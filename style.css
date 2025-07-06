@@ -1,0 +1,141 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: white;
+}
+
+.game-container {
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.score-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    gap: 10px;
+}
+
+.score, .bot-score, .high-score {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 10px 20px;
+    border-radius: 25px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    flex: 1;
+    text-align: center;
+}
+
+.score {
+    border-color: rgba(255, 215, 0, 0.5); /* Złoty dla Leona */
+}
+
+.bot-score {
+    border-color: rgba(255, 68, 68, 0.5); /* Czerwony dla Hugo */
+}
+
+#gameCanvas {
+    border: 3px solid #fff;
+    border-radius: 10px;
+    background: #000;
+    display: block;
+    margin: 0 auto 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.controls {
+    margin-top: 20px;
+}
+
+.controls p {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+button {
+    background: linear-gradient(45deg, #4CAF50, #45a049);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    border-radius: 25px;
+    cursor: pointer;
+    margin: 0 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    text-align: center;
+    border: 3px solid #ff4444;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.game-over h2 {
+    color: #ff4444;
+    margin-bottom: 15px;
+    font-size: 2rem;
+}
+
+.game-over p {
+    font-size: 1.3rem;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 480px) {
+    .game-container {
+        padding: 20px;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    #gameCanvas {
+        width: 300px;
+        height: 300px;
+    }
+    
+    .score-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
