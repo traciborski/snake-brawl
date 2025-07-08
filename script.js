@@ -34,14 +34,54 @@ let lastShotTime = 0;
 let botLastShotTime = 0;
 const shotCooldown = 300;
 let explosions = [];
+let maze = [];
 
 highScoreElement.textContent = highScore;
+
+function generateMaze() {
+    maze = [];
+    for (let x = 0; x < tileCount; x++) {
+        maze[x] = [];
+        for (let y = 0; y < tileCount; y++) {
+            maze[x][y] = 0;
+        }
+    }
+    
+    const wallCount = Math.floor(tileCount * tileCount * 0.1
+        
+    );
+    
+    for (let i = 0; i < wallCount; i++) {
+        let x, y;
+        do {
+            x = Math.floor(Math.random() * tileCount);
+            y = Math.floor(Math.random() * tileCount);
+        } while (maze[x][y] === 1 || 
+                 (x === 10 && y === 10) || 
+                 (x === 20 && y === 20) ||
+                 (x >= 9 && x <= 11 && y >= 9 && y <= 11) ||
+                 (x >= 19 && x <= 21 && y >= 19 && y <= 21));
+        
+        maze[x][y] = 1;
+    }
+}
+
+function isWall(x, y) {
+    if (x < 0 || x >= tileCount || y < 0 || y >= tileCount) return true;
+    return maze[x][y] === 1;
+}
 
 function generateFood() {
     food = {
         x: Math.floor(Math.random() * tileCount),
         y: Math.floor(Math.random() * tileCount)
     };
+    
+    // Sprawdzenie kolizji ze ścianami
+    if (isWall(food.x, food.y)) {
+        generateFood();
+        return;
+    }
     
     // Sprawdzenie kolizji z graczem
     for (let segment of snake) {
@@ -72,6 +112,12 @@ function generateBotFood() {
         y: Math.floor(Math.random() * tileCount)
     };
     
+    // Sprawdzenie kolizji ze ścianami
+    if (isWall(botFood.x, botFood.y)) {
+        generateBotFood();
+        return;
+    }
+    
     // Sprawdzenie kolizji z botem
     for (let segment of bot) {
         if (segment.x === botFood.x && segment.y === botFood.y) {
@@ -98,6 +144,20 @@ function generateBotFood() {
 function drawGame() {
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Rysowanie ścian labiryntu
+    ctx.fillStyle = '#444';
+    for (let x = 0; x < tileCount; x++) {
+        for (let y = 0; y < tileCount; y++) {
+            if (maze[x][y] === 1) {
+                ctx.fillRect(x * gridSize, y * gridSize, gridSize, gridSize);
+                // Dodanie obramowania
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x * gridSize, y * gridSize, gridSize, gridSize);
+            }
+        }
+    }
     
     // Rysowanie gracza (Leon - żółty zadymiarz)
     for (let i = 0; i < snake.length; i++) {
@@ -206,8 +266,15 @@ function moveSnake() {
     
     const head = { x: snake[0].x + dx, y: snake[0].y + dy };
     
-    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
-        gameOver();
+    if (isWall(head.x, head.y)) {
+        // Odbicie od ściany - zmiana kierunku
+        if (dx !== 0) {
+            dx = 0;
+            dy = Math.random() > 0.5 ? 1 : -1;
+        } else {
+            dy = 0;
+            dx = Math.random() > 0.5 ? 1 : -1;
+        }
         return;
     }
     
@@ -223,6 +290,11 @@ function moveSnake() {
     if (head.x === food.x && head.y === food.y) {
         score += 10;
         scoreElement.textContent = score;
+        
+        // Dodanie nowego segmentu na końcu węża
+        const tail = snake[snake.length - 1];
+        snake.push({ x: tail.x, y: tail.y });
+        
         generateFood();
     } else {
         snake.pop();
@@ -255,7 +327,7 @@ function moveBot() {
     const head = { x: bot[0].x + botDx, y: bot[0].y + botDy };
     
     // Sprawdzenie kolizji ze ścianami
-    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+    if (isWall(head.x, head.y)) {
         // Zmiana kierunku przy kolizji ze ścianą
         if (botDx !== 0) {
             botDx = 0;
@@ -288,6 +360,11 @@ function moveBot() {
     if (head.x === botFood.x && head.y === botFood.y) {
         botScore += 10;
         botScoreElement.textContent = botScore;
+        
+        // Dodanie nowego segmentu na końcu węża bota
+        const tail = bot[bot.length - 1];
+        bot.push({ x: tail.x, y: tail.y });
+        
         generateBotFood();
     } else {
         bot.pop();
@@ -339,11 +416,12 @@ function updateBullets() {
             const checkX = oldX + bullet.dx * step;
             const checkY = oldY + bullet.dy * step;
             
-            // Kolizja z jedzeniem
+            // Kolizja z jedzeniem gracza
             if (checkX === food.x && checkY === food.y) {
                 score += 10;
                 scoreElement.textContent = score;
                 
+                // Dodanie nowego segmentu na końcu węża
                 const tail = snake[snake.length - 1];
                 snake.push({ x: tail.x, y: tail.y });
                 
@@ -357,6 +435,29 @@ function updateBullets() {
                 });
                 
                 generateFood();
+                hitFood = true;
+                break;
+            }
+            
+            // Kolizja z jedzeniem bota
+            if (checkX === botFood.x && checkY === botFood.y) {
+                score += 10;
+                scoreElement.textContent = score;
+                
+                // Dodanie nowego segmentu na końcu węża
+                const tail = snake[snake.length - 1];
+                snake.push({ x: tail.x, y: tail.y });
+                
+                const explosionSize = Math.random() > 0.3 ? 15 : 25;
+                explosions.push({
+                    x: botFood.x,
+                    y: botFood.y,
+                    size: explosionSize,
+                    age: 0,
+                    maxAge: 20
+                });
+                
+                generateBotFood();
                 hitFood = true;
                 break;
             }
@@ -383,13 +484,12 @@ function updateBullets() {
                         botDx = 0;
                         botDy = 0;
                     } else {
-                        // Trafienie w ogon - obcięcie ogona
+                        // Trafienie w ogon - usunięcie tylko jednego segmentu
                         score += 20;
                         scoreElement.textContent = score;
                         
-                        // Odjęcie punktów botowi
-                        const removedSegments = bot.length - segmentIndex;
-                        botScore = Math.max(0, botScore - (removedSegments * 10));
+                        // Odjęcie punktów botowi za jeden segment
+                        botScore = Math.max(0, botScore - 10);
                         botScoreElement.textContent = botScore;
                         
                         explosions.push({
@@ -400,8 +500,8 @@ function updateBullets() {
                             maxAge: 25
                         });
                         
-                        // Obcięcie ogona od miejsca trafienia
-                        bot = bot.slice(0, segmentIndex);
+                        // Usunięcie tylko jednego segmentu
+                        bot.splice(segmentIndex, 1);
                     }
                     hitBot = true;
                     break;
@@ -418,7 +518,7 @@ function updateBullets() {
         bullet.x += bullet.dx * 3;
         bullet.y += bullet.dy * 3;
         
-        if (bullet.x < 0 || bullet.x >= tileCount || bullet.y < 0 || bullet.y >= tileCount) {
+        if (isWall(bullet.x, bullet.y)) {
             bullets.splice(i, 1);
         }
     }
@@ -436,11 +536,12 @@ function updateBullets() {
             const checkX = oldX + bullet.dx * step;
             const checkY = oldY + bullet.dy * step;
             
-            // Kolizja z jedzeniem
+            // Kolizja z jedzeniem gracza
             if (checkX === food.x && checkY === food.y) {
                 botScore += 10;
                 botScoreElement.textContent = botScore;
                 
+                // Dodanie nowego segmentu na końcu węża bota
                 const tail = bot[bot.length - 1];
                 bot.push({ x: tail.x, y: tail.y });
                 
@@ -454,6 +555,29 @@ function updateBullets() {
                 });
                 
                 generateFood();
+                hitFood = true;
+                break;
+            }
+            
+            // Kolizja z jedzeniem bota
+            if (checkX === botFood.x && checkY === botFood.y) {
+                botScore += 10;
+                botScoreElement.textContent = botScore;
+                
+                // Dodanie nowego segmentu na końcu węża bota
+                const tail = bot[bot.length - 1];
+                bot.push({ x: tail.x, y: tail.y });
+                
+                const explosionSize = Math.random() > 0.3 ? 15 : 25;
+                explosions.push({
+                    x: botFood.x,
+                    y: botFood.y,
+                    size: explosionSize,
+                    age: 0,
+                    maxAge: 20
+                });
+                
+                generateBotFood();
                 hitFood = true;
                 break;
             }
@@ -474,13 +598,12 @@ function updateBullets() {
                         
                         gameOver("Bot wygrał!");
                     } else {
-                        // Trafienie w ogon - obcięcie ogona
+                        // Trafienie w ogon - usunięcie tylko jednego segmentu
                         botScore += 20;
                         botScoreElement.textContent = botScore;
                         
-                        // Odjęcie punktów graczowi
-                        const removedSegments = snake.length - segmentIndex;
-                        score = Math.max(0, score - (removedSegments * 10));
+                        // Odjęcie punktów graczowi za jeden segment
+                        score = Math.max(0, score - 10);
                         scoreElement.textContent = score;
                         
                         explosions.push({
@@ -491,8 +614,8 @@ function updateBullets() {
                             maxAge: 25
                         });
                         
-                        // Obcięcie ogona od miejsca trafienia
-                        snake = snake.slice(0, segmentIndex);
+                        // Usunięcie tylko jednego segmentu
+                        snake.splice(segmentIndex, 1);
                     }
                     hitPlayer = true;
                     break;
@@ -509,7 +632,7 @@ function updateBullets() {
         bullet.x += bullet.dx * 3;
         bullet.y += bullet.dy * 3;
         
-        if (bullet.x < 0 || bullet.x >= tileCount || bullet.y < 0 || bullet.y >= tileCount) {
+        if (isWall(bullet.x, bullet.y)) {
             botBullets.splice(i, 1);
         }
     }
@@ -558,6 +681,7 @@ function startGame() {
     botLastShotTime = 0;
     explosions = [];
     
+    generateMaze();
     generateFood();
     generateBotFood();
     drawGame();
