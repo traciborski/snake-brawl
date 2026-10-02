@@ -1,85 +1,78 @@
-# Snake Brawl — Koncept gry (wersja robocza)
+# Snake Brawl — Koncept gry
 
 > Etap 1 z 4: **Koncept** → Architektura → Plan → Kod
-> Status: do akceptacji. Punkty oznaczone ❓ czekają na decyzję.
+> Status: ✅ zaakceptowany
 
 ## 1. Jedno zdanie
 
 Arcade'owy pojedynek dwóch węży na jednej klawiaturze: rośniesz, zjadając jedzenie,
-strzelasz, żeby zablokować rywala, a wygrywa ten, kto przetrwa rundę.
+strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto przetrwa.
 
 ## 2. Ustalenia
 
-| Obszar     | Decyzja                                          |
-|------------|--------------------------------------------------|
-| Baza       | Rozwijamy obecny pomysł Snake Brawl (piszemy od nowa) |
-| Gracze     | 2 graczy lokalnie, jedna klawiatura (bez bota na start) |
-| Platforma  | Przeglądarka na PC, sterowanie klawiaturą         |
+| Obszar     | Decyzja                                                  |
+|------------|----------------------------------------------------------|
+| Baza       | Rozwijamy pomysł Snake Brawl, kod piszemy od nowa        |
+| Gracze     | 2 graczy lokalnie, jedna klawiatura                      |
+| Platforma  | Przeglądarka na PC, klawiatura                           |
 | Klimat     | Arcade dla wszystkich: szybko, rywalizacja, krótkie rundy |
+| Styl       | Pikselowa kratka z neonową poświatą na ciemnym tle       |
+| Język UI   | Polski                                                   |
 
-## 3. Bohaterowie
+## 3. Bohaterowie i sterowanie
 
-- **Leon** — żółty wąż, sterowanie `W A S D` + strzał `Spacja` ❓ (albo `F`)
-- **Hugo** — drugi wąż (kolor ❓), sterowanie `Strzałki` + strzał `Enter` ❓ (albo `/`)
+| Gracz | Kolor              | Ruch       | Strzał   |
+|-------|--------------------|------------|----------|
+| Leon  | żółty `#FFD700`    | `W A S D`  | `Spacja` |
+| Hugo  | cyjan `#00E5FF`    | strzałki   | `Enter`  |
 
-## 4. Pętla rozgrywki
+## 4. Mecz i runda
 
-1. **Menu**: start, sterowanie, ustawienia meczu.
-2. **Odliczanie** 3-2-1, oba węże startują w przeciwnych rogach planszy.
-3. **Runda** trwa, dopóki jeden wąż żyje (albo do limitu czasu ❓ np. 90 s).
-4. **Ekran wyniku rundy**: kto wygrał i aktualny stan meczu.
-5. **Mecz** do 3 wygranych rund ❓ i ekran zwycięzcy, rewanż jednym klawiszem.
+1. **Menu**: start meczu, ekran sterowania.
+2. **Odliczanie** 3-2-1, węże startują w przeciwległych rogach planszy, długość 3.
+3. **Runda** trwa do śmierci węża albo 90 s.
+4. **Wynik rundy**:
+   - przeżył jeden wąż, więc on wygrywa;
+   - obaj zginęli w tym samym momencie, więc jest remis;
+   - po 90 s wygrywa dłuższy wąż, a przy równej długości jest remis.
+5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
+   i rewanż jednym klawiszem.
 
-## 5. Zasady (propozycja)
+## 5. Zasady
 
 **Ruch**
-- Plansza w kratkę, ruch krok po kroku (klasyczny snake), stała prędkość.
-- Śmierć: uderzenie w ścianę, w siebie, w ciało rywala.
-- Zderzenie głowami: obaj giną i runda kończy się remisem.
+- Plansza w kratkę, ruch krok po kroku ze stałą prędkością (~10 kratek/s).
+- Nie można zawrócić w miejscu.
+- Śmierć: ściana, krawędź planszy, własne ciało, ciało rywala.
+- Zderzenie głowami (to samo pole albo zamiana miejscami) oznacza śmierć obu.
 
 **Jedzenie**
-- Na planszy zawsze leży kilka owoców; zjedzenie daje +1 segment i punkty.
+- Na planszy zawsze leżą 3 owoce. Zjedzenie daje +1 segment.
 
-**Strzelanie** (wyróżnik gry)
-- Pocisk leci prosto, ma cooldown (~0,3 s).
-- Strzał kosztuje 1 segment własnego ogona ❓, więc długość to „amunicja”. Strzelanie nie jest wtedy darmowe.
-- Trafienie w ciało rywala odcina mu ogon od miejsca trafienia.
-- Trafienie w głowę ❓ zabija albo tylko ogłusza na chwilę.
-- Pocisk niszczy pojedynczy blok ściany ❓.
+**Strzelanie**
+- Strzał kosztuje 1 segment ogona. Z samą głową (długość 1) nie można strzelać.
+- Cooldown 0,3 s. Pocisk leci prosto, 2× szybciej niż wąż.
+- **Trafienie w ciało** odcina ogon od trafionego segmentu do końca.
+- **Trafienie w głowę** ogłusza: wąż stoi w miejscu 1 s i nie może strzelać.
+  Przez kolejną 1 s jest odporny na ogłuszenie, żeby nie dało się go „zablokować”.
+- Pociski trafiają każdego węża, także strzelającego.
+- Pocisk znika na ścianie (ściany są niezniszczalne).
+- Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 
 **Labirynt**
-- Mapa jest generowana losowo, ale symetrycznie, żeby było fair dla obu graczy.
-- Spawny i ich okolice zawsze wolne, mapa zawsze przejezdna.
+- Generowany losowo, ale symetrycznie (obrót o 180° wokół środka), żeby oba spawny były w identycznej sytuacji.
+- Okolice spawnów są zawsze wolne, a każde wolne pole jest osiągalne.
 
-**Power-upy** ❓ (raczej po pierwszej wersji)
-- Przyspieszenie, tarcza na jedno trafienie, potrójny strzał, duch (przenikanie ścian).
+## 6. Styl i oprawa
 
-## 6. Czego NIE robimy w pierwszej wersji
+- Kratka w stylu pikselowym, węże i pociski z neonową poświatą, ciemne tło.
+- Efekty: eksplozje cząsteczek, potrząsanie ekranem przy trafieniu,
+  miganie ogłuszonego węża.
+- Dźwięk: krótkie efekty (strzał, jedzenie, trafienie, śmierć), na razie bez muzyki.
 
-- Gra online / multiplayer przez sieć
-- Bot (AI), który może wrócić później jako tryb treningowy
-- Wersja mobilna / sterowanie dotykiem
-- Konta, tabela wyników online
+## 7. Poza pierwszą wersją (później)
 
-## 7. Styl
-
-- Grafika: pikselowa / neonowa ❓ na ciemnym tle, czytelne kolory graczy.
-- Efekty: eksplozje cząsteczek, potrząsanie ekranem przy trafieniu.
-- Dźwięk: krótkie efekty (strzał, jedzenie, śmierć) ❓ i muzyka później.
-- Język interfejsu: polski.
-
-## 8. Co zabieramy z obecnego kodu
-
-- Pomysł: Leon i Hugo, labirynt, strzelanie do jedzenia/rywala, eksplozje.
-- Kod: nie przenosimy wprost. Obecny `script.js` to jeden plik ze zmiennymi globalnymi
-  i zdublowaną logiką gracza/bota, więc nowa wersja dostanie porządną architekturę (etap 2).
-
-## 9. Otwarte pytania
-
-1. Klawisze strzału dla obu graczy?
-2. Czy strzał kosztuje segment ogona?
-3. Trafienie w głowę: śmierć czy ogłuszenie?
-4. Czy ściany da się niszczyć?
-5. Limit czasu rundy i do ilu wygranych gramy mecz?
-6. Styl graficzny: piksele czy neon?
-7. Power-upy już w pierwszej wersji, czy później?
+- Power-upy: przyspieszenie, tarcza, potrójny strzał, duch.
+- Bot (AI) jako tryb treningowy.
+- Muzyka, kilka gotowych map, ustawienia meczu.
+- Gra online, wersja mobilna, tabele wyników.
