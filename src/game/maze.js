@@ -40,7 +40,7 @@ function protectedCells(grid, spawns) {
     }
     const side = DIR_VEC[dir].x !== 0 ? { x: 0, y: 1 } : { x: 1, y: 0 };
     let p = body[0];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 14; i++) {
       p = step(p, dir);
       for (let k = -1; k <= 1; k++) mark({ x: p.x + side.x * k, y: p.y + side.y * k });
     }

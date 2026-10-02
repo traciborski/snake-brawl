@@ -1,7 +1,7 @@
 # Snake Brawl — Architektura
 
 > Etap 2 z 4: Koncept → **Architektura** → Plan → Kod
-> Status: do akceptacji. Bazuje na [01-KONCEPT.md](01-KONCEPT.md).
+> Status: ✅ zaakceptowana. Bazuje na [01-KONCEPT.md](01-KONCEPT.md).
 
 ## 1. Technologia
 
@@ -65,7 +65,7 @@ src/
     types.js            definicje typów JSDoc (Stan, Wąż, Pocisk, Zdarzenie…)
     grid.js             kierunki, pozycje, pomocnicze funkcje kratki
     maze.js             generowanie symetrycznego labiryntu + test spójności
-    round.js            createRound(seed) i stepRound(stan, komendy) → zdarzenia
+    round.js            createRound(seed), stepRound(stan, komendy) → zdarzenia, ruch węży
     snake.js            ruch, wzrost, zawracanie, odcinanie ogona, ogłuszenie
     bullets.js          strzał (koszt segmentu), lot, kolizje pocisków
     food.js             losowanie owoców na wolnych polach
@@ -73,12 +73,13 @@ src/
   input/
     keyboard.js         nasłuch klawiszy, kolejka kierunków na gracza
   render/
-    renderer.js         skalowanie canvasu, kolejność warstw
-    board.js            tło, kratka, ściany
-    snakes.js           węże (poświata, miganie przy ogłuszeniu)
+    renderer.js         skalowanie canvasu do okna, HiDPI
+    view.js             widok rundy: plansza + obiekty + efekty + HUD
+    board.js            tło, kratka, ściany (cache off-screen)
+    entities.js         węże (poświata, miganie przy ogłuszeniu), pociski, owoce
     effects.js          cząsteczki, shake (stan tylko wizualny)
     hud.js              wynik meczu, czas, długości
-    text.js             napisy pikselowe
+    text.js             napisy pikselowe, panele nakładek
   audio/
     sfx.js              syntezowane efekty, reagują na zdarzenia
   scenes/
@@ -88,7 +89,7 @@ src/
     roundEnd.js         kto wygrał rundę
     matchEnd.js         zwycięzca meczu, rewanż
 tests/
-    maze.test.js, snake.test.js, bullets.test.js, round.test.js, match.test.js
+    rng.test.js, maze.test.js, snake.test.js, bullets.test.js, match.test.js
 ```
 
 Obecny `script.js` usuwamy przy przepisywaniu (zostaje w historii gita).

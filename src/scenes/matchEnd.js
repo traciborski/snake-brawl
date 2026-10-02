@@ -1,0 +1,55 @@
+import { BOARD_Y, CELL, COLORS, GRID_H, KEYS, PLAYERS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
+import { randomSeed } from '../core/rng.js';
+import { createMatch } from '../game/match.js';
+import { drawRoundView } from '../render/view.js';
+import { blink, dimScreen, drawPanel, drawText } from '../render/text.js';
+
+const MIN_TICKS = 1.5 * TICKS_PER_SECOND;
+
+/** @param {any} app */
+export function createMatchEndScene(app) {
+  let ticks = 0;
+
+  return {
+    enter() {
+      ticks = 0;
+      app.audio.play('win');
+      app.effects.confetti(PLAYERS[app.match.winner].color);
+    },
+
+    update() {
+      const k = app.keyboard;
+      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
+      ticks++;
+      if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(PLAYERS[app.match.winner].color);
+      if (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm)) {
+        app.match = createMatch(randomSeed());
+        app.scenes.go('countdown');
+      }
+    },
+
+    render() {
+      const time = performance.now();
+      drawRoundView(app, time);
+      const { ctx } = app.renderer;
+      const cy = BOARD_Y + (GRID_H * CELL) / 2;
+      dimScreen(ctx, 0.6);
+      drawPanel(ctx, VIEW_W / 2, cy + 5, 680, 300, PLAYERS[app.match.winner].color);
+      app.effects.draw(ctx);
+
+      const winner = PLAYERS[app.match.winner];
+      drawText(ctx, winner.name.toUpperCase(), VIEW_W / 2, cy - 90, { size: 48, color: winner.color, glow: 24 });
+      drawText(ctx, 'WYGRYWA MECZ!', VIEW_W / 2, cy - 30, { size: 24, color: COLORS.text, glow: 10 });
+
+      const [a, b] = app.match.wins;
+      drawText(ctx, String(a), VIEW_W / 2 - 60, cy + 40, { size: 36, color: PLAYERS[0].color, glow: 12 });
+      drawText(ctx, ':', VIEW_W / 2, cy + 40, { size: 36, color: COLORS.text });
+      drawText(ctx, String(b), VIEW_W / 2 + 60, cy + 40, { size: 36, color: PLAYERS[1].color, glow: 12 });
+
+      if (ticks >= MIN_TICKS && blink(time)) {
+        drawText(ctx, 'SPACJA — rewanż    ESC — menu', VIEW_W / 2, cy + 110, { size: 12, color: COLORS.text });
+      }
+    },
+  };
+}
