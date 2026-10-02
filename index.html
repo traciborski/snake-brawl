@@ -3,28 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hugo & Leon Game</title>
+    <title>Snake Brawl</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>Hugo & Leon Game</h1>
-        <div class="score-container">
-            <div class="score">Leon: <span id="score">0</span></div>
-            <div class="bot-score">Hugo: <span id="botScore">0</span></div>
-            <div class="high-score">Najlepszy: <span id="highScore">0</span></div>
-        </div>
-        <canvas id="gameCanvas" width="800" height="800"></canvas>
-        <div class="controls">
-            <p>Sterowanie: Strzałki lub WASD | Spacja - strzał</p>
-            <button id="startButton">Start</button>
-            <button id="restartButton" style="display: none;">Restart</button>
-        </div>
-        <div id="gameOver" class="game-over" style="display: none;">
-            <h2>Game Over!</h2>
-            <p>Twój wynik: <span id="finalScore">0</span></p>
-        </div>
-    </div>
-    <script src="script.js"></script>
+    <canvas id="game" aria-label="Snake Brawl"></canvas>
+    <noscript>Snake Brawl wymaga włączonego JavaScriptu.</noscript>
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>
