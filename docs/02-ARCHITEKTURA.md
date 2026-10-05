@@ -181,8 +181,8 @@ Każda scena ma `enter()`, `update(tick)`, `render(ctx, alpha)`, `exit()`.
 ## 10. Testowanie
 
 - **Automatyczne** (`npm test`): całe `src/game/`. Przykłady:
-  labirynt jest symetryczny i spójny, strzał zabiera segment, trafienie w głowę ogłusza,
-  zderzenie głowami daje remis, po 1800 tickach wygrywa dłuższy.
+  labirynt jest symetryczny i spójny, strzał zabiera segment, trafienie w głowę zabija, pocisk odbija się 3 razy,
+  zderzenie głowami odbija obu, po 1800 tickach wygrywa dłuższy.
   Dzięki ziarnu RNG każdy scenariusz jest powtarzalny.
 - **Ręczne**: lista kontrolna rozgrywki w przeglądarce (w planie, etap 3).
 
