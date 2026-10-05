@@ -42,8 +42,7 @@
 | Ruch węża                | 10 pól/s | co 2 ticki |
 | Ruch pocisku             | 20 pól/s | 1 pole/tick |
 | Cooldown strzału         | 0,3 s   | 6 |
-| Ogłuszenie               | 1 s     | 20 |
-| Odporność po ogłuszeniu  | 1 s     | 20 |
+| Odbicia pocisku          | 3, przy 4. ścianie znika | – |
 | Czas rundy               | 90 s    | 1800 |
 | Odliczanie               | 3 s     | 60 |
 
@@ -68,7 +67,7 @@ src/
     grid.js             kierunki, pozycje, pomocnicze funkcje kratki
     maze.js             generowanie symetrycznego labiryntu + test spójności
     round.js            createRound(seed), stepRound(stan, komendy) → zdarzenia, ruch węży
-    snake.js            ruch, wzrost, zawracanie, odcinanie ogona, ogłuszenie
+    snake.js            skręty, odbicie (zawrócenie węża), odcinanie ogona, śmierć
     bullets.js          strzał (koszt segmentu), lot, kolizje pocisków
     food.js             losowanie owoców na wolnych polach
     match.js            wynik rundy, licznik meczu, zwycięzca
@@ -78,7 +77,7 @@ src/
     renderer.js         skalowanie canvasu do okna, HiDPI
     view.js             widok rundy: plansza + obiekty + efekty + HUD
     board.js            tło, kratka, ściany (cache off-screen)
-    entities.js         węże (poświata, miganie przy ogłuszeniu), pociski, owoce
+    entities.js         węże (poświata), pociski (przygasają z każdym odbiciem), owoce
     effects.js          cząsteczki, shake (stan tylko wizualny)
     hud.js              wynik meczu, czas, długości
     text.js             napisy pikselowe, panele nakładek
@@ -117,11 +116,11 @@ Snake = {
   body: Pos[],                  // [0] = głowa
   dir: Dir, nextDirs: Dir[],    // kolejka max 2 skrętów
   growPending: 0,
-  cooldown: 0, stun: 0, immunity: 0,
+  cooldown: 0,
   alive: true,
 }
 
-Bullet = { owner: 0 | 1, pos: Pos, dir: Dir }
+Bullet = { owner: 0 | 1, pos: Pos, dir: Dir, bounces: 0 }
 
 Commands = [{ turn?: Dir, shoot: boolean }, { … }]   // na gracza, na tick
 ```
@@ -133,13 +132,16 @@ Commands = [{ turn?: Dir, shoot: boolean }, { … }]   // na gracza, na tick
 Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocześnie**.
 
 1. **Komendy**: przyjmij skręt (bez zawracania) i żądanie strzału.
-2. **Timery**: zmniejsz cooldown, ogłuszenie, odporność i czas rundy.
-3. **Strzały**: jeśli długość > 1, cooldown = 0 i wąż nie jest ogłuszony, to zabierz
+2. **Timery**: zmniejsz cooldown i czas rundy.
+3. **Strzały**: jeśli długość > 1 i cooldown = 0, to zabierz
    segment z ogona i stwórz pocisk na polu przed głową.
-4. **Pociski**: przesuń każdy o 1 pole i sprawdź ścianę, inny pocisk, węże
-   (głowa → ogłuszenie, ciało → odcięcie ogona).
-5. **Węże** (co 2. tick, jeśli nie ogłuszone): policz obie nowe głowy naraz, potem
-   rozstrzygnij kolizje: ściana, ciała, głowa w głowę, zamiana miejscami, głowa w pocisk.
+4. **Pociski**: przesuń każdy o 1 pole. Ściana przed pociskiem → zawraca w miejscu
+   (po 3 odbiciach kolejna ściana go niszczy). Potem inny pocisk i węże
+   (głowa → śmierć, ciało → odcięcie ogona).
+5. **Węże** (co 2. tick): policz obie nowe głowy naraz. Przeszkoda (ściana, ciało,
+   głowa w głowę, zamiana miejscami) → wąż się odbija, czyli odwraca ciało i nie rusza się
+   w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
+   Na koniec głowa w pocisk → śmierć.
 6. **Jedzenie**: zjedzenie daje `growPending++`, uzupełnij owoce do 3.
 7. **Koniec rundy**: sprawdź śmierć lub upływ czasu i ustaw `result`.
 

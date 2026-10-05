@@ -12,14 +12,14 @@ function describe(result) {
     return {
       title: 'REMIS!',
       color: COLORS.text,
-      detail: result.reason === 'ko' ? 'Zderzenie czołowe — obaj rozbici' : 'Koniec czasu — równe długości',
+      detail: result.reason === 'ko' ? 'Obaj trafieni w głowę naraz' : 'Koniec czasu — równe długości',
     };
   }
   const p = PLAYERS[result.winner];
   return {
     title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`,
     color: p.color,
-    detail: result.reason === 'ko' ? 'Rywal rozbity' : 'Koniec czasu — dłuższy wąż wygrywa',
+    detail: result.reason === 'ko' ? 'Strzał w głowę' : 'Koniec czasu — dłuższy wąż wygrywa',
   };
 }
 

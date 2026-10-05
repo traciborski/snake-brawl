@@ -19,7 +19,7 @@ export function drawRoundView(app, time) {
   effects.applyShake(ctx);
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
-  for (const snake of round.snakes) drawSnake(ctx, snake, time);
+  for (const snake of round.snakes) drawSnake(ctx, snake);
   drawBullets(ctx, round);
   effects.draw(ctx);
   ctx.restore();

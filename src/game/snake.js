@@ -1,7 +1,6 @@
-// Wąż: tworzenie, skręty, timery, reakcja na trafienie.
+// Wąż: tworzenie, skręty, odbicie, reakcja na trafienie.
 
-import { IMMUNITY_TICKS, STUN_TICKS } from '../config.js';
-import { OPPOSITE } from './grid.js';
+import { DIR_VEC, OPPOSITE } from './grid.js';
 
 /** @typedef {import('./types.js').Snake} Snake */
 /** @typedef {import('./types.js').Dir} Dir */
@@ -19,8 +18,6 @@ export function createSnake(id, body, dir) {
     nextDirs: [],
     growPending: 0,
     cooldown: 0,
-    stun: 0,
-    immunity: 0,
     alive: true,
   };
 }
@@ -37,37 +34,45 @@ export function queueTurn(snake, dir) {
   return true;
 }
 
-/** Odlicza cooldown, ogłuszenie i odporność (odporność startuje po końcu ogłuszenia). */
+/** @param {Snake} snake */
 export function tickTimers(snake) {
   if (snake.cooldown > 0) snake.cooldown--;
-  if (snake.stun > 0) {
-    snake.stun--;
-    if (snake.stun === 0) snake.immunity = IMMUNITY_TICKS;
-  } else if (snake.immunity > 0) {
-    snake.immunity--;
-  }
 }
 
 /** @param {Snake} snake */
 export function canShoot(snake) {
-  return snake.alive && snake.stun === 0 && snake.cooldown === 0 && snake.body.length > 1;
+  return snake.alive && snake.cooldown === 0 && snake.body.length > 1;
+}
+
+/**
+ * Odbicie od przeszkody: wąż zawraca, czyli ogon staje się głową
+ * i dalej jedzie w stronę, w którą „patrzył” ogon.
+ * @param {Snake} snake
+ */
+export function bounce(snake) {
+  snake.nextDirs = [];
+  if (snake.body.length === 1) {
+    snake.dir = OPPOSITE[snake.dir];
+    return;
+  }
+  snake.body.reverse();
+  const [head, neck] = snake.body;
+  const dx = head.x - neck.x;
+  const dy = head.y - neck.y;
+  snake.dir = /** @type {Dir} */ (
+    Object.keys(DIR_VEC).find((d) => DIR_VEC[d].x === dx && DIR_VEC[d].y === dy) ?? OPPOSITE[snake.dir]
+  );
 }
 
 /**
  * Trafienie pociskiem w segment o indeksie `index`.
- * Głowa → ogłuszenie (jeśli wąż nie jest ogłuszony ani odporny), ciało → odcięcie ogona.
+ * Głowa → śmierć, ciało → odcięcie ogona od trafionego segmentu.
  * @param {Snake} snake @param {number} index @param {number} by @param {GameEvent[]} events
  */
 export function applyHit(snake, index, by, events) {
   if (index === 0) {
-    const pos = { ...snake.body[0] };
-    if (snake.stun === 0 && snake.immunity === 0) {
-      snake.stun = STUN_TICKS;
-      snake.nextDirs = [];
-      events.push({ type: 'stunned', snake: snake.id, by, pos });
-    } else {
-      events.push({ type: 'deflected', snake: snake.id, pos });
-    }
+    snake.alive = false;
+    events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] } });
     return;
   }
   const cells = snake.body.splice(index);

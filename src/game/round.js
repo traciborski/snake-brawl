@@ -15,7 +15,7 @@ import { fire, moveBullets } from './bullets.js';
 import { eatFood, refillFood } from './food.js';
 import { isBlocked, samePos, step } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
-import { applyHit, createSnake, queueTurn, tickTimers } from './snake.js';
+import { applyHit, bounce, createSnake, queueTurn, tickTimers } from './snake.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
@@ -94,60 +94,61 @@ export function stepRound(state, commands = []) {
 
 /**
  * Oba węże ruszają się równocześnie: najpierw liczymy nowe pozycje,
- * potem rozstrzygamy kolizje na podstawie stanu „po ruchu”.
+ * potem sprawdzamy przeszkody na podstawie stanu „po ruchu”.
+ * Przeszkoda (ściana, krawędź, dowolne ciało, czołówka) nie zabija, tylko odbija:
+ * wąż zawraca w miejscu. Odbity wąż nie zwalnia pola ogona, więc sprawdzamy
+ * ponownie, aż nic się nie zmieni.
  */
 function moveSnakes(state, events) {
   const plans = state.snakes.map((snake) => {
-    if (!snake.alive || snake.stun > 0) return null;
-    if (snake.nextDirs.length) snake.dir = snake.nextDirs.shift();
+    if (!snake.alive) return null;
+    const dir = snake.nextDirs.length ? snake.nextDirs[0] : snake.dir;
     const oldHead = snake.body[0];
-    const head = step(oldHead, snake.dir);
+    const head = step(oldHead, dir);
     const grows = snake.growPending > 0;
     const body = [head, ...(grows ? snake.body : snake.body.slice(0, -1))];
-    return { snake, oldHead, head, grows, body };
+    return { snake, dir, oldHead, head, grows, body, bounce: false };
   });
-  const bodies = state.snakes.map((s, i) => plans[i]?.body ?? s.body);
 
-  /** @type {Map<number, 'wall' | 'self' | 'rival' | 'headOn'>} */
-  const deaths = new Map();
-  plans.forEach((plan, i) => {
-    if (!plan) return;
-    if (isBlocked(state.grid, state.walls, plan.head)) {
-      deaths.set(i, 'wall');
-      return;
-    }
-    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) {
-      deaths.set(i, 'self');
-      return;
-    }
-    for (let j = 0; j < state.snakes.length; j++) {
+  const blocked = (i, bodies) => {
+    const plan = plans[i];
+    if (isBlocked(state.grid, state.walls, plan.head)) return true;
+    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return true;
+    for (let j = 0; j < plans.length; j++) {
       if (j === i || !state.snakes[j].alive) continue;
       const other = plans[j];
-      const headOn =
-        other &&
-        (samePos(other.head, plan.head) ||
-          (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)));
-      if (headOn) {
-        deaths.set(i, 'headOn');
-        return;
+      if (other && !other.bounce) {
+        if (samePos(other.head, plan.head)) return true;
+        if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return true;
       }
-      if (bodies[j].some((p) => samePos(p, plan.head))) {
-        deaths.set(i, 'rival');
-        return;
-      }
+      if (bodies[j].some((p) => samePos(p, plan.head))) return true;
     }
-  });
+    return false;
+  };
+
+  for (let changed = true; changed; ) {
+    changed = false;
+    const bodies = state.snakes.map((s, i) => (plans[i] && !plans[i].bounce ? plans[i].body : s.body));
+    plans.forEach((plan, i) => {
+      if (plan && !plan.bounce && blocked(i, bodies)) {
+        plan.bounce = true;
+        changed = true;
+      }
+    });
+  }
 
   for (const plan of plans) {
     if (!plan) continue;
-    const cause = deaths.get(plan.snake.id);
-    if (cause) {
-      plan.snake.alive = false;
-      events.push({ type: 'died', snake: plan.snake.id, pos: plan.head, cause });
+    const { snake } = plan;
+    if (plan.bounce) {
+      bounce(snake);
+      events.push({ type: 'bounced', snake: snake.id, pos: { ...plan.oldHead } });
       continue;
     }
-    plan.snake.body = plan.body;
-    if (plan.grows) plan.snake.growPending--;
+    if (snake.nextDirs.length) snake.nextDirs.shift();
+    snake.dir = plan.dir;
+    snake.body = plan.body;
+    if (plan.grows) snake.growPending--;
   }
 
   // Głowa wjeżdżająca w pocisk

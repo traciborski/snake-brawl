@@ -57,67 +57,105 @@ test('owoce uzupełniają się do limitu na wolnych polach', () => {
   }
 });
 
-test('śmierć na ścianie', () => {
+const bounced = (events, id) => events.some((e) => e.type === 'bounced' && e.snake === id);
+
+test('ściana odbija: wąż zawraca (ogon staje się głową) i żyje', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   wall(s, 11, 10);
   const events = run(s, 2);
-  assert.equal(s.snakes[0].alive, false);
-  assert.ok(events.some((e) => e.type === 'died' && e.cause === 'wall'));
-  assert.deepEqual(s.result, { winner: 1, reason: 'ko' });
+  assert.ok(bounced(events, 0));
+  assert.equal(s.snakes[0].alive, true);
+  assert.deepEqual(pos(s.snakes[0]), [[8, 10], [9, 10], [10, 10]]);
+  assert.equal(s.snakes[0].dir, 'left');
+  assert.equal(s.result, null);
+  run(s, 2);
+  assert.deepEqual(pos(s.snakes[0])[0], [7, 10]);
 });
 
-test('śmierć na krawędzi planszy', () => {
+test('krawędź planszy odbija', () => {
   const s = emptyRound();
   place(s, 0, [[0, 5], [1, 5], [2, 5]], 'left');
-  run(s, 2);
-  assert.equal(s.snakes[0].alive, false);
+  const events = run(s, 2);
+  assert.ok(bounced(events, 0));
+  assert.equal(s.snakes[0].alive, true);
+  assert.equal(s.snakes[0].dir, 'right');
 });
 
-test('śmierć na własnym ciele', () => {
+test('wąż z samą głową odbija się, zmieniając kierunek', () => {
+  const s = emptyRound();
+  place(s, 0, [[0, 5]], 'left');
+  run(s, 2);
+  assert.deepEqual(pos(s.snakes[0]), [[0, 5]]);
+  assert.equal(s.snakes[0].dir, 'right');
+});
+
+test('odbicie kasuje zakolejkowane skręty', () => {
+  const s = emptyRound();
+  const snake = place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10);
+  wall(s, 10, 9);
+  // skręt w górę też trafia w ścianę
+  run(s, 2, [{ turns: ['up', 'right'] }]);
+  assert.deepEqual(snake.nextDirs, []);
+});
+
+test('własne ciało odbija', () => {
   const s = emptyRound();
   // wąż zawinięty w „U”: skręt w prawo wjeżdża w jego własny środek
   place(s, 0, [[10, 10], [10, 9], [11, 9], [11, 10], [11, 11]], 'down');
   const events = run(s, 2, [{ turns: ['right'] }]);
-  assert.equal(s.snakes[0].alive, false);
-  assert.ok(events.some((e) => e.type === 'died' && e.cause === 'self'));
+  assert.ok(bounced(events, 0));
+  assert.equal(s.snakes[0].alive, true);
 });
 
-test('wjazd w pole, które ogon właśnie opuszcza, jest bezpieczny', () => {
+test('wjazd w pole, które ogon właśnie opuszcza, jest dozwolony', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [10, 11], [11, 11], [11, 10]], 'up');
-  run(s, 2, [{ turns: ['right'] }]);
-  assert.equal(s.snakes[0].alive, true);
+  const events = run(s, 2, [{ turns: ['right'] }]);
+  assert.ok(!bounced(events, 0));
   assert.deepEqual(pos(s.snakes[0])[0], [11, 10]);
 });
 
-test('wjazd w ciało rywala zabija', () => {
+test('ciało rywala odbija, rywal jedzie dalej', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[11, 12], [11, 11], [11, 10], [11, 9]], 'down');
-  run(s, 2);
-  assert.equal(s.snakes[0].alive, false);
-  assert.equal(s.snakes[1].alive, true);
-  assert.deepEqual(s.result, { winner: 1, reason: 'ko' });
+  const events = run(s, 2);
+  assert.ok(bounced(events, 0));
+  assert.ok(!bounced(events, 1));
+  assert.deepEqual(pos(s.snakes[1])[0], [11, 13]);
+  assert.equal(s.result, null);
 });
 
-test('zderzenie głowami na tym samym polu: remis', () => {
+test('zderzenie głowami na tym samym polu: obaj się odbijają', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[12, 10], [13, 10], [14, 10]], 'left');
   const events = run(s, 2);
-  assert.equal(s.snakes[0].alive, false);
-  assert.equal(s.snakes[1].alive, false);
-  assert.ok(events.every((e) => e.type !== 'died' || e.cause === 'headOn'));
-  assert.deepEqual(s.result, { winner: 'draw', reason: 'ko' });
+  assert.ok(bounced(events, 0) && bounced(events, 1));
+  assert.equal(s.snakes[0].dir, 'left');
+  assert.equal(s.snakes[1].dir, 'right');
+  assert.equal(s.result, null);
 });
 
-test('zderzenie głowami przy zamianie miejsc: remis', () => {
+test('zderzenie głowami przy zamianie miejsc: obaj się odbijają', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[11, 10], [12, 10], [13, 10]], 'left');
-  run(s, 2);
-  assert.deepEqual(s.result, { winner: 'draw', reason: 'ko' });
+  const events = run(s, 2);
+  assert.ok(bounced(events, 0) && bounced(events, 1));
+});
+
+test('odbity wąż nie zwalnia ogona, więc rywal jadący w jego ogon też się odbija', () => {
+  const s = emptyRound();
+  // Leon odbija się od ściany, Hugo celuje w pole jego ogona
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10);
+  place(s, 1, [[8, 11], [8, 12], [8, 13]], 'up');
+  const events = run(s, 2);
+  assert.ok(bounced(events, 0));
+  assert.ok(bounced(events, 1));
 });
 
 test('po upływie czasu wygrywa dłuższy wąż', () => {

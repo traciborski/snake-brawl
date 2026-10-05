@@ -12,13 +12,9 @@ const py = (p) => BOARD_Y + p.y * CELL;
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {Snake} snake
- * @param {number} time  ms, do animacji
  */
-export function drawSnake(ctx, snake, time) {
+export function drawSnake(ctx, snake) {
   const color = PLAYERS[snake.id].color;
-  const stunned = snake.stun > 0;
-  // Ogłuszony wąż miga
-  if (stunned && Math.floor(time / 90) % 2 === 0) return;
 
   ctx.save();
   ctx.globalAlpha = snake.alive ? 1 : 0.35;
@@ -54,27 +50,6 @@ export function drawSnake(ctx, snake, time) {
   ctx.fillRect(cx - ox - 2, cy - oy - 2, 4, 4);
   ctx.fillRect(cx + ox - 2, cy + oy - 2, 4, 4);
 
-  // Odporność po ogłuszeniu: biała ramka wokół głowy
-  if (snake.immunity > 0 && snake.alive) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time / 60);
-    ctx.strokeRect(hx - 1, hy - 1, CELL + 2, CELL + 2);
-  }
-  ctx.restore();
-
-  if (stunned) drawStunStars(ctx, hx + CELL / 2, hy + CELL / 2, time);
-}
-
-function drawStunStars(ctx, cx, cy, time) {
-  ctx.save();
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#ffffff';
-  ctx.shadowBlur = 6;
-  for (let i = 0; i < 3; i++) {
-    const a = time / 150 + (i * Math.PI * 2) / 3;
-    ctx.fillRect(cx + Math.cos(a) * 14 - 2, cy + Math.sin(a) * 8 - 14, 4, 4);
-  }
   ctx.restore();
 }
 
@@ -83,16 +58,18 @@ export function drawBullets(ctx, round) {
   for (const b of round.bullets) {
     const color = PLAYERS[b.owner].color;
     const v = DIR_VEC[b.dir];
+    // Każde odbicie przygasza pocisk: widać, ile mu jeszcze zostało
+    const fade = 1 - b.bounces * 0.2;
     const x = px(b.pos);
     const y = py(b.pos);
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 14;
     // Smuga za pociskiem
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = 0.35 * fade;
     ctx.fillStyle = color;
     ctx.fillRect(x - v.x * CELL + 6, y - v.y * CELL + 6, CELL - 12, CELL - 12);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = fade;
     ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 7, y + 7, CELL - 14, CELL - 14);

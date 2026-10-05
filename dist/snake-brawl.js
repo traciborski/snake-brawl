@@ -93,8 +93,7 @@ const VIEW_H = HUD_H + GRID_H * CELL; // 600
 const SNAKE_MOVE_EVERY = 2; // 10 pól/s
 const START_LENGTH = 3;
 const SHOT_COOLDOWN = 6; // 0,3 s
-const STUN_TICKS = 20; // 1 s
-const IMMUNITY_TICKS = 20; // 1 s
+const BULLET_MAX_BOUNCES = 3; // pocisk odbija się 3 razy, przy 4. ścianie znika
 const ROUND_TICKS = 90 * TICKS_PER_SECOND;
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 const FOOD_COUNT = 3;
@@ -154,7 +153,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, STUN_TICKS, IMMUNITY_TICKS, ROUND_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, PLAYERS, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, BULLET_MAX_BOUNCES, ROUND_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, PLAYERS, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -415,7 +414,7 @@ class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  /** @param {'shoot' | 'eat' | 'hit' | 'stun' | 'deflect' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
+  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'ricochet' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
   play(name) {
     switch (name) {
       case 'shoot':
@@ -428,12 +427,11 @@ class Sfx {
         this.noise({ dur: 0.15, vol: 0.5, freq: 2500 });
         this.tone({ freq: 200, to: 80, dur: 0.15, vol: 0.3 });
         break;
-      case 'stun':
-        this.tone({ freq: 1200, to: 300, dur: 0.3, type: 'sawtooth', vol: 0.25 });
-        this.tone({ freq: 1500, to: 400, dur: 0.3, type: 'square', vol: 0.15, delay: 0.05 });
+      case 'bounce':
+        this.tone({ freq: 160, to: 320, dur: 0.1, type: 'triangle', vol: 0.5 });
         break;
-      case 'deflect':
-        this.tone({ freq: 1800, to: 1600, dur: 0.06, type: 'triangle', vol: 0.3 });
+      case 'ricochet':
+        this.tone({ freq: 1800, to: 2600, dur: 0.06, type: 'triangle', vol: 0.25 });
         break;
       case 'wall':
         this.noise({ dur: 0.05, vol: 0.15, freq: 1500 });
@@ -468,8 +466,8 @@ class Sfx {
       shot: 'shoot',
       ate: 'eat',
       bodyHit: 'hit',
-      stunned: 'stun',
-      deflected: 'deflect',
+      bounced: 'bounce',
+      bulletBounce: 'ricochet',
       bulletWall: 'wall',
       bulletClash: 'clash',
       died: 'die',
@@ -539,8 +537,11 @@ class Effects {
         case 'shot':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
           break;
+        case 'bulletBounce':
+          this.burstAt(e.pos, COLORS.wallEdge, 6, 80, 0.2, 3);
+          break;
         case 'bulletWall':
-          this.burstAt(e.pos, COLORS.wallEdge, 8, 90, 0.25, 3);
+          this.burstAt(e.pos, COLORS.wallEdge, 14, 120, 0.35, 3);
           break;
         case 'bulletClash':
           this.burstAt(e.pos, '#ffffff', 16, 160, 0.35, 3);
@@ -550,12 +551,9 @@ class Effects {
           for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
           this.addShake(5);
           break;
-        case 'stunned':
-          this.burstAt(e.pos, '#ffffff', 20, 150, 0.4, 3);
-          this.addShake(7);
-          break;
-        case 'deflected':
-          this.burstAt(e.pos, '#ffffff', 8, 100, 0.25, 3);
+        case 'bounced':
+          this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);
+          this.addShake(2);
           break;
         case 'ate':
           this.burstAt(e.pos, COLORS.food, 12, 100, 0.4, 3);
@@ -698,8 +696,8 @@ function createMenuScene(app) {
         drawText(ctx, p.help, colX[i], 355, { size: 10, color: COLORS.text });
       });
 
-      drawText(ctx, 'Strzał kosztuje 1 segment ogona.', VIEW_W / 2, 410, { size: 10, color: COLORS.dim });
-      drawText(ctx, 'Ogon = odcięty. Głowa = ogłuszona.', VIEW_W / 2, 432, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Ściany odbijają węże i pociski. Giniesz tylko od strzału w głowę.', VIEW_W / 2, 400, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Strzał kosztuje 1 segment. Trafiony ogon odpada.', VIEW_W / 2, 422, { size: 10, color: COLORS.dim });
 
       if (blink(time)) {
         drawText(ctx, 'SPACJA / ENTER  —  START', VIEW_W / 2, 500, { size: 16, color: COLORS.text, glow: 8 });
@@ -920,7 +918,7 @@ const { fire, moveBullets } = __require("src/game/bullets.js");
 const { eatFood, refillFood } = __require("src/game/food.js");
 const { isBlocked, samePos, step } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
-const { applyHit, createSnake, queueTurn, tickTimers } = __require("src/game/snake.js");
+const { applyHit, bounce, createSnake, queueTurn, tickTimers } = __require("src/game/snake.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
@@ -999,60 +997,61 @@ function stepRound(state, commands = []) {
 
 /**
  * Oba węże ruszają się równocześnie: najpierw liczymy nowe pozycje,
- * potem rozstrzygamy kolizje na podstawie stanu „po ruchu”.
+ * potem sprawdzamy przeszkody na podstawie stanu „po ruchu”.
+ * Przeszkoda (ściana, krawędź, dowolne ciało, czołówka) nie zabija, tylko odbija:
+ * wąż zawraca w miejscu. Odbity wąż nie zwalnia pola ogona, więc sprawdzamy
+ * ponownie, aż nic się nie zmieni.
  */
 function moveSnakes(state, events) {
   const plans = state.snakes.map((snake) => {
-    if (!snake.alive || snake.stun > 0) return null;
-    if (snake.nextDirs.length) snake.dir = snake.nextDirs.shift();
+    if (!snake.alive) return null;
+    const dir = snake.nextDirs.length ? snake.nextDirs[0] : snake.dir;
     const oldHead = snake.body[0];
-    const head = step(oldHead, snake.dir);
+    const head = step(oldHead, dir);
     const grows = snake.growPending > 0;
     const body = [head, ...(grows ? snake.body : snake.body.slice(0, -1))];
-    return { snake, oldHead, head, grows, body };
+    return { snake, dir, oldHead, head, grows, body, bounce: false };
   });
-  const bodies = state.snakes.map((s, i) => plans[i]?.body ?? s.body);
 
-  /** @type {Map<number, 'wall' | 'self' | 'rival' | 'headOn'>} */
-  const deaths = new Map();
-  plans.forEach((plan, i) => {
-    if (!plan) return;
-    if (isBlocked(state.grid, state.walls, plan.head)) {
-      deaths.set(i, 'wall');
-      return;
-    }
-    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) {
-      deaths.set(i, 'self');
-      return;
-    }
-    for (let j = 0; j < state.snakes.length; j++) {
+  const blocked = (i, bodies) => {
+    const plan = plans[i];
+    if (isBlocked(state.grid, state.walls, plan.head)) return true;
+    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return true;
+    for (let j = 0; j < plans.length; j++) {
       if (j === i || !state.snakes[j].alive) continue;
       const other = plans[j];
-      const headOn =
-        other &&
-        (samePos(other.head, plan.head) ||
-          (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)));
-      if (headOn) {
-        deaths.set(i, 'headOn');
-        return;
+      if (other && !other.bounce) {
+        if (samePos(other.head, plan.head)) return true;
+        if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return true;
       }
-      if (bodies[j].some((p) => samePos(p, plan.head))) {
-        deaths.set(i, 'rival');
-        return;
-      }
+      if (bodies[j].some((p) => samePos(p, plan.head))) return true;
     }
-  });
+    return false;
+  };
+
+  for (let changed = true; changed; ) {
+    changed = false;
+    const bodies = state.snakes.map((s, i) => (plans[i] && !plans[i].bounce ? plans[i].body : s.body));
+    plans.forEach((plan, i) => {
+      if (plan && !plan.bounce && blocked(i, bodies)) {
+        plan.bounce = true;
+        changed = true;
+      }
+    });
+  }
 
   for (const plan of plans) {
     if (!plan) continue;
-    const cause = deaths.get(plan.snake.id);
-    if (cause) {
-      plan.snake.alive = false;
-      events.push({ type: 'died', snake: plan.snake.id, pos: plan.head, cause });
+    const { snake } = plan;
+    if (plan.bounce) {
+      bounce(snake);
+      events.push({ type: 'bounced', snake: snake.id, pos: { ...plan.oldHead } });
       continue;
     }
-    plan.snake.body = plan.body;
-    if (plan.grows) plan.snake.growPending--;
+    if (snake.nextDirs.length) snake.nextDirs.shift();
+    snake.dir = plan.dir;
+    snake.body = plan.body;
+    if (plan.grows) snake.growPending--;
   }
 
   // Głowa wjeżdżająca w pocisk
@@ -1086,10 +1085,10 @@ Object.assign(__exports, { createRound, stepRound });
 
 // ---- src/game/bullets.js ----
 __factories["src/game/bullets.js"] = function (__exports) {
-// Pociski: strzał (koszt segmentu), lot i kolizje.
+// Pociski: strzał (koszt segmentu), lot, odbicia od ścian i kolizje.
 
-const { SHOT_COOLDOWN } = __require("src/config.js");
-const { isBlocked, samePos, step } = __require("src/game/grid.js");
+const { BULLET_MAX_BOUNCES, SHOT_COOLDOWN } = __require("src/config.js");
+const { OPPOSITE, isBlocked, samePos, step } = __require("src/game/grid.js");
 const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
@@ -1099,6 +1098,7 @@ const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
 
 /**
  * Strzał: zabiera segment z ogona i tworzy pocisk na polu przed głową.
+ * Strzał prosto w przyległą ścianę od razu gaśnie (nie da się zastrzelić samego siebie z bliska).
  * @param {RoundState} state @param {Snake} snake @param {GameEvent[]} events
  * @returns {boolean} czy strzał padł
  */
@@ -1108,28 +1108,28 @@ function fire(state, snake, events) {
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */
-  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir };
+  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir, bounces: 0 };
   events.push({ type: 'shot', snake: snake.id, pos: { ...snake.body[0] } });
 
+  if (isBlocked(state.grid, state.walls, bullet.pos)) {
+    events.push({ type: 'bulletWall', pos: bullet.pos });
+    return true;
+  }
   const other = state.bullets.findIndex((b) => samePos(b.pos, bullet.pos));
   if (other >= 0) {
     state.bullets.splice(other, 1);
     events.push({ type: 'bulletClash', pos: bullet.pos });
     return true;
   }
-  if (!bulletHitsCell(state, bullet, events)) state.bullets.push(bullet);
+  if (!bulletHitsSnake(state, bullet, events)) state.bullets.push(bullet);
   return true;
 }
 
 /**
- * Sprawdza, co jest na polu pocisku: ściana, krawędź albo wąż.
- * @returns {boolean} true, jeśli pocisk znika
+ * Trafienie węża na polu pocisku.
+ * @returns {boolean} true, jeśli pocisk kogoś trafił (i znika)
  */
-function bulletHitsCell(state, bullet, events) {
-  if (isBlocked(state.grid, state.walls, bullet.pos)) {
-    events.push({ type: 'bulletWall', pos: bullet.pos });
-    return true;
-  }
+function bulletHitsSnake(state, bullet, events) {
   for (const snake of state.snakes) {
     if (!snake.alive) continue;
     const index = segmentAt(snake, bullet.pos);
@@ -1141,22 +1141,38 @@ function bulletHitsCell(state, bullet, events) {
 }
 
 /**
- * Przesuwa wszystkie pociski o 1 pole. Pociski, które wejdą na to samo pole
- * albo się miną, znoszą się nawzajem.
+ * Przesuwa wszystkie pociski o 1 pole. Pocisk, który trafia na ścianę, zawraca
+ * (w tym ticku zostaje w miejscu). Po BULLET_MAX_BOUNCES odbiciach kolejna ściana go niszczy.
+ * Pociski, które wejdą na to samo pole albo się miną, znoszą się nawzajem.
  * @param {RoundState} state @param {GameEvent[]} events
  */
 function moveBullets(state, events) {
-  const moves = state.bullets.map((b) => ({ b, from: b.pos, to: step(b.pos, b.dir) }));
   const gone = new Set();
+  const moves = state.bullets.map((b) => {
+    const from = b.pos;
+    const next = step(from, b.dir);
+    if (!isBlocked(state.grid, state.walls, next)) return { b, from, to: next };
+
+    if (b.bounces >= BULLET_MAX_BOUNCES) {
+      gone.add(b);
+      events.push({ type: 'bulletWall', pos: next });
+    } else {
+      b.bounces++;
+      b.dir = OPPOSITE[b.dir];
+      events.push({ type: 'bulletBounce', pos: next });
+    }
+    return { b, from, to: from };
+  });
 
   for (let i = 0; i < moves.length; i++) {
     for (let j = i + 1; j < moves.length; j++) {
       const a = moves[i];
       const c = moves[j];
+      if (gone.has(a.b) || gone.has(c.b)) continue;
       const meet = samePos(a.to, c.to);
       const cross = samePos(a.to, c.from) && samePos(c.to, a.from);
       if (meet || cross) {
-        if (!gone.has(a.b) && !gone.has(c.b)) events.push({ type: 'bulletClash', pos: a.to });
+        events.push({ type: 'bulletClash', pos: a.to });
         gone.add(a.b);
         gone.add(c.b);
       }
@@ -1165,12 +1181,12 @@ function moveBullets(state, events) {
 
   for (const m of moves) m.b.pos = m.to;
   for (const m of moves) {
-    if (!gone.has(m.b) && bulletHitsCell(state, m.b, events)) gone.add(m.b);
+    if (!gone.has(m.b) && bulletHitsSnake(state, m.b, events)) gone.add(m.b);
   }
   state.bullets = state.bullets.filter((b) => !gone.has(b));
 }
 
-Object.assign(__exports, { fire, bulletHitsCell, moveBullets });
+Object.assign(__exports, { fire, bulletHitsSnake, moveBullets });
 };
 
 // ---- src/game/grid.js ----
@@ -1228,10 +1244,9 @@ Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex
 
 // ---- src/game/snake.js ----
 __factories["src/game/snake.js"] = function (__exports) {
-// Wąż: tworzenie, skręty, timery, reakcja na trafienie.
+// Wąż: tworzenie, skręty, odbicie, reakcja na trafienie.
 
-const { IMMUNITY_TICKS, STUN_TICKS } = __require("src/config.js");
-const { OPPOSITE } = __require("src/game/grid.js");
+const { DIR_VEC, OPPOSITE } = __require("src/game/grid.js");
 
 /** @typedef {import('./types.js').Snake} Snake */
 /** @typedef {import('./types.js').Dir} Dir */
@@ -1249,8 +1264,6 @@ function createSnake(id, body, dir) {
     nextDirs: [],
     growPending: 0,
     cooldown: 0,
-    stun: 0,
-    immunity: 0,
     alive: true,
   };
 }
@@ -1267,37 +1280,45 @@ function queueTurn(snake, dir) {
   return true;
 }
 
-/** Odlicza cooldown, ogłuszenie i odporność (odporność startuje po końcu ogłuszenia). */
+/** @param {Snake} snake */
 function tickTimers(snake) {
   if (snake.cooldown > 0) snake.cooldown--;
-  if (snake.stun > 0) {
-    snake.stun--;
-    if (snake.stun === 0) snake.immunity = IMMUNITY_TICKS;
-  } else if (snake.immunity > 0) {
-    snake.immunity--;
-  }
 }
 
 /** @param {Snake} snake */
 function canShoot(snake) {
-  return snake.alive && snake.stun === 0 && snake.cooldown === 0 && snake.body.length > 1;
+  return snake.alive && snake.cooldown === 0 && snake.body.length > 1;
+}
+
+/**
+ * Odbicie od przeszkody: wąż zawraca, czyli ogon staje się głową
+ * i dalej jedzie w stronę, w którą „patrzył” ogon.
+ * @param {Snake} snake
+ */
+function bounce(snake) {
+  snake.nextDirs = [];
+  if (snake.body.length === 1) {
+    snake.dir = OPPOSITE[snake.dir];
+    return;
+  }
+  snake.body.reverse();
+  const [head, neck] = snake.body;
+  const dx = head.x - neck.x;
+  const dy = head.y - neck.y;
+  snake.dir = /** @type {Dir} */ (
+    Object.keys(DIR_VEC).find((d) => DIR_VEC[d].x === dx && DIR_VEC[d].y === dy) ?? OPPOSITE[snake.dir]
+  );
 }
 
 /**
  * Trafienie pociskiem w segment o indeksie `index`.
- * Głowa → ogłuszenie (jeśli wąż nie jest ogłuszony ani odporny), ciało → odcięcie ogona.
+ * Głowa → śmierć, ciało → odcięcie ogona od trafionego segmentu.
  * @param {Snake} snake @param {number} index @param {number} by @param {GameEvent[]} events
  */
 function applyHit(snake, index, by, events) {
   if (index === 0) {
-    const pos = { ...snake.body[0] };
-    if (snake.stun === 0 && snake.immunity === 0) {
-      snake.stun = STUN_TICKS;
-      snake.nextDirs = [];
-      events.push({ type: 'stunned', snake: snake.id, by, pos });
-    } else {
-      events.push({ type: 'deflected', snake: snake.id, pos });
-    }
+    snake.alive = false;
+    events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] } });
     return;
   }
   const cells = snake.body.splice(index);
@@ -1309,7 +1330,7 @@ function segmentAt(snake, pos) {
   return snake.body.findIndex((p) => p.x === pos.x && p.y === pos.y);
 }
 
-Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers, canShoot, applyHit, segmentAt });
+Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers, canShoot, bounce, applyHit, segmentAt });
 };
 
 // ---- src/game/food.js ----
@@ -1514,7 +1535,7 @@ function drawRoundView(app, time) {
   effects.applyShake(ctx);
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
-  for (const snake of round.snakes) drawSnake(ctx, snake, time);
+  for (const snake of round.snakes) drawSnake(ctx, snake);
   drawBullets(ctx, round);
   effects.draw(ctx);
   ctx.restore();
@@ -1614,13 +1635,9 @@ const py = (p) => BOARD_Y + p.y * CELL;
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {Snake} snake
- * @param {number} time  ms, do animacji
  */
-function drawSnake(ctx, snake, time) {
+function drawSnake(ctx, snake) {
   const color = PLAYERS[snake.id].color;
-  const stunned = snake.stun > 0;
-  // Ogłuszony wąż miga
-  if (stunned && Math.floor(time / 90) % 2 === 0) return;
 
   ctx.save();
   ctx.globalAlpha = snake.alive ? 1 : 0.35;
@@ -1656,27 +1673,6 @@ function drawSnake(ctx, snake, time) {
   ctx.fillRect(cx - ox - 2, cy - oy - 2, 4, 4);
   ctx.fillRect(cx + ox - 2, cy + oy - 2, 4, 4);
 
-  // Odporność po ogłuszeniu: biała ramka wokół głowy
-  if (snake.immunity > 0 && snake.alive) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time / 60);
-    ctx.strokeRect(hx - 1, hy - 1, CELL + 2, CELL + 2);
-  }
-  ctx.restore();
-
-  if (stunned) drawStunStars(ctx, hx + CELL / 2, hy + CELL / 2, time);
-}
-
-function drawStunStars(ctx, cx, cy, time) {
-  ctx.save();
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#ffffff';
-  ctx.shadowBlur = 6;
-  for (let i = 0; i < 3; i++) {
-    const a = time / 150 + (i * Math.PI * 2) / 3;
-    ctx.fillRect(cx + Math.cos(a) * 14 - 2, cy + Math.sin(a) * 8 - 14, 4, 4);
-  }
   ctx.restore();
 }
 
@@ -1685,16 +1681,18 @@ function drawBullets(ctx, round) {
   for (const b of round.bullets) {
     const color = PLAYERS[b.owner].color;
     const v = DIR_VEC[b.dir];
+    // Każde odbicie przygasza pocisk: widać, ile mu jeszcze zostało
+    const fade = 1 - b.bounces * 0.2;
     const x = px(b.pos);
     const y = py(b.pos);
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 14;
     // Smuga za pociskiem
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = 0.35 * fade;
     ctx.fillStyle = color;
     ctx.fillRect(x - v.x * CELL + 6, y - v.y * CELL + 6, CELL - 12, CELL - 12);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = fade;
     ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 7, y + 7, CELL - 14, CELL - 14);
@@ -1867,14 +1865,14 @@ function describe(result) {
     return {
       title: 'REMIS!',
       color: COLORS.text,
-      detail: result.reason === 'ko' ? 'Zderzenie czołowe — obaj rozbici' : 'Koniec czasu — równe długości',
+      detail: result.reason === 'ko' ? 'Obaj trafieni w głowę naraz' : 'Koniec czasu — równe długości',
     };
   }
   const p = PLAYERS[result.winner];
   return {
     title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`,
     color: p.color,
-    detail: result.reason === 'ko' ? 'Rywal rozbity' : 'Koniec czasu — dłuższy wąż wygrywa',
+    detail: result.reason === 'ko' ? 'Strzał w głowę' : 'Koniec czasu — dłuższy wąż wygrywa',
   };
 }
 

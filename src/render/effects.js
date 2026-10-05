@@ -52,8 +52,11 @@ export class Effects {
         case 'shot':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
           break;
+        case 'bulletBounce':
+          this.burstAt(e.pos, COLORS.wallEdge, 6, 80, 0.2, 3);
+          break;
         case 'bulletWall':
-          this.burstAt(e.pos, COLORS.wallEdge, 8, 90, 0.25, 3);
+          this.burstAt(e.pos, COLORS.wallEdge, 14, 120, 0.35, 3);
           break;
         case 'bulletClash':
           this.burstAt(e.pos, '#ffffff', 16, 160, 0.35, 3);
@@ -63,12 +66,9 @@ export class Effects {
           for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
           this.addShake(5);
           break;
-        case 'stunned':
-          this.burstAt(e.pos, '#ffffff', 20, 150, 0.4, 3);
-          this.addShake(7);
-          break;
-        case 'deflected':
-          this.burstAt(e.pos, '#ffffff', 8, 100, 0.25, 3);
+        case 'bounced':
+          this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);
+          this.addShake(2);
           break;
         case 'ate':
           this.burstAt(e.pos, COLORS.food, 12, 100, 0.4, 3);
