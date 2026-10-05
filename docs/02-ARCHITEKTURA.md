@@ -12,7 +12,7 @@
 | Dźwięk        | Web Audio API, dźwięki syntezowane w kodzie | Bez plików audio i bez licencji |
 | Zależności    | **Zero** bibliotek w grze               | Mniej do utrzymania, gra startuje od razu |
 | Testy         | `node --test` (wbudowany w Node 22)     | Logika gry jest czysta, więc testujemy ją bez przeglądarki |
-| Uruchamianie  | `npm start`, czyli mały serwer statyczny w Node | ES modules wymagają `http://`, a `file://` nie zadziała |
+| Uruchamianie  | Dwuklik w `index.html` albo `npm start` (serwer w Node) | `index.html` ładuje `dist/snake-brawl.js`, czyli moduły sklejone przez `npm run build` w jeden zwykły skrypt, bo przeglądarki blokują ES modules z `file://` |
 | Publikacja    | Pliki statyczne (np. GitHub Pages)      | Nie ma backendu |
 
 ## 2. Główna zasada: logika oddzielona od wyświetlania
@@ -52,8 +52,10 @@
 ```
 index.html              jeden <canvas>, ładuje src/main.js
 style.css
-package.json            skrypty: start, test (bez zależności)
-scripts/serve.js        mini serwer statyczny
+package.json            skrypty: start, build, test (bez zależności)
+scripts/serve.js        mini serwer statyczny (dist/ skleja na bieżąco)
+scripts/build.js        skleja src/ w dist/snake-brawl.js (bez zależności)
+dist/snake-brawl.js     WYGENEROWANY, commitowany, ładowany przez index.html
 src/
   main.js               start aplikacji: canvas, input, pętla, pierwsza scena
   config.js             wszystkie stałe: rozmiary, ticki, kolory, klawisze

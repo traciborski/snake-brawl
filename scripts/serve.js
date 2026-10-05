@@ -1,8 +1,10 @@
 // Mini serwer statyczny bez zależności: `npm start` → http://localhost:8080
+// dist/snake-brawl.js jest sklejany na bieżąco z src/, więc w trakcie pracy nie trzeba robić builda.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bundle, OUT } from './build.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT) || 8080;
@@ -29,7 +31,7 @@ createServer(async (req, res) => {
   }
 
   try {
-    const body = await readFile(file);
+    const body = path === `/${OUT}` ? bundle() : await readFile(file);
     res.writeHead(200, {
       'Content-Type': MIME[extname(file)] ?? 'application/octet-stream',
       'Cache-Control': 'no-store',

@@ -12,12 +12,20 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto przetrwa. Mecz g
 
 ## Uruchomienie
 
-Wymaga Node.js 20+ (bez instalowania zależności):
+**Granie:** otwórz `index.html` dwuklikiem, nic więcej nie trzeba.
+
+**Praca nad kodem** (Node.js 20+, bez instalowania zależności):
 
 ```bash
-npm start      # http://localhost:8080
-npm test       # testy logiki gry
+npm start      # http://localhost:8080, zawsze świeży kod z src/
+npm test       # testy logiki gry + sprawdzenie, czy dist/ jest aktualny
+npm run build  # po zmianach w src/: odświeża dist/snake-brawl.js
 ```
+
+Kod źródłowy to ES modules w `src/`. Przeglądarki blokują moduły otwierane z dysku
+(`file://`), dlatego `index.html` ładuje sklejony plik `dist/snake-brawl.js`.
+Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
+(jeśli się zapomni, `npm test` o tym przypomni).
 
 ## Dokumentacja
 
