@@ -63,6 +63,8 @@ else app.scenes.go('menu');
 
 startLoop({
   tickMs: TICK_MS,
+  // Online gra nie może stanąć w karcie w tle, bo inni czekaliby na nasze ruchy
+  runHidden: () => !!app.session,
   update() {
     app.scenes.update();
     app.keyboard.endTick();

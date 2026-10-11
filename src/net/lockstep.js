@@ -1,11 +1,16 @@
 // Lockstep: każdy komputer liczy tę samą symulację z tych samych komend.
 // Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
 // żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
+//
+// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 50 ms):
+// - wysyłamy dokładnie jedną komendę na tick (na klatkę clock + INPUT_DELAY),
+// - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
+//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick.
 // Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
 
 import { decodeCommand, encodeCommand } from './protocol.js';
 
-export const INPUT_DELAY = 3; // 150 ms
+export const INPUT_DELAY = 2; // 100 ms
 
 export class Lockstep {
   /** @param {number} players liczba graczy @param {number} me mój numer gracza */
@@ -19,6 +24,7 @@ export class Lockstep {
     this.round = -1;
     this.frame = 0;
     this.sent = 0;
+    this.clock = 0;
   }
 
   /** Początek rundy: pierwsze INPUT_DELAY klatek są puste u wszystkich. */
@@ -26,14 +32,30 @@ export class Lockstep {
     this.round = r;
     this.frame = 0;
     this.sent = INPUT_DELAY;
+    this.clock = 0;
     for (const key of this.buffer.keys()) {
       if (Number(key.split(':')[0]) < r) this.buffer.delete(key);
     }
   }
 
-  /** Czy można wysłać kolejną własną komendę (nie wyprzedzamy symulacji o więcej niż opóźnienie). */
+  /** Upływ jednego ticka czasu rzeczywistego. */
+  tick() {
+    if (this.round >= 0) this.clock++;
+  }
+
+  /** Czy wysłać kolejną własną komendę: jedna na tick, na klatkę clock + INPUT_DELAY. */
   canSend() {
-    return this.round >= 0 && this.sent <= this.frame + INPUT_DELAY;
+    return this.round >= 0 && this.sent <= this.clock + INPUT_DELAY;
+  }
+
+  /** Czy symulacji wolno zrobić kolejny krok (nie wyprzedzamy zegara). */
+  due() {
+    return this.round >= 0 && this.frame < this.clock;
+  }
+
+  /** O ile klatek symulacja jest za zegarem (0 = na czas). */
+  behind() {
+    return Math.max(0, this.clock - this.frame - 1);
   }
 
   /** Zapisuje własną komendę na kolejną klatkę i zwraca wiadomość do wysłania. */
@@ -83,7 +105,7 @@ export class Lockstep {
    * @returns {import('../game/types.js').Command[] | null}
    */
   take() {
-    if (this.round < 0 || this.waitingFor().length) return null;
+    if (!this.due() || this.waitingFor().length) return null;
     const { round, frame } = this;
     const commands = [];
     for (let p = 0; p < this.players; p++) {

@@ -46,11 +46,12 @@ function startMatch(app, session, { seed, players }) {
 export function createOnlineController(app, session, me) {
   const lock = new Lockstep(app.players.length, me);
   let stalled = 0;
+  let steps = 0;
 
   return {
     canPause: false,
     canSkip: false,
-    maxSteps: 4, // kto został w tyle (np. karta była w tle), nadrabia kilka klatek naraz
+    maxSteps: 2, // kto został w tyle, nadrabia najwyżej jedną klatkę na tick
     matchEndTicks: 8 * TICKS_PER_SECOND,
     rematchHint: 'Za chwilę powrót do poczekalni   ESC — wyjście',
     me,
@@ -65,18 +66,23 @@ export function createOnlineController(app, session, me) {
       stalled = 0;
     },
 
-    /** Raz na tick: wysyłamy własne komendy (z klawiatury tylko pierwszą, przy nadrabianiu puste). */
+    /** Raz na tick: upływ czasu i wysłanie własnej komendy (z klawiatury tylko pierwszej). */
     beforeTick() {
+      lock.tick();
       let first = true;
       while (lock.canSend()) {
         session.send(lock.makeInput(first ? app.keyboard.consumeMerged() : {}));
         first = false;
       }
+      steps = 0;
     },
 
     commands() {
+      // Drugi krok w tym samym ticku tylko wtedy, gdy symulacja jest za zegarem
+      if (!lock.due() || (steps > 0 && lock.behind() === 0)) return null;
       const commands = lock.take();
       stalled = commands ? 0 : stalled + 1;
+      if (commands) steps++;
       return commands;
     },
 

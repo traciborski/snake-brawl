@@ -77,6 +77,8 @@ else app.scenes.go('menu');
 
 startLoop({
   tickMs: TICK_MS,
+  // Online gra nie może stanąć w karcie w tle, bo inni czekaliby na nasze ruchy
+  runHidden: () => !!app.session,
   update() {
     app.scenes.update();
     app.keyboard.endTick();
@@ -202,16 +204,20 @@ Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_
 // ---- src/core/loop.js ----
 __factories["src/core/loop.js"] = function (__exports) {
 // Pętla gry: logika w stałych tickach, rysowanie w każdej klatce.
+// Gdy karta jest w tle, przeglądarka wstrzymuje requestAnimationFrame. W grze online
+// (runHidden) logika biegnie wtedy dalej na zegarze z Web Workera (zwykłe timery w tle
+// są mocno spowalniane), żeby inni gracze nie czekali na nasze ruchy.
 
 /**
- * @param {{ tickMs: number, update: () => void, render: (alpha: number, dt: number) => void }} options
+ * @param {{ tickMs: number, update: () => void, render: (alpha: number, dt: number) => void,
+ *           runHidden?: () => boolean }} options
  */
-function startLoop({ tickMs, update, render }) {
+function startLoop({ tickMs, update, render, runHidden = () => false }) {
   let last = performance.now();
   let acc = 0;
 
-  function frame(now) {
-    // Limit chroni przed „lawiną” ticków po powrocie do karty przeglądarki
+  /** Doganianie czasu: tyle ticków, ile wypada od ostatniego razu (z limitem). */
+  function advance(now) {
     const dt = Math.min(now - last, 250);
     last = now;
     acc += dt;
@@ -219,11 +225,37 @@ function startLoop({ tickMs, update, render }) {
       update();
       acc -= tickMs;
     }
+    return dt;
+  }
+
+  function frame(now) {
+    const dt = advance(now);
     render(acc / tickMs, dt / 1000);
     requestAnimationFrame(frame);
   }
 
+  startBackgroundTicker(tickMs, () => {
+    if (document.hidden && runHidden()) advance(performance.now());
+  });
+  document.addEventListener('visibilitychange', () => {
+    // Po powrocie z tła nie nadrabiamy całego czasu naraz (offline gra po prostu stała)
+    if (!document.hidden && !runHidden()) last = performance.now();
+  });
+
   requestAnimationFrame(frame);
+}
+
+/** Zegar w osobnym wątku. Bez obsługi Workerów (albo gdy zablokowane) po prostu nic nie robi. */
+function startBackgroundTicker(ms, onTick) {
+  try {
+    const code = `setInterval(() => postMessage(0), ${ms});`;
+    const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    const worker = new Worker(url);
+    worker.onmessage = onTick;
+    return worker;
+  } catch {
+    return null;
+  }
 }
 
 Object.assign(__exports, { startLoop });
@@ -1529,11 +1561,12 @@ function startMatch(app, session, { seed, players }) {
 function createOnlineController(app, session, me) {
   const lock = new Lockstep(app.players.length, me);
   let stalled = 0;
+  let steps = 0;
 
   return {
     canPause: false,
     canSkip: false,
-    maxSteps: 4, // kto został w tyle (np. karta była w tle), nadrabia kilka klatek naraz
+    maxSteps: 2, // kto został w tyle, nadrabia najwyżej jedną klatkę na tick
     matchEndTicks: 8 * TICKS_PER_SECOND,
     rematchHint: 'Za chwilę powrót do poczekalni   ESC — wyjście',
     me,
@@ -1548,18 +1581,23 @@ function createOnlineController(app, session, me) {
       stalled = 0;
     },
 
-    /** Raz na tick: wysyłamy własne komendy (z klawiatury tylko pierwszą, przy nadrabianiu puste). */
+    /** Raz na tick: upływ czasu i wysłanie własnej komendy (z klawiatury tylko pierwszej). */
     beforeTick() {
+      lock.tick();
       let first = true;
       while (lock.canSend()) {
         session.send(lock.makeInput(first ? app.keyboard.consumeMerged() : {}));
         first = false;
       }
+      steps = 0;
     },
 
     commands() {
+      // Drugi krok w tym samym ticku tylko wtedy, gdy symulacja jest za zegarem
+      if (!lock.due() || (steps > 0 && lock.behind() === 0)) return null;
       const commands = lock.take();
       stalled = commands ? 0 : stalled + 1;
+      if (commands) steps++;
       return commands;
     },
 
@@ -1591,11 +1629,16 @@ __factories["src/net/lockstep.js"] = function (__exports) {
 // Lockstep: każdy komputer liczy tę samą symulację z tych samych komend.
 // Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
 // żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
+//
+// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 50 ms):
+// - wysyłamy dokładnie jedną komendę na tick (na klatkę clock + INPUT_DELAY),
+// - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
+//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick.
 // Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
 
 const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
 
-const INPUT_DELAY = 3; // 150 ms
+const INPUT_DELAY = 2; // 100 ms
 
 class Lockstep {
   /** @param {number} players liczba graczy @param {number} me mój numer gracza */
@@ -1609,6 +1652,7 @@ class Lockstep {
     this.round = -1;
     this.frame = 0;
     this.sent = 0;
+    this.clock = 0;
   }
 
   /** Początek rundy: pierwsze INPUT_DELAY klatek są puste u wszystkich. */
@@ -1616,14 +1660,30 @@ class Lockstep {
     this.round = r;
     this.frame = 0;
     this.sent = INPUT_DELAY;
+    this.clock = 0;
     for (const key of this.buffer.keys()) {
       if (Number(key.split(':')[0]) < r) this.buffer.delete(key);
     }
   }
 
-  /** Czy można wysłać kolejną własną komendę (nie wyprzedzamy symulacji o więcej niż opóźnienie). */
+  /** Upływ jednego ticka czasu rzeczywistego. */
+  tick() {
+    if (this.round >= 0) this.clock++;
+  }
+
+  /** Czy wysłać kolejną własną komendę: jedna na tick, na klatkę clock + INPUT_DELAY. */
   canSend() {
-    return this.round >= 0 && this.sent <= this.frame + INPUT_DELAY;
+    return this.round >= 0 && this.sent <= this.clock + INPUT_DELAY;
+  }
+
+  /** Czy symulacji wolno zrobić kolejny krok (nie wyprzedzamy zegara). */
+  due() {
+    return this.round >= 0 && this.frame < this.clock;
+  }
+
+  /** O ile klatek symulacja jest za zegarem (0 = na czas). */
+  behind() {
+    return Math.max(0, this.clock - this.frame - 1);
   }
 
   /** Zapisuje własną komendę na kolejną klatkę i zwraca wiadomość do wysłania. */
@@ -1673,7 +1733,7 @@ class Lockstep {
    * @returns {import('../game/types.js').Command[] | null}
    */
   take() {
-    if (this.round < 0 || this.waitingFor().length) return null;
+    if (!this.due() || this.waitingFor().length) return null;
     const { round, frame } = this;
     const commands = [];
     for (let p = 0; p < this.players; p++) {

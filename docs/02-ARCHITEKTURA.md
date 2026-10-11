@@ -240,10 +240,15 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 **Lockstep**
 - Każdy komputer liczy tę samą symulację z tych samych komend. Serwer tylko przekazuje komendy
   i ustala ziarno meczu. Stan gry nigdy nie idzie przez sieć.
-- Komendy są numerowane `(runda, klatka)`. Komenda wysłana w klatce `f` działa w klatce `f + 3`
-  (opóźnienie 150 ms ukrywa ping). Pierwsze 3 klatki rundy są puste u wszystkich.
+- Komendy są numerowane `(runda, klatka)`. Komenda wysłana w klatce `f` działa w klatce `f + 2`
+  (opóźnienie 100 ms ukrywa ping). Pierwsze 2 klatki rundy są puste u wszystkich.
+- **Tempo wyznacza lokalny zegar** (tick co 50 ms): każdy wysyła dokładnie jedną komendę na tick,
+  a symulacja nigdy nie wyprzedza zegara. Gra online biegnie więc tak samo szybko jak offline.
 - Symulacja robi krok tylko, gdy ma komendy wszystkich graczy na daną klatkę. Gdy kogoś brakuje,
-  gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia kilka klatek naraz.
+  gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia najwyżej jedną
+  dodatkową klatkę na tick.
+- W karcie w tle przeglądarka wstrzymuje animację, więc online logika biegnie wtedy na zegarze
+  z Web Workera (`core/loop.js`), żeby inni nie czekali na nasze ruchy.
 - Ekrany między rundami trwają tyle samo u wszystkich i nie da się ich przeklikać.
 
 **Protokół (JSON przez WebSocket)**
