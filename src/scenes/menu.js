@@ -1,12 +1,14 @@
 import { COLORS, PLAYER_COLORS, VIEW_W } from '../config.js';
 import { blink, drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
+import { showRoomInAddressBar } from '../net/client.js';
 
 /** @param {any} app */
 export function createMenuScene(app) {
   return {
     enter() {
       app.effects.clear();
+      showRoomInAddressBar(null);
       const buttons = [
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
         h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),

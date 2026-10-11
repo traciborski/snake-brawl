@@ -31,8 +31,9 @@ Po każdej zmianie w grze wystarczy znowu `npm run deploy:server`.
 ## 3. Gra z sąsiadami
 
 1. Każdy otwiera adres gry i wybiera **Gra przez internet**.
-2. Jedna osoba klika **Utwórz pokój** i podaje pozostałym 4-znakowy kod.
-3. Pozostali wpisują kod i klikają **Dołącz**.
+2. Jedna osoba klika **Utwórz pokój**, potem **Kopiuj link** i wysyła link znajomym
+   (albo podaje im 4-znakowy kod).
+3. Pozostali otwierają link, wpisują imię i wciskają Enter (albo wpisują kod i klikają **Dołącz**).
 4. Założyciel klika **Start**.
 
 Gra sama łączy się z serwerem pokoi pod tym samym adresem, nic nie trzeba konfigurować.

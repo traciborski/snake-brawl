@@ -88,8 +88,9 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 
 - **Gra i mały serwer pośredniczący** stoją razem na Cloudflare Workers, pod jednym adresem:
   wchodzisz na link i grasz, bez instalowania. Serwer przekazuje ruchy między graczami.
-- **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`), reszta klika *Dołącz*
-  i wpisuje kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
+- **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`) oraz link zaproszenia
+  (`adres-gry/?pokoj=KOT7`, przycisk *Kopiuj link*). Kto otworzy link, od razu widzi zaproszenie:
+  wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
 - 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników
   (wszyscy przechodzą dalej w tym samym momencie).
 - Rozłączenie: wąż gracza ginie, reszta gra dalej.

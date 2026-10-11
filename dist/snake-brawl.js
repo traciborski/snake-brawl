@@ -26,6 +26,7 @@ const { createSetupScene } = __require("src/scenes/setup.js");
 const { createOnlineScene } = __require("src/scenes/online.js");
 const { createOfflineController } = __require("src/modes/offline.js");
 const { Overlay } = __require("src/ui/dom.js");
+const { roomFromLink } = __require("src/net/client.js");
 const { createCountdownScene } = __require("src/scenes/countdown.js");
 const { createPlayScene } = __require("src/scenes/play.js");
 const { createRoundEndScene } = __require("src/scenes/roundEnd.js");
@@ -69,7 +70,10 @@ app.scenes.register('matchEnd', createMatchEndScene(app));
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
-app.scenes.go('menu');
+// Link zaproszenia (?pokoj=KOD) prowadzi od razu do dołączania do pokoju
+const invite = roomFromLink();
+if (invite) app.scenes.go('online', { invite });
+else app.scenes.go('menu');
 
 startLoop({
   tickMs: TICK_MS,
@@ -709,12 +713,14 @@ __factories["src/scenes/menu.js"] = function (__exports) {
 const { COLORS, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { blink, drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
+const { showRoomInAddressBar } = __require("src/net/client.js");
 
 /** @param {any} app */
 function createMenuScene(app) {
   return {
     enter() {
       app.effects.clear();
+      showRoomInAddressBar(null);
       const buttons = [
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
         h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
@@ -909,6 +915,178 @@ class Overlay {
 }
 
 Object.assign(__exports, { h, Overlay });
+};
+
+// ---- src/net/client.js ----
+__factories["src/net/client.js"] = function (__exports) {
+// Połączenie z serwerem pokoi (WebSocket), wybór adresu serwera i linki zaproszeń do pokoju.
+
+const { ONLINE_SERVER } = __require("src/config.js");
+const { normalizeCode } = __require("src/net/protocol.js");
+
+/**
+ * Adres serwera pokoi:
+ * - z linku (?server=wss://…), gdy ktoś chce wskazać inny serwer,
+ * - ten sam adres, z którego przyszła gra (Cloudflare albo `npm start`: gra i pokoje są razem),
+ * - przy grze otwartej z dysku (file://) adres z config.js.
+ * @returns {string | null}
+ */
+function serverUrl() {
+  const fromLink = new URLSearchParams(location.search).get('server');
+  if (fromLink) return fromLink.replace(/\/+$/, '');
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+  }
+  return ONLINE_SERVER || null;
+}
+
+/**
+ * Sesja w pokoju gry. Po połączeniu `onMessage` dostaje wszystkie wiadomości serwera.
+ * @typedef {object} Session
+ * @property {string} code
+ * @property {any} lobby                  ostatni stan poczekalni
+ * @property {(msg: object) => void} send
+ * @property {() => void} close
+ * @property {((msg: any) => void) | null} onMessage
+ * @property {(() => void) | null} onClose  zerwanie połączenia (nie wywoływane po close())
+ */
+
+/**
+ * Łączy z pokojem. Kończy się po pierwszym stanie poczekalni albo błędem
+ * (np. { code: 'exists' | 'missing' | 'full' | 'playing' | 'network', msg }).
+ * @returns {Promise<Session>}
+ */
+function joinRoom(baseUrl, code, name, create) {
+  return new Promise((resolve, reject) => {
+    const networkError = { code: 'network', msg: 'Nie udało się połączyć z serwerem gry' };
+    /** @type {WebSocket} */
+    let ws;
+    try {
+      ws = new WebSocket(`${baseUrl}/room/${code}`);
+    } catch {
+      reject(networkError);
+      return;
+    }
+
+    let settled = false;
+    let closing = false;
+    /** @type {Session} */
+    const session = {
+      code,
+      lobby: null,
+      onMessage: null,
+      onClose: null,
+      send: (msg) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      },
+      close: () => {
+        closing = true;
+        ws.close();
+      },
+    };
+
+    ws.onopen = () => session.send({ t: 'hello', name, create });
+    ws.onmessage = (e) => {
+      let msg;
+      try {
+        msg = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (msg.t === 'lobby') session.lobby = msg;
+      if (!settled) {
+        if (msg.t === 'lobby') {
+          settled = true;
+          resolve(session);
+        } else if (msg.t === 'error') {
+          settled = true;
+          reject(msg);
+        }
+        return;
+      }
+      session.onMessage?.(msg);
+    };
+    ws.onclose = () => {
+      if (!settled) {
+        settled = true;
+        reject(networkError);
+      } else if (!closing) {
+        session.onClose?.();
+      }
+    };
+  });
+}
+
+const ROOM_PARAM = 'pokoj';
+
+/** Kod pokoju z linku zaproszenia (?pokoj=KOT7) albo null. */
+function roomFromLink() {
+  return normalizeCode(new URLSearchParams(location.search).get(ROOM_PARAM));
+}
+
+/** Link zaproszenia do pokoju (z zachowaniem ?server=, jeśli był). */
+function roomLink(code) {
+  const url = new URL(location.href);
+  url.hash = '';
+  url.searchParams.set(ROOM_PARAM, code);
+  return url.toString();
+}
+
+/** Ustawia (albo czyści, gdy code = null) kod pokoju w pasku adresu, bez przeładowania strony. */
+function showRoomInAddressBar(code) {
+  try {
+    const url = new URL(location.href);
+    if (code) url.searchParams.set(ROOM_PARAM, code);
+    else url.searchParams.delete(ROOM_PARAM);
+    history.replaceState(null, '', url);
+  } catch {
+    // np. strona otwarta z dysku w przeglądarce, która na to nie pozwala
+  }
+}
+
+Object.assign(__exports, { serverUrl, joinRoom, roomFromLink, roomLink, showRoomInAddressBar });
+};
+
+// ---- src/net/protocol.js ----
+__factories["src/net/protocol.js"] = function (__exports) {
+// Wspólne dla gry i serwera: kody pokoi i zapis komend w wiadomościach sieciowych.
+
+/** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_LENGTH = 4;
+const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+
+/** Losowy kod pokoju, np. „KOT7”. */
+function randomCode(random = Math.random) {
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)];
+  return code;
+}
+
+/** Kod wpisany przez gracza: wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
+function normalizeCode(raw) {
+  const code = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
+  return ROOM_PATH_RE.test(`/room/${code}`) ? code : null;
+}
+
+const DIR_TO_CHAR = { up: 'u', down: 'd', left: 'l', right: 'r' };
+const CHAR_TO_DIR = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+/**
+ * Komenda gry → zwarta postać do wiadomości: { d: 'ul', s: 1 } (max 3 skręty).
+ * @param {import('../game/types.js').Command} cmd
+ */
+function encodeCommand(cmd) {
+  const d = (cmd.turns ?? []).slice(0, 3).map((t) => DIR_TO_CHAR[t]).join('');
+  return { d, s: cmd.shoot ? 1 : 0 };
+}
+
+/** @returns {import('../game/types.js').Command} */
+function decodeCommand({ d = '', s = 0 }) {
+  return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
+}
+
+Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, randomCode, normalizeCode, encodeCommand, decodeCommand });
 };
 
 // ---- src/scenes/setup.js ----
@@ -1117,7 +1295,7 @@ __factories["src/scenes/online.js"] = function (__exports) {
 // Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
 const { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
-const { joinRoom, serverUrl } = __require("src/net/client.js");
+const { joinRoom, roomLink, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
 const { normalizeCode, randomCode } = __require("src/net/protocol.js");
 const { attachSession, leaveOnline } = __require("src/modes/online.js");
 const { drawText } = __require("src/render/text.js");
@@ -1132,15 +1310,24 @@ const CREATE_ATTEMPTS = 5;
 function createOnlineScene(app) {
   let busy = false;
 
-  /** Formularz: imię + utwórz / dołącz. */
-  function showForm(error = '') {
+  /**
+   * Formularz: imię + utwórz / dołącz. Z linku zaproszenia (inviteCode) kod jest już wpisany,
+   * a Enter od razu dołącza.
+   */
+  function showForm(error = '', inviteCode = null) {
     const server = serverUrl();
     const name = h('input', {
       value: load('onlineName', load('names', DEFAULT_NAMES)[0]),
       maxLength: NAME_MAX,
       'aria-label': 'Twoje imię',
     });
-    const code = h('input', { placeholder: 'KOD', maxLength: 4, 'aria-label': 'Kod pokoju', style: { width: '6em', textTransform: 'uppercase' } });
+    const code = h('input', {
+      value: inviteCode ?? '',
+      placeholder: 'KOD',
+      maxLength: 4,
+      'aria-label': 'Kod pokoju',
+      style: { width: '6em', textTransform: 'uppercase' },
+    });
     const message = h('p', { className: 'hint error' }, error || (server ? '' : 'Serwer gry online nie jest jeszcze ustawiony.'));
 
     const go = async (create) => {
@@ -1177,13 +1364,19 @@ function createOnlineScene(app) {
       'form',
       {
         className: 'panel',
-        onsubmit: (e) => {
-          e.preventDefault();
-          go(!code.value.trim());
+        onsubmit: (e) => e.preventDefault(),
+        // Enter w polu: z wpisanym kodem dołącza, bez kodu tworzy pokój
+        // (formularz z dwoma polami i bez przycisku „submit” sam się nie wysyła)
+        onkeydown: (e) => {
+          if (e.code === 'Escape') app.scenes.go('menu');
+          if ((e.code === 'Enter' || e.code === 'NumpadEnter') && e.target instanceof HTMLInputElement) {
+            e.preventDefault();
+            go(!code.value.trim());
+          }
         },
-        onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu'),
       },
-      h('h2', {}, 'GRA PRZEZ INTERNET'),
+      h('h2', {}, inviteCode ? `ZAPROSZENIE DO POKOJU ${inviteCode}` : 'GRA PRZEZ INTERNET'),
+      inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
       h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
       h(
         'div',
@@ -1208,6 +1401,7 @@ function createOnlineScene(app) {
   function showLobby() {
     const lobby = app.session?.lobby;
     if (!lobby) return showForm();
+    showRoomInAddressBar(lobby.code);
     const isHost = lobby.host === lobby.you;
     const canStart = lobby.players.length >= 2;
 
@@ -1225,7 +1419,8 @@ function createOnlineScene(app) {
       'div',
       { className: 'panel', onkeydown: (e) => e.code === 'Escape' && leaveOnline(app) },
       h('h2', {}, `POKÓJ  ${lobby.code}`),
-      h('p', { className: 'hint' }, 'Podaj ten kod znajomym, żeby dołączyli.'),
+      h('p', { className: 'hint' }, 'Wyślij znajomym link (albo sam kod), żeby dołączyli:'),
+      linkRow(lobby.code),
       rows,
       h('p', { className: 'hint' }, `${lobby.players.length} / ${MAX_PLAYERS} graczy`),
       h(
@@ -1243,12 +1438,29 @@ function createOnlineScene(app) {
     app.overlay.show(panel);
   }
 
+  /** Link zaproszenia z przyciskiem kopiowania. */
+  function linkRow(code) {
+    const link = h('input', { value: roomLink(code), readOnly: true, 'aria-label': 'Link do pokoju', style: { width: '24em', fontSize: '0.7em' } });
+    const copy = h('button', { type: 'button' }, 'KOPIUJ LINK');
+    copy.addEventListener('click', async () => {
+      link.select();
+      try {
+        await navigator.clipboard.writeText(link.value);
+      } catch {
+        document.execCommand?.('copy'); // starsze przeglądarki i strona z dysku
+      }
+      copy.textContent = 'SKOPIOWANO!';
+      setTimeout(() => (copy.textContent = 'KOPIUJ LINK'), 1500);
+    });
+    return h('div', { className: 'row', style: { justifyContent: 'center' } }, link, copy);
+  }
+
   return {
-    /** @param {{ lobby?: boolean, error?: string }} [params] */
+    /** @param {{ lobby?: boolean, error?: string, invite?: string }} [params] */
     enter(params = {}) {
       app.onLobby = () => showLobby();
       if (params.lobby && app.session) showLobby();
-      else showForm(params.error);
+      else showForm(params.error, params.invite ?? null);
     },
 
     exit() {
@@ -1267,150 +1479,6 @@ function createOnlineScene(app) {
 Object.assign(__exports, { createOnlineScene });
 };
 
-// ---- src/net/client.js ----
-__factories["src/net/client.js"] = function (__exports) {
-// Połączenie z serwerem pokoi (WebSocket) i wybór adresu serwera.
-
-const { ONLINE_SERVER } = __require("src/config.js");
-
-/**
- * Adres serwera pokoi:
- * - z linku (?server=wss://…), gdy ktoś chce wskazać inny serwer,
- * - ten sam adres, z którego przyszła gra (Cloudflare albo `npm start`: gra i pokoje są razem),
- * - przy grze otwartej z dysku (file://) adres z config.js.
- * @returns {string | null}
- */
-function serverUrl() {
-  const fromLink = new URLSearchParams(location.search).get('server');
-  if (fromLink) return fromLink.replace(/\/+$/, '');
-  if (location.protocol === 'http:' || location.protocol === 'https:') {
-    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
-  }
-  return ONLINE_SERVER || null;
-}
-
-/**
- * Sesja w pokoju gry. Po połączeniu `onMessage` dostaje wszystkie wiadomości serwera.
- * @typedef {object} Session
- * @property {string} code
- * @property {any} lobby                  ostatni stan poczekalni
- * @property {(msg: object) => void} send
- * @property {() => void} close
- * @property {((msg: any) => void) | null} onMessage
- * @property {(() => void) | null} onClose  zerwanie połączenia (nie wywoływane po close())
- */
-
-/**
- * Łączy z pokojem. Kończy się po pierwszym stanie poczekalni albo błędem
- * (np. { code: 'exists' | 'missing' | 'full' | 'playing' | 'network', msg }).
- * @returns {Promise<Session>}
- */
-function joinRoom(baseUrl, code, name, create) {
-  return new Promise((resolve, reject) => {
-    const networkError = { code: 'network', msg: 'Nie udało się połączyć z serwerem gry' };
-    /** @type {WebSocket} */
-    let ws;
-    try {
-      ws = new WebSocket(`${baseUrl}/room/${code}`);
-    } catch {
-      reject(networkError);
-      return;
-    }
-
-    let settled = false;
-    let closing = false;
-    /** @type {Session} */
-    const session = {
-      code,
-      lobby: null,
-      onMessage: null,
-      onClose: null,
-      send: (msg) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-      },
-      close: () => {
-        closing = true;
-        ws.close();
-      },
-    };
-
-    ws.onopen = () => session.send({ t: 'hello', name, create });
-    ws.onmessage = (e) => {
-      let msg;
-      try {
-        msg = JSON.parse(e.data);
-      } catch {
-        return;
-      }
-      if (msg.t === 'lobby') session.lobby = msg;
-      if (!settled) {
-        if (msg.t === 'lobby') {
-          settled = true;
-          resolve(session);
-        } else if (msg.t === 'error') {
-          settled = true;
-          reject(msg);
-        }
-        return;
-      }
-      session.onMessage?.(msg);
-    };
-    ws.onclose = () => {
-      if (!settled) {
-        settled = true;
-        reject(networkError);
-      } else if (!closing) {
-        session.onClose?.();
-      }
-    };
-  });
-}
-
-Object.assign(__exports, { serverUrl, joinRoom });
-};
-
-// ---- src/net/protocol.js ----
-__factories["src/net/protocol.js"] = function (__exports) {
-// Wspólne dla gry i serwera: kody pokoi i zapis komend w wiadomościach sieciowych.
-
-/** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const CODE_LENGTH = 4;
-const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
-
-/** Losowy kod pokoju, np. „KOT7”. */
-function randomCode(random = Math.random) {
-  let code = '';
-  for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)];
-  return code;
-}
-
-/** Kod wpisany przez gracza: wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
-function normalizeCode(raw) {
-  const code = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
-  return ROOM_PATH_RE.test(`/room/${code}`) ? code : null;
-}
-
-const DIR_TO_CHAR = { up: 'u', down: 'd', left: 'l', right: 'r' };
-const CHAR_TO_DIR = { u: 'up', d: 'down', l: 'left', r: 'right' };
-
-/**
- * Komenda gry → zwarta postać do wiadomości: { d: 'ul', s: 1 } (max 3 skręty).
- * @param {import('../game/types.js').Command} cmd
- */
-function encodeCommand(cmd) {
-  const d = (cmd.turns ?? []).slice(0, 3).map((t) => DIR_TO_CHAR[t]).join('');
-  return { d, s: cmd.shoot ? 1 : 0 };
-}
-
-/** @returns {import('../game/types.js').Command} */
-function decodeCommand({ d = '', s = 0 }) {
-  return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
-}
-
-Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, randomCode, normalizeCode, encodeCommand, decodeCommand });
-};
-
 // ---- src/modes/online.js ----
 __factories["src/modes/online.js"] = function (__exports) {
 // Gra przez internet: komendy wszystkich graczy przez serwer (lockstep).
@@ -1418,6 +1486,7 @@ __factories["src/modes/online.js"] = function (__exports) {
 const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { createMatch } = __require("src/game/match.js");
 const { Lockstep } = __require("src/net/lockstep.js");
+const { showRoomInAddressBar } = __require("src/net/client.js");
 const { drawPanel, drawText } = __require("src/render/text.js");
 
 /** Ile ticków przestoju, zanim pokażemy „czekam na…” (żeby nie migało przy zwykłym pingu). */
@@ -1444,6 +1513,7 @@ function attachSession(app, session) {
 function leaveOnline(app) {
   app.session?.close();
   app.session = null;
+  showRoomInAddressBar(null);
   app.scenes.go('menu');
 }
 

@@ -1,7 +1,7 @@
 // Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
 import { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } from '../config.js';
-import { joinRoom, serverUrl } from '../net/client.js';
+import { joinRoom, roomLink, serverUrl, showRoomInAddressBar } from '../net/client.js';
 import { normalizeCode, randomCode } from '../net/protocol.js';
 import { attachSession, leaveOnline } from '../modes/online.js';
 import { drawText } from '../render/text.js';
@@ -16,15 +16,24 @@ const CREATE_ATTEMPTS = 5;
 export function createOnlineScene(app) {
   let busy = false;
 
-  /** Formularz: imię + utwórz / dołącz. */
-  function showForm(error = '') {
+  /**
+   * Formularz: imię + utwórz / dołącz. Z linku zaproszenia (inviteCode) kod jest już wpisany,
+   * a Enter od razu dołącza.
+   */
+  function showForm(error = '', inviteCode = null) {
     const server = serverUrl();
     const name = h('input', {
       value: load('onlineName', load('names', DEFAULT_NAMES)[0]),
       maxLength: NAME_MAX,
       'aria-label': 'Twoje imię',
     });
-    const code = h('input', { placeholder: 'KOD', maxLength: 4, 'aria-label': 'Kod pokoju', style: { width: '6em', textTransform: 'uppercase' } });
+    const code = h('input', {
+      value: inviteCode ?? '',
+      placeholder: 'KOD',
+      maxLength: 4,
+      'aria-label': 'Kod pokoju',
+      style: { width: '6em', textTransform: 'uppercase' },
+    });
     const message = h('p', { className: 'hint error' }, error || (server ? '' : 'Serwer gry online nie jest jeszcze ustawiony.'));
 
     const go = async (create) => {
@@ -61,13 +70,19 @@ export function createOnlineScene(app) {
       'form',
       {
         className: 'panel',
-        onsubmit: (e) => {
-          e.preventDefault();
-          go(!code.value.trim());
+        onsubmit: (e) => e.preventDefault(),
+        // Enter w polu: z wpisanym kodem dołącza, bez kodu tworzy pokój
+        // (formularz z dwoma polami i bez przycisku „submit” sam się nie wysyła)
+        onkeydown: (e) => {
+          if (e.code === 'Escape') app.scenes.go('menu');
+          if ((e.code === 'Enter' || e.code === 'NumpadEnter') && e.target instanceof HTMLInputElement) {
+            e.preventDefault();
+            go(!code.value.trim());
+          }
         },
-        onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu'),
       },
-      h('h2', {}, 'GRA PRZEZ INTERNET'),
+      h('h2', {}, inviteCode ? `ZAPROSZENIE DO POKOJU ${inviteCode}` : 'GRA PRZEZ INTERNET'),
+      inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
       h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
       h(
         'div',
@@ -92,6 +107,7 @@ export function createOnlineScene(app) {
   function showLobby() {
     const lobby = app.session?.lobby;
     if (!lobby) return showForm();
+    showRoomInAddressBar(lobby.code);
     const isHost = lobby.host === lobby.you;
     const canStart = lobby.players.length >= 2;
 
@@ -109,7 +125,8 @@ export function createOnlineScene(app) {
       'div',
       { className: 'panel', onkeydown: (e) => e.code === 'Escape' && leaveOnline(app) },
       h('h2', {}, `POKÓJ  ${lobby.code}`),
-      h('p', { className: 'hint' }, 'Podaj ten kod znajomym, żeby dołączyli.'),
+      h('p', { className: 'hint' }, 'Wyślij znajomym link (albo sam kod), żeby dołączyli:'),
+      linkRow(lobby.code),
       rows,
       h('p', { className: 'hint' }, `${lobby.players.length} / ${MAX_PLAYERS} graczy`),
       h(
@@ -127,12 +144,29 @@ export function createOnlineScene(app) {
     app.overlay.show(panel);
   }
 
+  /** Link zaproszenia z przyciskiem kopiowania. */
+  function linkRow(code) {
+    const link = h('input', { value: roomLink(code), readOnly: true, 'aria-label': 'Link do pokoju', style: { width: '24em', fontSize: '0.7em' } });
+    const copy = h('button', { type: 'button' }, 'KOPIUJ LINK');
+    copy.addEventListener('click', async () => {
+      link.select();
+      try {
+        await navigator.clipboard.writeText(link.value);
+      } catch {
+        document.execCommand?.('copy'); // starsze przeglądarki i strona z dysku
+      }
+      copy.textContent = 'SKOPIOWANO!';
+      setTimeout(() => (copy.textContent = 'KOPIUJ LINK'), 1500);
+    });
+    return h('div', { className: 'row', style: { justifyContent: 'center' } }, link, copy);
+  }
+
   return {
-    /** @param {{ lobby?: boolean, error?: string }} [params] */
+    /** @param {{ lobby?: boolean, error?: string, invite?: string }} [params] */
     enter(params = {}) {
       app.onLobby = () => showLobby();
       if (params.lobby && app.session) showLobby();
-      else showForm(params.error);
+      else showForm(params.error, params.invite ?? null);
     },
 
     exit() {

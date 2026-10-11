@@ -3,6 +3,7 @@
 import { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
 import { createMatch } from '../game/match.js';
 import { Lockstep } from '../net/lockstep.js';
+import { showRoomInAddressBar } from '../net/client.js';
 import { drawPanel, drawText } from '../render/text.js';
 
 /** Ile ticków przestoju, zanim pokażemy „czekam na…” (żeby nie migało przy zwykłym pingu). */
@@ -29,6 +30,7 @@ export function attachSession(app, session) {
 export function leaveOnline(app) {
   app.session?.close();
   app.session = null;
+  showRoomInAddressBar(null);
   app.scenes.go('menu');
 }
 

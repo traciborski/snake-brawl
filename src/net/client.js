@@ -1,6 +1,7 @@
-// Połączenie z serwerem pokoi (WebSocket) i wybór adresu serwera.
+// Połączenie z serwerem pokoi (WebSocket), wybór adresu serwera i linki zaproszeń do pokoju.
 
 import { ONLINE_SERVER } from '../config.js';
+import { normalizeCode } from './protocol.js';
 
 /**
  * Adres serwera pokoi:
@@ -93,4 +94,31 @@ export function joinRoom(baseUrl, code, name, create) {
       }
     };
   });
+}
+
+const ROOM_PARAM = 'pokoj';
+
+/** Kod pokoju z linku zaproszenia (?pokoj=KOT7) albo null. */
+export function roomFromLink() {
+  return normalizeCode(new URLSearchParams(location.search).get(ROOM_PARAM));
+}
+
+/** Link zaproszenia do pokoju (z zachowaniem ?server=, jeśli był). */
+export function roomLink(code) {
+  const url = new URL(location.href);
+  url.hash = '';
+  url.searchParams.set(ROOM_PARAM, code);
+  return url.toString();
+}
+
+/** Ustawia (albo czyści, gdy code = null) kod pokoju w pasku adresu, bez przeładowania strony. */
+export function showRoomInAddressBar(code) {
+  try {
+    const url = new URL(location.href);
+    if (code) url.searchParams.set(ROOM_PARAM, code);
+    else url.searchParams.delete(ROOM_PARAM);
+    history.replaceState(null, '', url);
+  } catch {
+    // np. strona otwarta z dysku w przeglądarce, która na to nie pozwala
+  }
 }

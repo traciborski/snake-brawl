@@ -12,6 +12,7 @@ import { createSetupScene } from './scenes/setup.js';
 import { createOnlineScene } from './scenes/online.js';
 import { createOfflineController } from './modes/offline.js';
 import { Overlay } from './ui/dom.js';
+import { roomFromLink } from './net/client.js';
 import { createCountdownScene } from './scenes/countdown.js';
 import { createPlayScene } from './scenes/play.js';
 import { createRoundEndScene } from './scenes/roundEnd.js';
@@ -55,7 +56,10 @@ app.scenes.register('matchEnd', createMatchEndScene(app));
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
-app.scenes.go('menu');
+// Link zaproszenia (?pokoj=KOD) prowadzi od razu do dołączania do pokoju
+const invite = roomFromLink();
+if (invite) app.scenes.go('online', { invite });
+else app.scenes.go('menu');
 
 startLoop({
   tickMs: TICK_MS,
