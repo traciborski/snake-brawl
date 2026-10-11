@@ -42,3 +42,4 @@ Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
 1. [Koncept](docs/01-KONCEPT.md): zasady gry
 2. [Architektura](docs/02-ARCHITEKTURA.md): jak zbudowany jest kod
 3. [Plan](docs/03-PLAN.md): kroki i lista kontrolna
+4. [Wystawienie](docs/04-WYSTAWIENIE.md): GitHub Pages + Cloudflare

@@ -71,9 +71,11 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
   ✅ Test automatyczny w 3 przeglądarkach: identyczny stan u wszystkich, rozłączenie, rewanż.
 
 ## Krok 10: Wystawienie w internecie
-- [ ] Gra na GitHub Pages (repo publiczne)
-- [ ] Serwer na Cloudflare Workers (konto właściciela, `wrangler deploy`)
-- [ ] Adres serwera w konfiguracji gry
+- [x] Przygotowane: `server/worker.js`, `wrangler.toml`, `.nojekyll`, instrukcja [04-WYSTAWIENIE.md](04-WYSTAWIENIE.md)
+- [x] Sprawdzone lokalnie w środowisku Cloudflare (`wrangler dev`): mecz w 3 przeglądarkach
+- [ ] Gra na GitHub Pages (repo publiczne), robi właściciel repo
+- [ ] Serwer na Cloudflare Workers (konto właściciela, `npm run deploy:server`)
+- [ ] Adres serwera w `src/config.js` (`ONLINE_SERVER`)
 - **Sprawdzenie:** mecz z sąsiadami.
 
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
