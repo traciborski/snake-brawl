@@ -1,2 +1,5 @@
 # Folder z plikami gry składany przy wystawianiu na Cloudflare
 site/
+
+# Lokalne dane narzędzia Cloudflare (wrangler dev)
+.wrangler/
