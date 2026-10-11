@@ -1264,34 +1264,37 @@ function wrap(grid, p) {
 }
 
 /**
- * Pole, na które wjeżdża wąż z `from` w kierunku `dir`. Krawędź planszy i niebieskie
- * ściany przenoszą na drugą stronę: wąż przeskakuje je dalej w tym samym kierunku.
+ * Pole, na które wjeżdża wąż z `from` w kierunku `dir`.
+ * - Krawędź planszy: wyjazd z przeciwnej krawędzi.
+ * - Niebieska ściana w środku: wyjazd zza jej bliźniaczki po drugiej stronie planszy
+ *   (obraz po obrocie o 180°; labirynt jest symetryczny, więc zawsze istnieje),
+ *   dalej w tym samym kierunku.
  * @param {Grid} grid @param {Uint8Array} walls @param {Pos} from @param {Dir} dir
  * @returns {{ pos: Pos, teleported: boolean }}
  */
 function passThrough(grid, walls, from, dir) {
+  const isPortal = (p) => walls[cellIndex(grid, p)] === WALL.PORTAL;
   const next = step(from, dir);
   let teleported = !inBounds(grid, next);
   let pos = wrap(grid, next);
-  for (let i = 0; i < grid.w + grid.h && walls[cellIndex(grid, pos)] === WALL.PORTAL; i++) {
-    pos = wrap(grid, step(pos, dir));
+  if (isPortal(pos)) {
+    pos = rotate180(grid, pos);
+    for (let i = 0; i < grid.w + grid.h && isPortal(pos); i++) pos = wrap(grid, step(pos, dir));
     teleported = true;
   }
   return { pos, teleported };
 }
 
 /**
- * Kierunek od pola `from` do sąsiedniego pola `to`, także gdy leżą po dwóch
- * stronach portalu (przeskok przez niebieską ścianę albo krawędź planszy).
- * @returns {Dir}
+ * Kierunek od pola `from` do sąsiedniego pola `to`, także przez krawędź planszy.
+ * Gdy pola nie sąsiadują (przeskok przez niebieską ścianę), zwraca null.
+ * @returns {Dir | null}
  */
 function dirBetween(grid, from, to) {
-  let dx = to.x - from.x;
-  let dy = to.y - from.y;
-  if (Math.abs(dx) > grid.w / 2) dx = -dx;
-  if (Math.abs(dy) > grid.h / 2) dy = -dy;
-  if (dx !== 0) return dx > 0 ? 'right' : 'left';
-  return dy > 0 ? 'down' : 'up';
+  for (const d of /** @type {Dir[]} */ (Object.keys(DIR_VEC))) {
+    if (samePos(wrap(grid, step(from, d)), to)) return d;
+  }
+  return null;
 }
 
 Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex, rotate180, isBlocked, wrap, passThrough, dirBetween });
@@ -1359,7 +1362,8 @@ function bounce(snake, grid) {
     return;
   }
   snake.body.reverse();
-  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]);
+  // Przy przeskoku przez portal segmenty nie sąsiadują: wtedy po prostu zawracamy
+  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
 /** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall'} cause */

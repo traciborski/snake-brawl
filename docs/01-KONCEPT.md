@@ -46,7 +46,9 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 - **Trzy rodzaje ścian** (każdy to ok. 1/3 ścian):
   - 🔴 **czerwona** zabija,
   - ⚫ **czarna** odbija: wąż zawraca, czyli ogon staje się głową i wąż jedzie w przeciwną stronę,
-  - 🔵 **niebieska** przenosi: wąż przeskakuje ją i wyjeżdża po jej drugiej stronie.
+  - 🔵 **niebieska** przenosi: każda niebieska ściana ma bliźniaczkę po przeciwnej stronie planszy
+    (lustrzane odbicie, bo labirynt jest symetryczny). Wjeżdżasz w jedną, wyjeżdżasz zza drugiej
+    i jedziesz dalej w tym samym kierunku.
 - **Krawędź planszy** działa jak niebieska ściana: wyjeżdżasz z drugiej strony planszy.
 - Własne ciało, ciało rywala i zderzenie głowami **odbijają** (jak czarna ściana).
 

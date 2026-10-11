@@ -83,34 +83,66 @@ test('krawędź planszy przenosi na drugą stronę', () => {
   assert.equal(s.snakes[0].dir, 'left');
 });
 
-test('niebieska ściana przenosi na jej drugą stronę', () => {
+/** Niebieska ściana w środku z bliźniaczką po drugiej stronie planszy (obrót o 180°). */
+function portal(s, cells) {
+  for (const [x, y] of cells) {
+    wall(s, x, y, WALL.PORTAL);
+    wall(s, s.grid.w - 1 - x, s.grid.h - 1 - y, WALL.PORTAL);
+  }
+}
+
+test('niebieska ściana przenosi za bliźniaczą ścianę po drugiej stronie planszy', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
-  for (const x of [11, 12, 13]) wall(s, x, 10, WALL.PORTAL);
+  // ściana (11..13, 10), bliźniaczka (34..36, 16)
+  portal(s, [[11, 10], [12, 10], [13, 10]]);
   const events = run(s, 2);
   assert.ok(events.some((e) => e.type === 'teleported'));
-  assert.deepEqual(pos(s.snakes[0])[0], [14, 10]);
+  assert.deepEqual(pos(s.snakes[0])[0], [37, 16]);
+  assert.equal(s.snakes[0].dir, 'right');
   run(s, 2);
-  assert.deepEqual(pos(s.snakes[0]), [[15, 10], [14, 10], [10, 10]]);
+  assert.deepEqual(pos(s.snakes[0]), [[38, 16], [37, 16], [10, 10]]);
 });
 
-test('za niebieską ścianą stoi czarna: wąż się odbija', () => {
+test('pionowa niebieska ściana: wyjazd zza bliźniaczki, dalej w tym samym kierunku', () => {
+  const s = emptyRound();
+  place(s, 0, [[20, 5], [19, 5], [18, 5]], 'right');
+  // ściana (21, 4..6), bliźniaczka (26, 20..22); wjazd w środek → wyjazd na (27, 21)
+  portal(s, [[21, 4], [21, 5], [21, 6]]);
+  run(s, 2);
+  assert.deepEqual(pos(s.snakes[0])[0], [27, 21]);
+});
+
+test('za bliźniaczką stoi czarna ściana: wąż się odbija', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
-  wall(s, 11, 10, WALL.PORTAL);
-  wall(s, 12, 10, WALL.BOUNCE);
+  portal(s, [[11, 10]]); // bliźniaczka (36, 16)
+  wall(s, 37, 16, WALL.BOUNCE);
   const events = run(s, 2);
   assert.ok(events.some((e) => e.type === 'bounced'));
   assert.equal(s.snakes[0].dir, 'left');
 });
 
-test('za niebieską ścianą stoi czerwona: wąż ginie', () => {
+test('za bliźniaczką stoi czerwona ściana: wąż ginie', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
-  wall(s, 11, 10, WALL.PORTAL);
-  wall(s, 12, 10, WALL.DEADLY);
+  portal(s, [[11, 10]]);
+  wall(s, 37, 16, WALL.DEADLY);
   run(s, 2);
   assert.equal(s.snakes[0].alive, false);
+});
+
+test('odbicie, gdy ogon jest tuż za portalem: wąż po prostu zawraca', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  portal(s, [[11, 10]]);
+  run(s, 4); // głowa (38,16), ciało (37,16), ogon (10,10)
+  wall(s, 39, 16);
+  // ogon zostaje po drugiej stronie portalu
+  run(s, 2);
+  assert.equal(s.snakes[0].alive, true);
+  assert.deepEqual(pos(s.snakes[0])[0], [10, 10]);
+  assert.equal(s.snakes[0].dir, 'left');
 });
 
 test('czerwona ściana zabija, rywal wygrywa rundę', () => {

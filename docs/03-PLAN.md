@@ -60,7 +60,8 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [ ] Co 10. strzał skraca strzelającego o segment, AMMO w pasku się zgadza
 - [ ] Własny pocisk przelatuje przez strzelającego
 - [ ] Trafienie w ogon odcina go, a w głowę zabija
-- [ ] Czerwona ściana zabija, czarna odbija, niebieska i krawędź przenoszą na drugą stronę
+- [ ] Czerwona ściana zabija, czarna odbija, krawędź przenosi na przeciwną krawędź
+- [ ] Niebieska ściana w środku przenosi za bliźniaczą ścianę po drugiej stronie planszy
 - [ ] Pocisk znika na każdej ścianie i krawędzi
 - [ ] Strzał w głowę obu naraz daje remis
 - [ ] Mecz kończy się po 3 wygranych i rewanż działa

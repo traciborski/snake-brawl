@@ -135,8 +135,9 @@ Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocze
 4. **Pociski**: przesuń o 1 lub 2 pola (3 pola na 2 ticki), sprawdzając kolizje po każdym polu.
    Ściana lub krawędź → pocisk znika. Potem inny pocisk i węże poza strzelającym
    (głowa → śmierć, ciało → odcięcie ogona).
-5. **Węże** (co 2. tick): policz obie nowe głowy naraz (`passThrough`: krawędź i niebieskie
-   ściany przenoszą na drugą stronę). Czerwona ściana → śmierć. Czarna ściana, ciało,
+5. **Węże** (co 2. tick): policz obie nowe głowy naraz (`passThrough`: krawędź
+   przenosi na przeciwną krawędź, niebieska ściana za jej bliźniaczkę
+   po drugiej stronie planszy). Czerwona ściana → śmierć. Czarna ściana, ciało,
    głowa w głowę, zamiana miejscami → wąż się odbija, czyli odwraca ciało i nie rusza się
    w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
    Na koniec głowa w cudzy pocisk → śmierć.

@@ -58,7 +58,8 @@ export function bounce(snake, grid) {
     return;
   }
   snake.body.reverse();
-  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]);
+  // Przy przeskoku przez portal segmenty nie sąsiadują: wtedy po prostu zawracamy
+  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
 /** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall'} cause */
