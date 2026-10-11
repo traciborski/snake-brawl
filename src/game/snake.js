@@ -62,7 +62,7 @@ export function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'left'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'left'} cause */
 export function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;

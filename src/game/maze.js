@@ -3,7 +3,7 @@
 // Okolice spawnów są zawsze wolne, a wszystkie wolne pola są osiągalne.
 
 import { nextFloat, randInt } from '../core/rng.js';
-import { WALL } from '../config.js';
+import { WALL, WALL_MIX } from '../config.js';
 import { DIR_VEC, cellIndex, inBounds, passThrough, rotate180, step } from './grid.js';
 
 const mirrorX = (grid, p) => ({ x: grid.w - 1 - p.x, y: p.y });
@@ -120,8 +120,9 @@ export function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 
       }
       if (cells.some((p) => forbidden[cellIndex(grid, p)])) continue;
 
-      // Każdy odcinek ma jeden rodzaj: czarna, czerwona albo niebieska, po równo
-      const kind = 1 + randInt(rng, 3);
+      // Każdy odcinek ma jeden rodzaj: czarna, czerwona albo niebieska (proporcje w WALL_MIX)
+      const roll = nextFloat(rng);
+      const kind = roll < WALL_MIX.bounce ? WALL.BOUNCE : roll < WALL_MIX.bounce + WALL_MIX.deadly ? WALL.DEADLY : WALL.PORTAL;
       for (const p of cells) {
         for (const q of symmetric(grid, p)) {
           const i = cellIndex(grid, q);

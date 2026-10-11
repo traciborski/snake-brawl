@@ -6,7 +6,13 @@ import { blink, dimScreen, drawPanel, drawScore, drawText } from '../render/text
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
-const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę', left: 'Rywal wyszedł z gry' };
+const DEATH = {
+  shot: 'Strzał w głowę',
+  wall: 'Rywal wjechał w czerwoną ścianę',
+  body: 'Rywal wjechał w ogon',
+  crash: 'Zderzenie głowami',
+  left: 'Rywal wyszedł z gry',
+};
 
 /**
  * @param {import('../game/types.js').RoundState} round
@@ -16,7 +22,9 @@ function describe(round, players) {
   const { winner } = round.result;
   const duel = round.snakes.length === 2;
   if (winner === 'draw') {
-    return { title: 'REMIS!', subtitle: '', color: COLORS.text, detail: duel ? 'Obaj odpadli w tym samym momencie' : 'Wszyscy odpadli naraz' };
+    const crash = round.snakes.every((s) => s.death === 'crash');
+    const detail = crash ? 'Zderzenie głowami' : duel ? 'Obaj odpadli w tym samym momencie' : 'Wszyscy odpadli naraz';
+    return { title: 'REMIS!', subtitle: '', color: COLORS.text, detail };
   }
   const p = players[winner];
   const loser = round.snakes.find((s) => !s.alive);

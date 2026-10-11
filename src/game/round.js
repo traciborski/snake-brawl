@@ -89,8 +89,10 @@ export function stepRound(state, commands = []) {
 /**
  * Oba węże ruszają się równocześnie: najpierw liczymy nowe pozycje,
  * potem sprawdzamy przeszkody na podstawie stanu „po ruchu”.
- * - czerwona ściana → śmierć,
- * - czarna ściana, dowolne ciało, czołówka → odbicie (wąż zawraca w miejscu),
+ * - czerwona ściana → śmierć (wall),
+ * - zderzenie głowami (to samo pole albo zamiana miejscami) → giną obaj (crash),
+ * - głowa w ciało innego węża → ginie ten, kto wjechał (body),
+ * - czarna ściana, własne ciało → odbicie (wąż zawraca w miejscu),
  * - krawędź i niebieska ściana → przeniesienie na drugą stronę (`passThrough`).
  * Odbity albo martwy wąż nie zwalnia pola ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
  */
@@ -104,34 +106,37 @@ function moveSnakes(state, events) {
     const grows = snake.growPending > 0;
     const body = [head, ...(grows ? snake.body : snake.body.slice(0, -1))];
     const cell = walls[cellIndex(grid, head)];
-    return { snake, dir, oldHead, head, teleported, grows, body, dies: cell === WALL.DEADLY, bounce: false };
+    return { snake, dir, oldHead, head, teleported, grows, body, dies: cell === WALL.DEADLY ? 'wall' : null, bounce: false };
   });
   const moving = (plan) => plan && !plan.bounce && !plan.dies;
 
-  const blocked = (i, bodies) => {
+  /** Co spotka głowę węża i: null (jedzie dalej), 'bounce' albo przyczyna śmierci. */
+  const outcome = (i, bodies) => {
     const plan = plans[i];
-    if (walls[cellIndex(grid, plan.head)] !== WALL.NONE) return true;
-    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return true;
     for (let j = 0; j < plans.length; j++) {
       if (j === i || !state.snakes[j].alive) continue;
       const other = plans[j];
       if (moving(other)) {
-        if (samePos(other.head, plan.head)) return true;
-        if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return true;
+        if (samePos(other.head, plan.head)) return 'crash';
+        if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return 'crash';
       }
-      if (bodies[j].some((p) => samePos(p, plan.head))) return true;
+      if (bodies[j].some((p) => samePos(p, plan.head))) return 'body';
     }
-    return false;
+    if (walls[cellIndex(grid, plan.head)] !== WALL.NONE) return 'bounce';
+    if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return 'bounce';
+    return null;
   };
 
   for (let changed = true; changed; ) {
     changed = false;
     const bodies = state.snakes.map((s, i) => (moving(plans[i]) ? plans[i].body : s.body));
-    plans.forEach((plan, i) => {
-      if (moving(plan) && blocked(i, bodies)) {
-        plan.bounce = true;
-        changed = true;
-      }
+    // Najpierw wyniki dla wszystkich, potem zmiany: czołówka dotyczy obu węży naraz
+    const results = plans.map((plan, i) => (moving(plan) ? outcome(i, bodies) : null));
+    results.forEach((result, i) => {
+      if (!result) return;
+      if (result === 'bounce') plans[i].bounce = true;
+      else plans[i].dies = result;
+      changed = true;
     });
   }
 
@@ -139,8 +144,9 @@ function moveSnakes(state, events) {
     if (!plan) continue;
     const { snake } = plan;
     if (plan.dies) {
+      // Głowa zostaje tam, gdzie wjechała (w ścianę albo w rywala)
       snake.body = plan.body;
-      kill(snake, 'wall', null, events);
+      kill(snake, plan.dies, null, events);
       continue;
     }
     if (plan.bounce) {

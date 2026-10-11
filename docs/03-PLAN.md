@@ -24,7 +24,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] `game/food.js`: 3 owoce na wolnych polach
 - [x] `game/round.js`: `createRound`, `stepRound` (kroki 1, 2, 5, 6, 7)
 - [x] Ściany: czerwona zabija, czarna odbija, niebieska i krawędź przenoszą na drugą stronę
-- [x] Odbicia od ciał: własne ciało, rywal, głowa w głowę, zamiana miejscami
+- [x] Zderzenie głowami zabija obu, wjazd w ogon rywala zabija wjeżdżającego, własne ciało odbija
 - **Testy:** każdy rodzaj odbicia, wzrost po zjedzeniu.
 
 ## Krok 3: Strzelanie

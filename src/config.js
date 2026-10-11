@@ -26,6 +26,8 @@ export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 export const FOOD_COUNT = 3;
 export const WINS_TO_MATCH = 3;
 export const MAZE_DENSITY = 0.08;
+// Udział rodzajów ścian w labiryncie: najwięcej czarnych, najmniej niebieskich
+export const WALL_MIX = { bounce: 0.5, deadly: 0.3, portal: 0.2 };
 
 // Rodzaje pól planszy. Krawędź planszy działa jak PORTAL.
 export const WALL = {

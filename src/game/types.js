@@ -14,7 +14,8 @@
  * @property {number} cooldown   ticki do kolejnego strzału
  * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive
- * @property {null | 'shot' | 'wall' | 'left'} death   przyczyna śmierci (left = rozłączenie online)
+ * @property {null | 'shot' | 'wall' | 'crash' | 'body' | 'left'} death   przyczyna śmierci
+ *   (crash = zderzenie głowami, body = wjazd w rywala, left = rozłączenie online)
  */
 
 /** @typedef {{ owner: number, pos: Pos, dir: Dir }} Bullet */
@@ -46,7 +47,7 @@
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |
  *   { type: 'ate', snake: number, pos: Pos } |
- *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'left' } |
+ *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'left' } |
  *   { type: 'roundOver', result: RoundResult }
  * )} GameEvent
  */

@@ -152,9 +152,9 @@ Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocze
    (głowa → śmierć, ciało → odcięcie ogona).
 5. **Węże** (co 2. tick): policz obie nowe głowy naraz (`passThrough`: krawędź
    przenosi na przeciwną krawędź, niebieska ściana za jej bliźniaczkę
-   po drugiej stronie planszy). Czerwona ściana → śmierć. Czarna ściana, ciało,
-   głowa w głowę, zamiana miejscami → wąż się odbija, czyli odwraca ciało i nie rusza się
-   w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
+   po drugiej stronie planszy). Czerwona ściana → śmierć. Głowa w głowę albo zamiana
+   miejscami → giną obaj. Głowa w ciało innego węża → ginie wjeżdżający. Czarna ściana albo
+   własne ciało → wąż się odbija, czyli odwraca ciało i nie rusza się w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
    Na koniec głowa w cudzy pocisk → śmierć.
 6. **Jedzenie**: zjedzenie daje `growPending++`, uzupełnij owoce do 3.
 7. **Koniec rundy**: ktoś zginął → ustaw `result` (obaj naraz → remis).
@@ -207,7 +207,7 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 
 - **Automatyczne** (`npm test`): całe `src/game/`. Przykłady:
   labirynt jest symetryczny i spójny, strzał zabiera segment, trafienie w głowę zabija, czerwona ściana zabija, niebieska przenosi,
-  zderzenie głowami odbija obu, własny pocisk jest niegroźny.
+  zderzenie głowami zabija obu, wjazd w ogon rywala zabija wjeżdżającego, własny pocisk jest niegroźny.
   Dzięki ziarnu RNG każdy scenariusz jest powtarzalny.
 - **Ręczne**: lista kontrolna rozgrywki w przeglądarce (w planie, etap 3).
 

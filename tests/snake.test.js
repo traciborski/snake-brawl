@@ -212,37 +212,49 @@ test('wjazd w pole, które ogon właśnie opuszcza, jest dozwolony', () => {
   assert.deepEqual(pos(s.snakes[0])[0], [11, 10]);
 });
 
-test('ciało rywala odbija, rywal jedzie dalej', () => {
+const died = (events, id) => events.find((e) => e.type === 'died' && e.snake === id);
+
+test('wjazd głową w ogon rywala: ginie ten, kto wjechał', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[11, 12], [11, 11], [11, 10], [11, 9]], 'down');
   const events = run(s, 2);
-  assert.ok(bounced(events, 0));
-  assert.ok(!bounced(events, 1));
-  assert.deepEqual(pos(s.snakes[1])[0], [11, 13]);
-  assert.equal(s.result, null);
+  assert.equal(died(events, 0)?.cause, 'body');
+  assert.equal(s.snakes[1].alive, true);
+  assert.deepEqual(s.result, { winner: 1 });
 });
 
-test('zderzenie głowami na tym samym polu: obaj się odbijają', () => {
+test('zderzenie głowami na tym samym polu: giną obaj', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[12, 10], [13, 10], [14, 10]], 'left');
   const events = run(s, 2);
-  assert.ok(bounced(events, 0) && bounced(events, 1));
-  assert.equal(s.snakes[0].dir, 'left');
-  assert.equal(s.snakes[1].dir, 'right');
-  assert.equal(s.result, null);
+  assert.equal(died(events, 0)?.cause, 'crash');
+  assert.equal(died(events, 1)?.cause, 'crash');
+  assert.deepEqual(s.result, { winner: 'draw' });
 });
 
-test('zderzenie głowami przy zamianie miejsc: obaj się odbijają', () => {
+test('zderzenie głowami przy zamianie miejsc: giną obaj', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
   place(s, 1, [[11, 10], [12, 10], [13, 10]], 'left');
-  const events = run(s, 2);
-  assert.ok(bounced(events, 0) && bounced(events, 1));
+  run(s, 2);
+  assert.deepEqual(s.result, { winner: 'draw' });
 });
 
-test('odbity wąż nie zwalnia ogona, więc rywal jadący w jego ogon też się odbija', () => {
+test('wjazd w głowę stojącego (odbitego) węża to wjazd w jego ciało', () => {
+  const s = emptyRound();
+  // Leon odbija się od ściany i zostaje w miejscu, Hugo wjeżdża w jego głowę
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10);
+  place(s, 1, [[10, 11], [10, 12], [10, 13]], 'up');
+  const events = run(s, 2);
+  assert.ok(bounced(events, 0));
+  assert.equal(died(events, 1)?.cause, 'body');
+  assert.equal(s.snakes[0].alive, true);
+});
+
+test('odbity wąż nie zwalnia ogona, więc rywal jadący w jego ogon ginie', () => {
   const s = emptyRound();
   // Leon odbija się od ściany, Hugo celuje w pole jego ogona
   place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
@@ -250,7 +262,16 @@ test('odbity wąż nie zwalnia ogona, więc rywal jadący w jego ogon też się 
   place(s, 1, [[8, 11], [8, 12], [8, 13]], 'up');
   const events = run(s, 2);
   assert.ok(bounced(events, 0));
-  assert.ok(bounced(events, 1));
+  assert.equal(died(events, 1)?.cause, 'body');
+});
+
+test('wjazd w pole, które ogon rywala właśnie opuszcza, jest bezpieczny', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  place(s, 1, [[8, 11], [8, 12], [8, 13]], 'up');
+  const events = run(s, 2);
+  assert.ok(!died(events, 1));
+  assert.deepEqual(pos(s.snakes[1])[0], [8, 10]);
 });
 
 test('bez limitu czasu: runda trwa, dopóki nikt nie zginie', () => {
