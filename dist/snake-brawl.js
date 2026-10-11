@@ -1858,14 +1858,18 @@ __factories["src/net/lockstep.js"] = function (__exports) {
 // żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
 //
 // Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 55 ms):
-// - wysyłamy dokładnie jedną komendę na tick (na klatkę clock + INPUT_DELAY),
+// - wysyłamy dokładnie jedną komendę na tick: na klatkę, która wykona się INPUT_DELAY ticków później,
 // - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
-//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick.
+//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick,
+// - zegar nie ucieka symulacji dalej niż o MAX_AHEAD klatek. Gdy czekamy na ruchy innych
+//   (np. zaczęliśmy rundę chwilę przed nimi), zegar staje, zamiast wysyłać nasze komendy
+//   coraz dalej w przyszłość, co wydłużałoby opóźnienie naszych własnych skrętów.
 // Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
 
 const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
 
 const INPUT_DELAY = 2; // 110 ms
+const MAX_AHEAD = 1;
 
 class Lockstep {
   /**
@@ -1900,12 +1904,15 @@ class Lockstep {
 
   /** Upływ jednego ticka czasu rzeczywistego. */
   tick() {
-    if (this.round >= 0) this.clock++;
+    if (this.round >= 0 && this.clock - this.frame <= MAX_AHEAD) this.clock++;
   }
 
-  /** Czy wysłać kolejną własną komendę: jedna na tick, na klatkę clock + INPUT_DELAY. */
+  /**
+   * Czy wysłać kolejną własną komendę: jedna na tick. W ticku `clock` wykonuje się klatka
+   * clock - 1, więc komenda na klatkę clock - 1 + INPUT_DELAY działa dokładnie INPUT_DELAY ticków później.
+   */
   canSend() {
-    return this.round >= 0 && this.sent <= this.clock + INPUT_DELAY;
+    return this.round >= 0 && this.sent < this.clock + INPUT_DELAY;
   }
 
   /** Czy symulacji wolno zrobić kolejny krok (nie wyprzedzamy zegara). */
@@ -1992,7 +1999,7 @@ class Lockstep {
   }
 }
 
-Object.assign(__exports, { INPUT_DELAY, Lockstep });
+Object.assign(__exports, { INPUT_DELAY, MAX_AHEAD, Lockstep });
 };
 
 // ---- src/scenes/countdown.js ----

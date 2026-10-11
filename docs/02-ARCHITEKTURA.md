@@ -250,6 +250,10 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
   (opóźnienie 110 ms ukrywa ping). Pierwsze 2 klatki rundy są puste u wszystkich.
 - **Tempo wyznacza lokalny zegar** (tick co 55 ms): każdy wysyła dokładnie jedną komendę na tick,
   a symulacja nigdy nie wyprzedza zegara. Gra online biegnie więc tak samo szybko jak offline.
+  Własny skręt działa dokładnie 2 ticki (110 ms) po wciśnięciu, jeśli ruchy innych są na czas.
+- **Zegar nie ucieka symulacji** dalej niż o 1 klatkę (`MAX_AHEAD`). Kto zaczął rundę chwilę
+  wcześniej i czeka na innych, ma zatrzymany zegar, zamiast wysyłać komendy coraz dalej
+  w przyszłość (to wydłużało opóźnienie jego skrętów nawet do 220 ms).
 - Symulacja robi krok tylko, gdy ma komendy wszystkich graczy na daną klatkę. Gdy kogoś brakuje,
   gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia najwyżej jedną
   dodatkową klatkę na tick.

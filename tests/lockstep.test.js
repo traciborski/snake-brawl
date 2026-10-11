@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INPUT_DELAY, Lockstep } from '../src/net/lockstep.js';
+import { INPUT_DELAY, Lockstep, MAX_AHEAD } from '../src/net/lockstep.js';
 import { createRound, stepRound } from '../src/game/round.js';
 
 /** Jeden tick: upływ czasu i próba kroku. */
@@ -17,14 +17,39 @@ test('pierwsze klatki rundy są puste, potem czekamy na komendy wszystkich', () 
   assert.deepEqual(lock.waitingFor(), [0, 1]);
 });
 
-test('własna komenda działa INPUT_DELAY klatek później i nie wyprzedza symulacji', () => {
-  const lock = new Lockstep(2, 0);
+test('własna komenda działa dokładnie INPUT_DELAY ticków później, jedna komenda na tick', () => {
+  const lock = new Lockstep(1, 0);
   lock.startRound(0);
+  // Tick 1 (tak jak w grze: najpierw upływ czasu, potem wysłanie, potem krok)
+  lock.tick();
+  assert.equal(lock.canSend(), true);
   const msg = lock.makeInput({ turns: ['up'], shoot: true });
   assert.deepEqual(msg, { t: 'input', r: 0, f: INPUT_DELAY, d: 'u', s: 1 });
   assert.equal(lock.canSend(), false, 'jedna komenda na tick');
-  lock.tick();
-  assert.equal(lock.canSend(), true);
+  assert.deepEqual(lock.take(), [{}]);
+  // Komenda z ticku 1 wykonuje się w ticku 1 + INPUT_DELAY
+  for (let t = 2; t <= 1 + INPUT_DELAY; t++) {
+    lock.tick();
+    if (lock.canSend()) lock.makeInput({});
+    const cmds = lock.take();
+    if (t < 1 + INPUT_DELAY) assert.deepEqual(cmds, [{}]);
+    else assert.deepEqual(cmds, [{ turns: ['up'], shoot: true }]);
+  }
+});
+
+test('gdy czekamy na innych, zegar staje i nie wysyłamy komend coraz dalej w przyszłość', () => {
+  const lock = new Lockstep(2, 0);
+  lock.startRound(0);
+  const sent = [];
+  for (let t = 0; t < 10; t++) {
+    lock.tick();
+    while (lock.canSend()) sent.push(lock.makeInput({}).f);
+    lock.take();
+  }
+  // Gracz 1 milczy: symulacja stoi na klatce INPUT_DELAY, a my wysłaliśmy tylko trochę do przodu
+  assert.equal(lock.frame, INPUT_DELAY);
+  assert.equal(lock.sent - 1, lock.frame + INPUT_DELAY + MAX_AHEAD, 'najdalsza wysłana klatka');
+  assert.equal(lock.behind(), 1);
 });
 
 test('krok, gdy przyjdą komendy wszystkich; echo własnej komendy jest pomijane', () => {
