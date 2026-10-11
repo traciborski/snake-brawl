@@ -2,7 +2,7 @@
 // Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
 // żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
 //
-// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 50 ms):
+// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 55 ms):
 // - wysyłamy dokładnie jedną komendę na tick (na klatkę clock + INPUT_DELAY),
 // - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
 //   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick.
@@ -10,7 +10,7 @@
 
 import { decodeCommand, encodeCommand } from './protocol.js';
 
-export const INPUT_DELAY = 2; // 100 ms
+export const INPUT_DELAY = 2; // 110 ms
 
 export class Lockstep {
   /**

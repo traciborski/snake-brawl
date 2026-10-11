@@ -33,15 +33,15 @@
 
 ## 3. Czas: stały krok symulacji
 
-- Symulacja chodzi w stałych **tickach co 50 ms (20 Hz)**, niezależnie od FPS monitora.
+- Symulacja chodzi w stałych **tickach co 55 ms (ok. 18 Hz)**, niezależnie od FPS monitora.
 - Rysowanie odbywa się w `requestAnimationFrame` (60+ FPS), z akumulatorem czasu.
 - Wszystkie czasy z konceptu wyrażamy w tickach (w `config.js`):
 
 | Parametr                 | Wartość | Ticki |
 |--------------------------|---------|-------|
-| Ruch węża                | 10 pól/s | co 2 ticki |
-| Ruch pocisku             | 30 pól/s | 3 pola na 2 ticki (1, 2, 1, 2…) |
-| Cooldown strzału         | 0,3 s   | 6 |
+| Ruch węża                | ok. 9 pól/s | co 2 ticki |
+| Ruch pocisku             | ok. 27 pól/s | 3 pola na 2 ticki (1, 2, 1, 2…) |
+| Cooldown strzału         | ok. 0,33 s | 6 |
 | Odliczanie               | 3 s     | 60 |
 
 ## 4. Struktura plików
@@ -242,8 +242,8 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 - Każdy komputer liczy tę samą symulację z tych samych komend. Serwer tylko przekazuje komendy
   i ustala ziarno meczu. Stan gry nigdy nie idzie przez sieć.
 - Komendy są numerowane `(runda, klatka)`. Komenda wysłana w klatce `f` działa w klatce `f + 2`
-  (opóźnienie 100 ms ukrywa ping). Pierwsze 2 klatki rundy są puste u wszystkich.
-- **Tempo wyznacza lokalny zegar** (tick co 50 ms): każdy wysyła dokładnie jedną komendę na tick,
+  (opóźnienie 110 ms ukrywa ping). Pierwsze 2 klatki rundy są puste u wszystkich.
+- **Tempo wyznacza lokalny zegar** (tick co 55 ms): każdy wysyła dokładnie jedną komendę na tick,
   a symulacja nigdy nie wyprzedza zegara. Gra online biegnie więc tak samo szybko jak offline.
 - Symulacja robi krok tylko, gdy ma komendy wszystkich graczy na daną klatkę. Gdy kogoś brakuje,
   gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia najwyżej jedną

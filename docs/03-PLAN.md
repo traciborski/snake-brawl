@@ -39,7 +39,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** wyniki rund i meczu.
 
 ## Krok 5: Przeglądarka: pętla, sterowanie, rysowanie
-- [x] `core/loop.js`: stały krok 50 ms + `requestAnimationFrame`
+- [x] `core/loop.js`: stały krok 55 ms + `requestAnimationFrame`
 - [x] `input/keyboard.js`: WASD+Spacja, strzałki+Enter, `preventDefault`
 - [x] `render/*`: skalowanie, plansza, ściany (cache), węże, pociski, owoce, HUD
 - **Sprawdzenie:** dwie osoby mogą zagrać rundę.

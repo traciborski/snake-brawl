@@ -111,10 +111,10 @@ Object.assign(window, { snakeBrawl: app });
 
 // ---- src/config.js ----
 __factories["src/config.js"] = function (__exports) {
-// Wszystkie stałe gry w jednym miejscu. Czasy logiki są w tickach (1 tick = 50 ms).
+// Wszystkie stałe gry w jednym miejscu. Czasy logiki są w tickach (1 tick = 55 ms).
 
-const TICK_MS = 50;
-const TICKS_PER_SECOND = 1000 / TICK_MS;
+const TICK_MS = 55; // 50 ms było odrobinę za szybko
+const TICKS_PER_SECOND = Math.round(1000 / TICK_MS); // ok. 18
 
 // Plansza
 const GRID_W = 48;
@@ -128,11 +128,11 @@ const VIEW_W = GRID_W * CELL; // 960
 const VIEW_H = HUD_H + GRID_H * CELL; // 600
 
 // Rozgrywka
-const SNAKE_MOVE_EVERY = 2; // 10 pól/s
+const SNAKE_MOVE_EVERY = 2; // ok. 9 pól/s
 const START_LENGTH = 3;
-const SHOT_COOLDOWN = 6; // 0,3 s
+const SHOT_COOLDOWN = 6; // ok. 0,33 s
 const SHOTS_PER_SEGMENT = 10; // jeden segment ogona = 10 strzałów
-// Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
+// Pocisk: 3 pola na 2 ticki = ok. 27 pól/s, czyli 3× szybciej niż wąż
 const BULLET_CELLS = 3;
 const BULLET_PER_TICKS = 2;
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
@@ -1841,7 +1841,7 @@ __factories["src/net/lockstep.js"] = function (__exports) {
 // Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
 // żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
 //
-// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 50 ms):
+// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 55 ms):
 // - wysyłamy dokładnie jedną komendę na tick (na klatkę clock + INPUT_DELAY),
 // - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
 //   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick.
@@ -1849,7 +1849,7 @@ __factories["src/net/lockstep.js"] = function (__exports) {
 
 const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
 
-const INPUT_DELAY = 2; // 100 ms
+const INPUT_DELAY = 2; // 110 ms
 
 class Lockstep {
   /**

@@ -1,7 +1,7 @@
-// Wszystkie stałe gry w jednym miejscu. Czasy logiki są w tickach (1 tick = 50 ms).
+// Wszystkie stałe gry w jednym miejscu. Czasy logiki są w tickach (1 tick = 55 ms).
 
-export const TICK_MS = 50;
-export const TICKS_PER_SECOND = 1000 / TICK_MS;
+export const TICK_MS = 55; // 50 ms było odrobinę za szybko
+export const TICKS_PER_SECOND = Math.round(1000 / TICK_MS); // ok. 18
 
 // Plansza
 export const GRID_W = 48;
@@ -15,11 +15,11 @@ export const VIEW_W = GRID_W * CELL; // 960
 export const VIEW_H = HUD_H + GRID_H * CELL; // 600
 
 // Rozgrywka
-export const SNAKE_MOVE_EVERY = 2; // 10 pól/s
+export const SNAKE_MOVE_EVERY = 2; // ok. 9 pól/s
 export const START_LENGTH = 3;
-export const SHOT_COOLDOWN = 6; // 0,3 s
+export const SHOT_COOLDOWN = 6; // ok. 0,33 s
 export const SHOTS_PER_SEGMENT = 10; // jeden segment ogona = 10 strzałów
-// Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
+// Pocisk: 3 pola na 2 ticki = ok. 27 pól/s, czyli 3× szybciej niż wąż
 export const BULLET_CELLS = 3;
 export const BULLET_PER_TICKS = 2;
 export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;

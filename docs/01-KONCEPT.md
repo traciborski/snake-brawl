@@ -53,7 +53,7 @@ do gry przez internet.
 ## 5. Zasady
 
 **Ruch**
-- Plansza w kratkę, ruch krok po kroku ze stałą prędkością (~10 kratek/s).
+- Plansza w kratkę, ruch krok po kroku ze stałą prędkością (ok. 9 kratek/s).
 - Nie można zawrócić w miejscu klawiszem.
 - **Trzy rodzaje ścian** (ok. 50% czarnych, 30% czerwonych, 20% niebieskich):
   - 🔴 **czerwona** zabija,
@@ -73,7 +73,7 @@ do gry przez internet.
 - **1 segment ogona = 10 strzałów.** Pierwszy strzał z dziesiątki zabiera segment z ogona,
   kolejne 9 jest „za darmo”. Z samą głową można strzelać tylko do końca bieżącej dziesiątki.
   Pasek u góry pokazuje pozostałą amunicję (AMMO).
-- Cooldown 0,3 s. Pocisk leci prosto, **3× szybciej niż wąż** (30 pól/s).
+- Cooldown ok. 0,3 s. Pocisk leci prosto, **3× szybciej niż wąż** (ok. 27 pól/s).
 - **Trafienie w ciało** odcina ogon od trafionego segmentu do końca.
 - **Trafienie w głowę** zabija rywala, więc strzelający wygrywa rundę. Wjazd głową w cudzy pocisk też.
 - **Własne pociski są niegroźne**: przelatują przez strzelającego bez śladu.
