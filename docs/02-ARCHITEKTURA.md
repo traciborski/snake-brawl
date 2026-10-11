@@ -257,14 +257,25 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 | Kierunek | Wiadomość | Znaczenie |
 |----------|-----------|-----------|
 | klient → serwer | `hello { name, create }` | dołączenie do pokoju z adresu `/room/KOD` (albo założenie go) |
-| serwer → klient | `lobby { you, host, players }` | stan poczekalni |
+| serwer → klient | `lobby { you, host, players, playing }` | stan poczekalni (`playing`: trwa mecz) |
 | klient → serwer | `start` | założyciel zaczyna mecz |
 | serwer → wszyscy | `start { seed, players }` | początek meczu; kolejność graczy = kolory i rogi |
 | klient → serwer | `input { r, f, d, s }` | ruch: runda, klatka, skręty (`d`), strzał (`s`) |
 | serwer → wszyscy | `input { p, r, f, d, s }` | ruch gracza `p` |
 | serwer → wszyscy | `left { p, r, f }` | gracz `p` się rozłączył: od klatki `(r, f)` jego wąż ginie |
+| klient → serwer | `result { r, w }` | wynik rundy `r` (`w`: numer zwycięzcy albo `null`) |
+| serwer → wszyscy | `result { r, w }` | pierwszy zgłoszony wynik rundy, dla dołączających w trakcie |
+| serwer → wszyscy | `joined { p, id, name, r }` | nowy gracz `p` dołączył w trakcie meczu, gra od rundy `r` |
+| serwer → klient | `late { seed, r, players, results }` | dla dołączającego: ziarno, jego runda, gracze z rundami startu, dotychczasowe wyniki |
 | klient → serwer | `lobby` | koniec meczu, powrót do poczekalni |
-| serwer → klient | `error { msg }` | np. pokój nie istnieje, pełny albo trwa w nim gra |
+| serwer → klient | `error { msg }` | np. pokój nie istnieje albo jest pełny |
 
 Rozłączenie działa deterministycznie: serwer podaje pierwszą klatkę, której gracz już nie wysłał,
 a wszyscy stosują je w tym samym miejscu, bo i tak nie mogli jej jeszcze policzyć.
+
+**Dołączenie w trakcie meczu** też jest deterministyczne. Serwer zna najwyższą rundę, z której
+dostał ruch (`maxRound`), i wpuszcza nowego gracza od rundy `maxRound + 2`: nikt nie mógł jej
+jeszcze zacząć, bo wiadomość `joined` dotrze do każdego przed jego ruchami z tej rundy.
+Od tej rundy wszyscy liczą węża więcej (`playersInRound`). Dołączający czeka w poczekalni,
+aż pozna wyniki wszystkich wcześniejszych rund, odtwarza z nich stan meczu (`replayMatch`)
+i startuje razem z innymi.

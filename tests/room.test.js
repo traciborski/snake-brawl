@@ -38,7 +38,7 @@ test('założenie pokoju, dołączenie, poczekalnia z założycielem', () => {
   assert.notEqual(lobby.you, lobby.host);
 });
 
-test('błędy: pokój nie istnieje, kod zajęty, pokój pełny, trwa mecz', () => {
+test('błędy: pokój nie istnieje, kod zajęty, pokój pełny', () => {
   const room = new Room('ABCD');
   const ghost = client(room, 'X');
   assert.equal(ghost.socket.last('error').code, 'missing');
@@ -51,11 +51,40 @@ test('błędy: pokój nie istnieje, kod zajęty, pokój pełny, trwa mecz', () =
   client(room, 'D');
   assert.equal(client(room, 'E').socket.last('error').code, 'full');
 
-  const room2 = new Room('EFGH');
-  const host = client(room2, 'A', true);
-  client(room2, 'B');
-  host.send({ t: 'start' });
-  assert.equal(client(room2, 'C').socket.last('error').code, 'playing');
+});
+
+test('dołączenie w trakcie meczu: od rundy maxRound + 2, wszyscy się dowiadują', () => {
+  const room = new Room('KOT7', { random: () => 0.25 });
+  const a = client(room, 'A', true);
+  const b = client(room, 'B');
+  a.send({ t: 'start' });
+  a.send({ t: 'input', r: 1, f: 10, d: '', s: 0 });
+  a.send({ t: 'result', r: 0, w: 1 });
+  a.send({ t: 'result', r: 0, w: 0 }); // drugi raz ten sam wynik: ignorowany
+  const c = client(room, 'Celina');
+  assert.equal(c.socket.last('error'), undefined);
+  assert.equal(c.socket.last('lobby').playing, true);
+  const late = c.socket.last('late');
+  assert.equal(late.r, 3);
+  assert.equal(late.seed, room.seed);
+  assert.deepEqual(late.results, [1]);
+  assert.deepEqual(late.players.map((p) => [p.name, p.r]), [['A', 0], ['B', 0], ['Celina', 3]]);
+  assert.deepEqual(b.socket.last('joined'), { t: 'joined', p: 2, id: late.players[2].id, name: 'Celina', r: 3 });
+  // dołączający gra normalnie: jego ruchy idą do wszystkich
+  c.send({ t: 'input', r: 3, f: 2, d: 'u', s: 0 });
+  assert.equal(a.socket.last('input').p, 2);
+  // kolejne wyniki dostaje też on
+  b.send({ t: 'result', r: 1, w: 'draw' });
+  assert.deepEqual(c.socket.last('result'), { t: 'result', r: 1, w: 'draw' });
+});
+
+test('w trakcie meczu miejsca liczą się razem z graczami, którzy wyszli', () => {
+  const room = new Room('KOT7');
+  const a = client(room, 'A', true);
+  const others = ['B', 'C', 'D'].map((n) => client(room, n));
+  a.send({ t: 'start' });
+  others[0].conn.closed(); // B wychodzi, ale jego wąż i miejsce zostają do końca meczu
+  assert.equal(client(room, 'E').socket.last('error').code, 'full');
 });
 
 test('start: tylko założyciel, min. 2 graczy, wszyscy dostają to samo ziarno', () => {

@@ -51,6 +51,8 @@ const app = {
   session: null,
   /** @type {((lobby: any) => void) | null} */
   onLobby: null,
+  /** Dołączanie w trakcie meczu: czekamy na swoją rundę (null = nie czekamy) */
+  lateJoin: null,
   /** @type {{ name: string, color: string }[]} */
   players: DEFAULT_NAMES.slice(0, 2).map((name, i) => ({ name, color: PLAYER_COLORS[i] })),
   /** Tryb gry: skąd biorą się komendy, co robi Esc i rewanż (offline albo online) */
@@ -1389,6 +1391,16 @@ function nextRoundSeed(match) {
   return (match.seed + Math.imul(match.round + 1, 0x9e3779b9)) >>> 0;
 }
 
+/**
+ * Stan meczu po rozegranych rundach (dla gracza dołączającego w trakcie: zna tylko ich wyniki).
+ * @param {number} seed @param {number} players @param {(number | 'draw')[]} winners zwycięzcy kolejnych rund
+ */
+function replayMatch(seed, players, winners) {
+  const match = createMatch(seed, players);
+  for (const winner of winners) recordRound(match, { winner });
+  return match;
+}
+
 /** @param {MatchState} match @param {RoundResult} result @returns {number | null} */
 function recordRound(match, result) {
   match.round++;
@@ -1400,7 +1412,7 @@ function recordRound(match, result) {
   return match.winner;
 }
 
-Object.assign(__exports, { createMatch, nextRoundSeed, recordRound });
+Object.assign(__exports, { createMatch, nextRoundSeed, replayMatch, recordRound });
 };
 
 // ---- src/ui/storage.js ----
@@ -1572,8 +1584,19 @@ function createOnlineScene(app) {
     const lobby = app.session?.lobby;
     if (!lobby) return showForm();
     showRoomInAddressBar(lobby.code);
-    const isHost = lobby.host === lobby.you;
+    const playing = !!lobby.playing;
+    const isHost = lobby.host === lobby.you && !playing;
     const canStart = lobby.players.length >= 2;
+    // Dołączyliśmy w trakcie meczu: wchodzimy od rundy lateJoin.r (numerujemy od 1 dla ludzi)
+    const status = playing
+      ? app.lateJoin
+        ? `Trwa mecz. Dołączysz od rundy ${app.lateJoin.r + 1}…`
+        : 'Mecz właśnie się kończy, za chwilę wszyscy wrócą tutaj…'
+      : isHost
+        ? canStart
+          ? 'Kliknij START, gdy wszyscy są.'
+          : 'Czekamy na co najmniej jednego gracza…'
+        : 'Czekamy, aż założyciel zacznie mecz…';
 
     const rows = lobby.players.map((p, i) =>
       h(
@@ -1599,11 +1622,7 @@ function createOnlineScene(app) {
         h('button', { type: 'button', onclick: () => leaveOnline(app) }, 'WYJDŹ'),
         isHost && h('button', { type: 'button', autofocus: true, disabled: !canStart, onclick: () => app.session?.send({ t: 'start' }) }, 'START'),
       ),
-      h(
-        'p',
-        { className: 'hint' },
-        isHost ? (canStart ? 'Kliknij START, gdy wszyscy są.' : 'Czekamy na co najmniej jednego gracza…') : 'Czekamy, aż założyciel zacznie mecz…',
-      ),
+      h('p', { className: 'hint' }, status),
     );
     app.overlay.show(panel);
   }
@@ -1654,7 +1673,7 @@ __factories["src/modes/online.js"] = function (__exports) {
 // Gra przez internet: komendy wszystkich graczy przez serwer (lockstep).
 
 const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
-const { createMatch } = __require("src/game/match.js");
+const { createMatch, replayMatch } = __require("src/game/match.js");
 const { Lockstep } = __require("src/net/lockstep.js");
 const { mergeCommands } = __require("src/input/touch.js");
 const { showRoomInAddressBar } = __require("src/net/client.js");
@@ -1671,8 +1690,15 @@ function attachSession(app, session) {
   app.session = session;
   session.onMessage = (msg) => {
     if (msg.t === 'start') startMatch(app, session, msg);
-    else if (msg.t === 'lobby') app.onLobby?.(msg);
-    else app.controller.receive?.(msg);
+    else if (msg.t === 'late') waitToJoin(app, session, msg);
+    else if (msg.t === 'lobby') {
+      // Mecz się skończył, zanim dołączający zdążył wejść: zwykła poczekalnia
+      if (!msg.playing) app.lateJoin = null;
+      app.onLobby?.(msg);
+    } else if (msg.t === 'result' && app.lateJoin) {
+      app.lateJoin.results[msg.r] = msg.w;
+      tryLateStart(app, session);
+    } else app.controller.receive?.(msg);
   };
   session.onClose = () => {
     app.session = null;
@@ -1684,11 +1710,13 @@ function attachSession(app, session) {
 function leaveOnline(app) {
   app.session?.close();
   app.session = null;
+  app.lateJoin = null;
   showRoomInAddressBar(null);
   app.scenes.go('menu');
 }
 
 function startMatch(app, session, { seed, players }) {
+  app.lateJoin = null;
   const me = players.findIndex((p) => p.id === session.lobby?.you);
   app.players = players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
   app.match = createMatch(seed, players.length);
@@ -1696,9 +1724,38 @@ function startMatch(app, session, { seed, players }) {
   app.scenes.go('countdown');
 }
 
-/** @param {any} app @param {import('../net/client.js').Session} session @param {number} me */
-function createOnlineController(app, session, me) {
-  const lock = new Lockstep(app.players.length, me);
+/**
+ * Dołączenie w trakcie meczu: czekamy w poczekalni na wyniki rund sprzed naszej rundy
+ * (żeby znać stan meczu) i wchodzimy do gry od rundy r.
+ */
+function waitToJoin(app, session, { seed, r, players, results }) {
+  app.lateJoin = { seed, r, players, results: [...results] };
+  app.onLobby?.(session.lobby);
+  tryLateStart(app, session);
+}
+
+function tryLateStart(app, session) {
+  const late = app.lateJoin;
+  const known = late.results.slice(0, late.r);
+  if (known.length < late.r || known.some((w) => w === undefined)) return;
+  const match = replayMatch(late.seed, late.players.length, known);
+  // Mecz rozstrzygnął się, zanim weszliśmy: czekamy na powrót wszystkich do poczekalni
+  if (match.winner !== null) return;
+
+  app.lateJoin = null;
+  const me = late.players.findIndex((p) => p.id === session.lobby?.you);
+  app.players = late.players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.match = match;
+  app.controller = createOnlineController(app, session, me, late.players.map((p) => p.r));
+  app.scenes.go('countdown');
+}
+
+/**
+ * @param {any} app @param {import('../net/client.js').Session} session @param {number} me
+ * @param {number[]} [joinRounds] od której rundy gra każdy gracz
+ */
+function createOnlineController(app, session, me, joinRounds) {
+  const lock = new Lockstep(app.players.length, me, joinRounds);
   let stalled = 0;
   let steps = 0;
 
@@ -1713,6 +1770,20 @@ function createOnlineController(app, session, me) {
     receive(msg) {
       if (msg.t === 'input') lock.receive(msg);
       else if (msg.t === 'left') lock.markLeft(msg.p, msg.r, msg.f);
+      else if (msg.t === 'joined') {
+        // Nowy gracz w trakcie meczu: gra od rundy msg.r, do tego czasu nie ma węża
+        lock.addPlayer(msg.r);
+        app.players.push({ name: msg.name, color: PLAYER_COLORS[msg.p] });
+        app.match.wins.push(0);
+      }
+    },
+
+    /** Ilu węży jest w danej rundzie (dołączający wchodzą od swojej rundy). */
+    playersInRound: (r) => lock.playersInRound(r),
+
+    /** Wynik rundy dla serwera: potrzebny graczom dołączającym w trakcie meczu. */
+    roundEnded(r, result) {
+      session.send({ t: 'result', r, w: result.winner });
     },
 
     startRound(r) {
@@ -1781,10 +1852,15 @@ const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
 const INPUT_DELAY = 2; // 100 ms
 
 class Lockstep {
-  /** @param {number} players liczba graczy @param {number} me mój numer gracza */
-  constructor(players, me) {
+  /**
+   * @param {number} players liczba graczy
+   * @param {number} me mój numer gracza
+   * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
+   */
+  constructor(players, me, joinRounds = Array(players).fill(0)) {
     this.players = players;
     this.me = me;
+    this.joinRounds = [...joinRounds];
     /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
     this.buffer = new Map();
     /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
@@ -1850,6 +1926,19 @@ class Lockstep {
     return !!at && (r > at.r || (r === at.r && f >= at.f));
   }
 
+  /** Nowy gracz dołącza w trakcie meczu, od rundy r. */
+  addPlayer(r) {
+    this.joinRounds.push(r);
+    this.players++;
+  }
+
+  /** Ilu graczy (węży) jest w rundzie r: dołączający dopiero od swojej rundy. */
+  playersInRound(r) {
+    let n = 0;
+    while (n < this.players && this.joinRounds[n] <= r) n++;
+    return n;
+  }
+
   /** Ilu graczy jeszcze gra (nie rozłączyło się). */
   activePlayers() {
     let n = 0;
@@ -1860,7 +1949,7 @@ class Lockstep {
   /** Gracze, na których komendy czekamy w bieżącej klatce. */
   waitingFor() {
     const missing = [];
-    for (let p = 0; p < this.players; p++) {
+    for (let p = 0; p < this.playersInRound(this.round); p++) {
       if (this.frame < INPUT_DELAY || this.isLeft(p)) continue;
       if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
     }
@@ -1876,7 +1965,7 @@ class Lockstep {
     if (!this.due() || this.waitingFor().length) return null;
     const { round, frame } = this;
     const commands = [];
-    for (let p = 0; p < this.players; p++) {
+    for (let p = 0; p < this.playersInRound(round); p++) {
       const key = `${round}:${frame}:${p}`;
       if (this.isLeft(p)) commands.push({ quit: true });
       else commands.push(this.buffer.get(key) ?? {});
@@ -1904,7 +1993,8 @@ function createCountdownScene(app) {
 
   return {
     enter() {
-      app.round = createRound(nextRoundSeed(app.match), { players: app.players.length });
+      const players = app.controller.playersInRound?.(app.match.round) ?? app.players.length;
+      app.round = createRound(nextRoundSeed(app.match), { players });
       app.roundNumber = app.match.round + 1;
       app.effects.clear();
       ticks = COUNTDOWN_TICKS;
@@ -3044,6 +3134,7 @@ function createRoundEndScene(app) {
   return {
     enter() {
       const result = app.round.result;
+      app.controller.roundEnded?.(app.match.round, result);
       recordRound(app.match, result);
       info = describe(app.round, app.players);
       ticks = 0;

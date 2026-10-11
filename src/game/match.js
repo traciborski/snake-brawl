@@ -23,6 +23,16 @@ export function nextRoundSeed(match) {
   return (match.seed + Math.imul(match.round + 1, 0x9e3779b9)) >>> 0;
 }
 
+/**
+ * Stan meczu po rozegranych rundach (dla gracza dołączającego w trakcie: zna tylko ich wyniki).
+ * @param {number} seed @param {number} players @param {(number | 'draw')[]} winners zwycięzcy kolejnych rund
+ */
+export function replayMatch(seed, players, winners) {
+  const match = createMatch(seed, players);
+  for (const winner of winners) recordRound(match, { winner });
+  return match;
+}
+
 /** @param {MatchState} match @param {RoundResult} result @returns {number | null} */
 export function recordRound(match, result) {
   match.round++;

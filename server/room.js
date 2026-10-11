@@ -1,4 +1,5 @@
-// Pokój gry online: poczekalnia, start meczu, przekazywanie ruchów, rozłączenia.
+// Pokój gry online: poczekalnia, start meczu, przekazywanie ruchów, rozłączenia,
+// dołączanie w trakcie meczu (od rundy, której nikt jeszcze nie zaczął).
 // Czysta logika bez sieci: gniazdo to dowolny obiekt z send(tekst) i close().
 // Używają jej lokalny serwer (scripts/serve.js) i Cloudflare (server/worker.js).
 
@@ -23,6 +24,14 @@ export class Room {
     this.players = [];
     /** @type {Map<number, { r: number, f: number }>} ostatni przekazany ruch gracza */
     this.last = new Map();
+    /** Ziarno trwającego meczu (dla graczy dołączających w trakcie) */
+    this.seed = 0;
+    /** Najwyższy numer rundy, z której przyszedł jakikolwiek ruch */
+    this.maxRound = -1;
+    /** @type {(number | 'draw')[]} wyniki rozegranych rund (zgłaszane przez graczy) */
+    this.results = [];
+    /** @type {number[]} od której rundy gra gracz o danym numerze */
+    this.joinRounds = [];
     this.nextId = 1;
   }
 
@@ -63,14 +72,38 @@ export class Room {
     };
     if (create && this.created) return reject('exists', 'Pokój o tym kodzie już istnieje');
     if (!create && !this.created) return reject('missing', 'Nie ma pokoju o takim kodzie');
-    if (this.phase === 'game') return reject('playing', 'W tym pokoju trwa właśnie mecz');
-    if (this.members.length >= MAX_PLAYERS) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
+    const full = this.members.length >= MAX_PLAYERS || (this.phase === 'game' && this.players.length >= MAX_PLAYERS);
+    if (full) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
 
     this.created = true;
     const member = { id: this.nextId++, name: cleanName(name), socket };
     this.members.push(member);
     this.broadcastLobby();
+    if (this.phase === 'game') this.joinLate(member);
     return member;
+  }
+
+  /**
+   * Dołączenie w trakcie meczu. Nowy gracz wchodzi od rundy maxRound + 2: nikt nie mógł jej
+   * jeszcze utworzyć, bo do tego trzeba skończyć rundę maxRound + 1, a jej ruchy serwer
+   * przekaże dopiero po tej wiadomości (kolejność wiadomości w połączeniu jest zachowana).
+   * @param {Member} member
+   */
+  joinLate(member) {
+    const r = this.maxRound + 2;
+    const p = this.players.length;
+    this.players.push(member);
+    this.joinRounds.push(r);
+    for (const m of this.members) {
+      if (m !== member) send(m.socket, { t: 'joined', p, id: member.id, name: member.name, r });
+    }
+    send(member.socket, {
+      t: 'late',
+      seed: this.seed,
+      r,
+      players: this.players.map((m, i) => ({ id: m.id, name: m.name, r: this.joinRounds[i] })),
+      results: this.results,
+    });
   }
 
   /** @param {Member} member */
@@ -80,8 +113,12 @@ export class Room {
         if (this.phase !== 'lobby' || member !== this.members[0] || this.members.length < 2) return;
         this.phase = 'game';
         this.players = [...this.members];
+        this.joinRounds = this.players.map(() => 0);
         this.last.clear();
+        this.maxRound = -1;
+        this.results = [];
         const seed = Math.floor(this.random() * 0x100000000) >>> 0;
+        this.seed = seed;
         const players = this.players.map((m) => ({ id: m.id, name: m.name }));
         this.broadcast({ t: 'start', seed, players });
         return;
@@ -93,7 +130,18 @@ export class Room {
         if (!Number.isInteger(r) || !Number.isInteger(f) || r < 0 || f < 0) return;
         if (typeof d !== 'string' || !DIRS_RE.test(d)) return;
         this.last.set(member.id, { r, f });
+        this.maxRound = Math.max(this.maxRound, r);
         this.broadcast({ t: 'input', p, r, f, d, s: s ? 1 : 0 });
+        return;
+      }
+      case 'result': {
+        // Wynik rundy (liczą go wszyscy tak samo, wystarczy pierwszy). Potrzebny dołączającym.
+        const { r, w } = msg;
+        if (this.phase !== 'game' || !Number.isInteger(r) || r < 0 || r > this.results.length) return;
+        if (!(w === 'draw' || (Number.isInteger(w) && w >= 0 && w < this.players.length))) return;
+        if (r < this.results.length) return;
+        this.results.push(w);
+        this.broadcast({ t: 'result', r, w });
         return;
       }
       case 'lobby': {
@@ -128,7 +176,8 @@ export class Room {
   broadcastLobby() {
     const players = this.members.map((m) => ({ id: m.id, name: m.name }));
     const host = this.members[0]?.id ?? null;
-    for (const m of this.members) send(m.socket, { t: 'lobby', code: this.code, you: m.id, host, players });
+    const playing = this.phase === 'game';
+    for (const m of this.members) send(m.socket, { t: 'lobby', code: this.code, you: m.id, host, players, playing });
   }
 
   broadcast(msg) {

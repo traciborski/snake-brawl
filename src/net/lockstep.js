@@ -13,10 +13,15 @@ import { decodeCommand, encodeCommand } from './protocol.js';
 export const INPUT_DELAY = 2; // 100 ms
 
 export class Lockstep {
-  /** @param {number} players liczba graczy @param {number} me mój numer gracza */
-  constructor(players, me) {
+  /**
+   * @param {number} players liczba graczy
+   * @param {number} me mój numer gracza
+   * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
+   */
+  constructor(players, me, joinRounds = Array(players).fill(0)) {
     this.players = players;
     this.me = me;
+    this.joinRounds = [...joinRounds];
     /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
     this.buffer = new Map();
     /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
@@ -82,6 +87,19 @@ export class Lockstep {
     return !!at && (r > at.r || (r === at.r && f >= at.f));
   }
 
+  /** Nowy gracz dołącza w trakcie meczu, od rundy r. */
+  addPlayer(r) {
+    this.joinRounds.push(r);
+    this.players++;
+  }
+
+  /** Ilu graczy (węży) jest w rundzie r: dołączający dopiero od swojej rundy. */
+  playersInRound(r) {
+    let n = 0;
+    while (n < this.players && this.joinRounds[n] <= r) n++;
+    return n;
+  }
+
   /** Ilu graczy jeszcze gra (nie rozłączyło się). */
   activePlayers() {
     let n = 0;
@@ -92,7 +110,7 @@ export class Lockstep {
   /** Gracze, na których komendy czekamy w bieżącej klatce. */
   waitingFor() {
     const missing = [];
-    for (let p = 0; p < this.players; p++) {
+    for (let p = 0; p < this.playersInRound(this.round); p++) {
       if (this.frame < INPUT_DELAY || this.isLeft(p)) continue;
       if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
     }
@@ -108,7 +126,7 @@ export class Lockstep {
     if (!this.due() || this.waitingFor().length) return null;
     const { round, frame } = this;
     const commands = [];
-    for (let p = 0; p < this.players; p++) {
+    for (let p = 0; p < this.playersInRound(round); p++) {
       const key = `${round}:${frame}:${p}`;
       if (this.isLeft(p)) commands.push({ quit: true });
       else commands.push(this.buffer.get(key) ?? {});

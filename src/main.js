@@ -37,6 +37,8 @@ const app = {
   session: null,
   /** @type {((lobby: any) => void) | null} */
   onLobby: null,
+  /** Dołączanie w trakcie meczu: czekamy na swoją rundę (null = nie czekamy) */
+  lateJoin: null,
   /** @type {{ name: string, color: string }[]} */
   players: DEFAULT_NAMES.slice(0, 2).map((name, i) => ({ name, color: PLAYER_COLORS[i] })),
   /** Tryb gry: skąd biorą się komendy, co robi Esc i rewanż (offline albo online) */

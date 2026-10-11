@@ -102,6 +102,9 @@ do gry przez internet.
   wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
 - 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników
   (wszyscy przechodzą dalej w tym samym momencie).
+- **Dołączanie w trakcie meczu:** kto wejdzie do pokoju, gdy trwa mecz (i jest wolne miejsce),
+  czeka w poczekalni z napisem „Trwa mecz. Dołączysz od rundy N…” i wchodzi do gry od najbliższej
+  wolnej rundy (zwykle następnej albo jeszcze kolejnej), z zerem wygranych.
 - Rozłączenie: wąż gracza ginie, reszta gra dalej.
 - Po meczu wszyscy wracają do poczekalni, skąd założyciel może zacząć rewanż.
 

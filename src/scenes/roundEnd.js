@@ -46,6 +46,7 @@ export function createRoundEndScene(app) {
   return {
     enter() {
       const result = app.round.result;
+      app.controller.roundEnded?.(app.match.round, result);
       recordRound(app.match, result);
       info = describe(app.round, app.players);
       ticks = 0;

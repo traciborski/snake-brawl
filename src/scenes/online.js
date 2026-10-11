@@ -108,8 +108,19 @@ export function createOnlineScene(app) {
     const lobby = app.session?.lobby;
     if (!lobby) return showForm();
     showRoomInAddressBar(lobby.code);
-    const isHost = lobby.host === lobby.you;
+    const playing = !!lobby.playing;
+    const isHost = lobby.host === lobby.you && !playing;
     const canStart = lobby.players.length >= 2;
+    // Dołączyliśmy w trakcie meczu: wchodzimy od rundy lateJoin.r (numerujemy od 1 dla ludzi)
+    const status = playing
+      ? app.lateJoin
+        ? `Trwa mecz. Dołączysz od rundy ${app.lateJoin.r + 1}…`
+        : 'Mecz właśnie się kończy, za chwilę wszyscy wrócą tutaj…'
+      : isHost
+        ? canStart
+          ? 'Kliknij START, gdy wszyscy są.'
+          : 'Czekamy na co najmniej jednego gracza…'
+        : 'Czekamy, aż założyciel zacznie mecz…';
 
     const rows = lobby.players.map((p, i) =>
       h(
@@ -135,11 +146,7 @@ export function createOnlineScene(app) {
         h('button', { type: 'button', onclick: () => leaveOnline(app) }, 'WYJDŹ'),
         isHost && h('button', { type: 'button', autofocus: true, disabled: !canStart, onclick: () => app.session?.send({ t: 'start' }) }, 'START'),
       ),
-      h(
-        'p',
-        { className: 'hint' },
-        isHost ? (canStart ? 'Kliknij START, gdy wszyscy są.' : 'Czekamy na co najmniej jednego gracza…') : 'Czekamy, aż założyciel zacznie mecz…',
-      ),
+      h('p', { className: 'hint' }, status),
     );
     app.overlay.show(panel);
   }

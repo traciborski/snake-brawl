@@ -10,7 +10,8 @@ export function createCountdownScene(app) {
 
   return {
     enter() {
-      app.round = createRound(nextRoundSeed(app.match), { players: app.players.length });
+      const players = app.controller.playersInRound?.(app.match.round) ?? app.players.length;
+      app.round = createRound(nextRoundSeed(app.match), { players });
       app.roundNumber = app.match.round + 1;
       app.effects.clear();
       ticks = COUNTDOWN_TICKS;

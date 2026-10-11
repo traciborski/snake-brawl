@@ -82,6 +82,12 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Prośba o obrócenie telefonu, pełny ekran, brak przewijania i przybliżania w trakcie rundy
 - **Testy:** gesty i przycisk (Node), telefon w emulacji z prawdziwymi zdarzeniami dotyku.
 
+## Krok 12: Dołączanie w trakcie meczu
+- [x] Serwer wpuszcza do trwającego meczu od rundy `maxRound + 2` (`joined`, `late`)
+- [x] Klienci zgłaszają wyniki rund (`result`), dołączający odtwarza z nich stan meczu
+- [x] Lockstep i liczba węży w rundzie zależą od rundy dołączenia gracza
+- **Testy:** logika pokoju, lockstep, symulacja 3 klientów z opóźnieniami (identyczny stan).
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

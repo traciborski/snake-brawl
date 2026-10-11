@@ -115,6 +115,30 @@ test('tempo: symulacja nie wyprzedza zegara, nawet gdy komendy są dostępne', (
   assert.equal(steps, 30, 'dokładnie jeden krok na tick');
 });
 
+test('gracz dołączający w trakcie meczu: brak węża i komend przed jego rundą', () => {
+  const lock = new Lockstep(2, 0);
+  lock.addPlayer(3);
+  assert.equal(lock.playersInRound(2), 2);
+  assert.equal(lock.playersInRound(3), 3);
+  lock.startRound(2);
+  lock.tick();
+  assert.equal(lock.take().length, 2, 'w rundzie 2 dwa węże');
+  lock.startRound(3);
+  lock.tick();
+  assert.equal(lock.take().length, 3, 'od rundy 3 trzy');
+  for (let f = 1; f < INPUT_DELAY; f++) tickTake(lock);
+  lock.makeInput({});
+  lock.tick();
+  lock.receive({ p: 1, r: 3, f: INPUT_DELAY, d: '', s: 0 });
+  assert.deepEqual(lock.waitingFor(), [2], 'czekamy też na nowego gracza');
+});
+
+test('dołączający z listą rund startowych widzi to samo co pozostali', () => {
+  const lock = new Lockstep(3, 2, [0, 0, 3]);
+  assert.equal(lock.playersInRound(0), 2);
+  assert.equal(lock.playersInRound(5), 3);
+});
+
 test('komenda quit zabija węża (przyczyna: left)', () => {
   const s = createRound(1, { players: 2 });
   const events = stepRound(s, [{}, { quit: true }]);
