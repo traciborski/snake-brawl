@@ -76,6 +76,12 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [ ] Konto Cloudflare i podpięcie repo (Workers Builds: automatyczne budowanie po pushu na `main`), robi właściciel repo
 - **Sprawdzenie:** mecz z sąsiadami.
 
+## Krok 11: Telefon (dotyk)
+- [x] `input/touch.js`: przesunięcie palcem = skręt, przycisk STRZAŁ (stuknięcie i przytrzymanie)
+- [x] Sterowanie włącza się po pierwszym dotknięciu, przycisk tylko w trakcie rundy
+- [x] Prośba o obrócenie telefonu, pełny ekran, brak przewijania i przybliżania w trakcie rundy
+- **Testy:** gesty i przycisk (Node), telefon w emulacji z prawdziwymi zdarzeniami dotyku.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony
@@ -88,3 +94,4 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [ ] Strzał w głowę obu naraz daje remis
 - [ ] Mecz kończy się po 3 wygranych i rewanż działa
 - [ ] Gra skaluje się do okna i jest ostra na ekranach HiDPI
+- [ ] Na telefonie: skręty palcem, STRZAŁ, prośba o obrócenie w pionie

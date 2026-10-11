@@ -18,6 +18,7 @@ const { DEFAULT_NAMES, KEYMAPS, PLAYER_COLORS, TICK_MS } = __require("src/config
 const { startLoop } = __require("src/core/loop.js");
 const { SceneManager } = __require("src/core/scenes.js");
 const { Keyboard } = __require("src/input/keyboard.js");
+const { Touch } = __require("src/input/touch.js");
 const { Sfx } = __require("src/audio/sfx.js");
 const { Effects } = __require("src/render/effects.js");
 const { Renderer } = __require("src/render/renderer.js");
@@ -37,6 +38,7 @@ const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game')
 const app = {
   renderer: new Renderer(canvas),
   keyboard: new Keyboard(window, KEYMAPS),
+  touch: new Touch(window, document.getElementById('fire')),
   overlay: new Overlay(/** @type {HTMLElement} */ (document.getElementById('overlay'))),
   audio: new Sfx(),
   effects: new Effects(),
@@ -67,6 +69,14 @@ app.scenes.register('play', createPlayScene(app));
 app.scenes.register('roundEnd', createRoundEndScene(app));
 app.scenes.register('matchEnd', createMatchEndScene(app));
 
+// Telefon: po pierwszym dotknięciu pełny ekran i (gdzie się da) blokada w poziomie
+app.touch.onFirstTouch.push(() => {
+  document.documentElement.requestFullscreen?.().then(
+    () => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}),
+    () => {},
+  );
+});
+
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
@@ -84,6 +94,10 @@ startLoop({
     app.keyboard.endTick();
   },
   render(alpha, dt) {
+    // Sterowanie dotykiem i blokada przewijania tylko w trakcie rundy
+    const inRound = app.scenes.name === 'countdown' || app.scenes.name === 'play';
+    app.touch.setVisible(inRound);
+    document.body.classList.toggle('in-round', inRound);
     app.effects.update(dt);
     app.scenes.render(alpha, dt);
   },
@@ -428,6 +442,123 @@ class Keyboard {
 }
 
 Object.assign(__exports, { Keyboard });
+};
+
+// ---- src/input/touch.js ----
+__factories["src/input/touch.js"] = function (__exports) {
+// Sterowanie dotykiem (telefon, tablet): przesunięcie palcem w dowolnym miejscu skręca węża,
+// przycisk STRZAŁ (można przytrzymać) strzela. Daje te same komendy co klawiatura.
+//
+// Sterowanie włącza się samo przy pierwszym dotknięciu ekranu. Kto gra myszą i klawiaturą,
+// nigdy go nie zobaczy. Przycisk widać tylko w trakcie rundy (setVisible).
+
+/** @typedef {import('../game/types.js').Dir} Dir */
+/** @typedef {import('../game/types.js').Command} Command */
+
+/** Jak daleko (w pikselach ekranu) trzeba przesunąć palec, żeby skręcić. */
+const SWIPE_PX = 24;
+const MAX_PENDING_TURNS = 3;
+
+/** Kierunek przesunięcia albo null, jeśli palec przesunął się za mało. */
+function swipeDir(dx, dy, threshold = SWIPE_PX) {
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < threshold) return null;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}
+
+class Touch {
+  /**
+   * @param {EventTarget} target  gdzie słuchać palców (okno)
+   * @param {HTMLElement | null} fireButton
+   */
+  constructor(target, fireButton = null) {
+    this.fireButton = fireButton;
+    /** czy ktoś już grał dotykiem na tym urządzeniu */
+    this.active = false;
+    this.visible = false;
+    /** @type {Map<number, { x: number, y: number }>} początek bieżącego ruchu każdego palca */
+    this.swipes = new Map();
+    /** @type {Dir[]} */
+    this.turns = [];
+    this.firing = false;
+    this.fireTapped = false;
+    /** @type {(() => void)[]} */
+    this.onFirstTouch = [];
+
+    target.addEventListener('pointerdown', (e) => this.down(/** @type {PointerEvent} */ (e)));
+    target.addEventListener('pointermove', (e) => this.move(/** @type {PointerEvent} */ (e)));
+    for (const type of ['pointerup', 'pointercancel']) {
+      target.addEventListener(type, (e) => this.swipes.delete(/** @type {PointerEvent} */ (e).pointerId));
+    }
+
+    if (fireButton) {
+      fireButton.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.firing = true;
+        this.fireTapped = true;
+      });
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+        fireButton.addEventListener(type, () => (this.firing = false));
+      }
+    }
+  }
+
+  /** @param {PointerEvent} e */
+  down(e) {
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    if (!this.active) {
+      this.active = true;
+      this.updateButton();
+      for (const fn of this.onFirstTouch) fn();
+    }
+    if (!this.visible || e.target === this.fireButton) return;
+    this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  /** Każde przesunięcie o SWIPE_PX daje skręt; bez odrywania palca można skręcać dalej. */
+  move(e) {
+    const start = this.swipes.get(e.pointerId);
+    if (!start) return;
+    const dir = swipeDir(e.clientX - start.x, e.clientY - start.y);
+    if (!dir) return;
+    if (this.turns[this.turns.length - 1] !== dir && this.turns.length < MAX_PENDING_TURNS) this.turns.push(dir);
+    this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  /** Przycisk STRZAŁ i przesuwanie działają tylko w trakcie rundy. */
+  setVisible(visible) {
+    if (visible === this.visible) return;
+    this.visible = visible;
+    if (!visible) this.reset();
+    this.updateButton();
+  }
+
+  updateButton() {
+    if (this.fireButton) this.fireButton.hidden = !(this.active && this.visible);
+  }
+
+  /** @returns {Command} komenda na ten tick (jak z klawiatury) */
+  consume() {
+    const cmd = { turns: this.turns, shoot: this.firing || this.fireTapped };
+    this.turns = [];
+    this.fireTapped = false;
+    return cmd;
+  }
+
+  reset() {
+    this.swipes.clear();
+    this.turns = [];
+    this.firing = false;
+    this.fireTapped = false;
+  }
+}
+
+/** Łączy dwie komendy w jedną (np. klawiatura + dotyk). @param {Command} a @param {Command} b */
+function mergeCommands(a, b) {
+  return { turns: [...(a.turns ?? []), ...(b.turns ?? [])], shoot: !!(a.shoot || b.shoot) };
+}
+
+Object.assign(__exports, { SWIPE_PX, swipeDir, Touch, mergeCommands });
 };
 
 // ---- src/audio/sfx.js ----
@@ -1300,9 +1431,11 @@ Object.assign(__exports, { load, save });
 // ---- src/modes/offline.js ----
 __factories["src/modes/offline.js"] = function (__exports) {
 // Gra na jednym komputerze: komendy prosto z klawiatury, zestaw klawiszy i = gracz i.
+// Dotyk (jeśli ktoś gra na tablecie) steruje graczem 1.
 
 const { randomSeed } = __require("src/core/rng.js");
 const { createMatch } = __require("src/game/match.js");
+const { mergeCommands } = __require("src/input/touch.js");
 
 /** @param {any} app */
 function createOfflineController(app) {
@@ -1310,7 +1443,10 @@ function createOfflineController(app) {
     canPause: true,
     canSkip: true,
     rematchHint: 'SPACJA — rewanż    ESC — menu',
-    commands: () => app.keyboard.consumeCommands(),
+    commands() {
+      const [first, ...rest] = app.keyboard.consumeCommands();
+      return [mergeCommands(first, app.touch.consume()), ...rest];
+    },
     leave: () => app.scenes.go('menu'),
     rematch() {
       app.match = createMatch(randomSeed(), app.players.length);
@@ -1518,6 +1654,7 @@ __factories["src/modes/online.js"] = function (__exports) {
 const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { createMatch } = __require("src/game/match.js");
 const { Lockstep } = __require("src/net/lockstep.js");
+const { mergeCommands } = __require("src/input/touch.js");
 const { showRoomInAddressBar } = __require("src/net/client.js");
 const { drawPanel, drawText } = __require("src/render/text.js");
 
@@ -1586,7 +1723,8 @@ function createOnlineController(app, session, me) {
       lock.tick();
       let first = true;
       while (lock.canSend()) {
-        session.send(lock.makeInput(first ? app.keyboard.consumeMerged() : {}));
+        const cmd = first ? mergeCommands(app.keyboard.consumeMerged(), app.touch.consume()) : {};
+        session.send(lock.makeInput(cmd));
         first = false;
       }
       steps = 0;
@@ -1797,6 +1935,9 @@ function createCountdownScene(app) {
       drawPanel(ctx, VIEW_W / 2, cy - 25, 280, 180);
       drawText(ctx, `RUNDA ${app.roundNumber}`, VIEW_W / 2, cy - 70, { size: 18, color: COLORS.text, glow: 8 });
       drawText(ctx, String(n), VIEW_W / 2, cy + 10, { size: 48 + Math.round(frac * 24), color: COLORS.text, glow: 20 });
+      if (app.touch.active) {
+        drawText(ctx, 'przesuń palcem, żeby skręcić', VIEW_W / 2, cy + 120, { size: 10, color: COLORS.text });
+      }
     },
   };
 }
@@ -2801,6 +2942,7 @@ function createPlayScene(app) {
 
       if (paused) {
         k.consumeCommands();
+        app.touch.consume();
         return;
       }
 

@@ -7,6 +7,17 @@
 html,
 body {
     height: 100%;
+    /* bez przybliżania podwójnym stuknięciem i bez „odbijania” strony na telefonie */
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* W trakcie rundy przesuwanie palcem steruje wężem, więc strona nie może się przewijać */
+body.in-round {
+    touch-action: none;
 }
 
 body {
@@ -152,4 +163,51 @@ canvas {
     border-color: #7a80a8;
     color: #e8ecff;
     box-shadow: none;
+}
+
+/* Przycisk STRZAŁ (tylko dotyk, tylko w trakcie rundy) */
+#fire {
+    position: fixed;
+    right: max(2vw, env(safe-area-inset-right));
+    bottom: 6vh;
+    width: min(22vh, 26vw);
+    height: min(22vh, 26vw);
+    border-radius: 50%;
+    border: 3px solid #ffd700;
+    background: rgba(255, 215, 0, 0.12);
+    box-shadow: 0 0 16px rgba(255, 215, 0, 0.6);
+    color: #ffd700;
+    font: inherit;
+    font-size: min(2.2vh, 2.6vw);
+    touch-action: none;
+    z-index: 10;
+}
+
+#fire[hidden] {
+    display: none;
+}
+
+#fire:active {
+    background: rgba(255, 215, 0, 0.35);
+}
+
+#rotate {
+    display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+    #rotate {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 2em;
+        background: #05060f;
+        color: #00e5ff;
+        font-size: 4.5vw;
+        line-height: 1.8;
+    }
 }

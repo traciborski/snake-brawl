@@ -31,6 +31,13 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 | Offline | `W A S D` + `Spacja` | strzałki + `Enter` |
 | Online  | każdy steruje swoim wężem dowolnym z tych zestawów | |
 
+**Telefon i tablet** (ta sama strona, bez osobnej wersji): sterowanie dotykiem włącza się samo
+po pierwszym dotknięciu ekranu. Przesunięcie palcem w dowolnym miejscu skręca węża, a przycisk
+**STRZAŁ** w prawym dolnym rogu (można go przytrzymać) strzela. Przycisk widać tylko na ekranie
+grającego dotykiem i tylko w trakcie rundy. Gra prosi o trzymanie telefonu poziomo i przechodzi
+na pełny ekran. Na jednym urządzeniu dotyk steruje graczem 1, więc telefon nadaje się głównie
+do gry przez internet.
+
 ## 4. Mecz i runda
 
 1. **Menu**: wybór trybu (jeden komputer / internet), potem imiona.

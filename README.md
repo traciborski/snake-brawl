@@ -9,6 +9,7 @@ Mecz gramy do 3 wygranych.
 | Jeden komputer, gracz 1 | `W A S D` + `Spacja` |
 | Jeden komputer, gracz 2 | strzałki + `Enter` |
 | Przez internet | każdy steruje swoim wężem dowolnym z tych zestawów |
+| Telefon / tablet | przesunięcie palcem = skręt, przycisk **STRZAŁ** (telefon poziomo) |
 
 `P` pauza (tylko offline) · `Esc` menu · `M` dźwięk
 

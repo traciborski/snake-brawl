@@ -43,6 +43,9 @@ export function createCountdownScene(app) {
       drawPanel(ctx, VIEW_W / 2, cy - 25, 280, 180);
       drawText(ctx, `RUNDA ${app.roundNumber}`, VIEW_W / 2, cy - 70, { size: 18, color: COLORS.text, glow: 8 });
       drawText(ctx, String(n), VIEW_W / 2, cy + 10, { size: 48 + Math.round(frac * 24), color: COLORS.text, glow: 20 });
+      if (app.touch.active) {
+        drawText(ctx, 'przesuń palcem, żeby skręcić', VIEW_W / 2, cy + 120, { size: 10, color: COLORS.text });
+      }
     },
   };
 }

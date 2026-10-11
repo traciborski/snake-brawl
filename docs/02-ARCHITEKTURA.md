@@ -71,6 +71,7 @@ src/
     match.js            wynik rundy, licznik meczu, zwycięzca
   input/
     keyboard.js         nasłuch klawiszy, kolejka kierunków na zestaw klawiszy
+    touch.js            dotyk: przesunięcie palcem = skręt, przycisk STRZAŁ; te same komendy co klawiatura
   modes/
     offline.js          kontroler trybu: jeden komputer
     online.js           kontroler trybu: internet (lockstep)

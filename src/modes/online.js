@@ -3,6 +3,7 @@
 import { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
 import { createMatch } from '../game/match.js';
 import { Lockstep } from '../net/lockstep.js';
+import { mergeCommands } from '../input/touch.js';
 import { showRoomInAddressBar } from '../net/client.js';
 import { drawPanel, drawText } from '../render/text.js';
 
@@ -71,7 +72,8 @@ export function createOnlineController(app, session, me) {
       lock.tick();
       let first = true;
       while (lock.canSend()) {
-        session.send(lock.makeInput(first ? app.keyboard.consumeMerged() : {}));
+        const cmd = first ? mergeCommands(app.keyboard.consumeMerged(), app.touch.consume()) : {};
+        session.send(lock.makeInput(cmd));
         first = false;
       }
       steps = 0;

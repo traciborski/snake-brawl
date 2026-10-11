@@ -26,6 +26,7 @@ export function createPlayScene(app) {
 
       if (paused) {
         k.consumeCommands();
+        app.touch.consume();
         return;
       }
 

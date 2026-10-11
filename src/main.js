@@ -4,6 +4,7 @@ import { DEFAULT_NAMES, KEYMAPS, PLAYER_COLORS, TICK_MS } from './config.js';
 import { startLoop } from './core/loop.js';
 import { SceneManager } from './core/scenes.js';
 import { Keyboard } from './input/keyboard.js';
+import { Touch } from './input/touch.js';
 import { Sfx } from './audio/sfx.js';
 import { Effects } from './render/effects.js';
 import { Renderer } from './render/renderer.js';
@@ -23,6 +24,7 @@ const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game')
 const app = {
   renderer: new Renderer(canvas),
   keyboard: new Keyboard(window, KEYMAPS),
+  touch: new Touch(window, document.getElementById('fire')),
   overlay: new Overlay(/** @type {HTMLElement} */ (document.getElementById('overlay'))),
   audio: new Sfx(),
   effects: new Effects(),
@@ -53,6 +55,14 @@ app.scenes.register('play', createPlayScene(app));
 app.scenes.register('roundEnd', createRoundEndScene(app));
 app.scenes.register('matchEnd', createMatchEndScene(app));
 
+// Telefon: po pierwszym dotknięciu pełny ekran i (gdzie się da) blokada w poziomie
+app.touch.onFirstTouch.push(() => {
+  document.documentElement.requestFullscreen?.().then(
+    () => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}),
+    () => {},
+  );
+});
+
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
@@ -70,6 +80,10 @@ startLoop({
     app.keyboard.endTick();
   },
   render(alpha, dt) {
+    // Sterowanie dotykiem i blokada przewijania tylko w trakcie rundy
+    const inRound = app.scenes.name === 'countdown' || app.scenes.name === 'play';
+    app.touch.setVisible(inRound);
+    document.body.classList.toggle('in-round', inRound);
     app.effects.update(dt);
     app.scenes.render(alpha, dt);
   },
