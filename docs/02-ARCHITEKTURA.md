@@ -40,10 +40,8 @@
 | Parametr                 | Wartość | Ticki |
 |--------------------------|---------|-------|
 | Ruch węża                | 10 pól/s | co 2 ticki |
-| Ruch pocisku             | 20 pól/s | 1 pole/tick |
+| Ruch pocisku             | 30 pól/s | 3 pola na 2 ticki (1, 2, 1, 2…) |
 | Cooldown strzału         | 0,3 s   | 6 |
-| Odbicia pocisku          | 3, przy 4. ścianie znika | – |
-| Czas rundy               | 90 s    | 1800 |
 | Odliczanie               | 3 s     | 60 |
 
 ## 4. Struktura plików
@@ -64,7 +62,7 @@ src/
     scenes.js           maszyna stanów scen (enter / update / render / exit)
   game/                 ◄── CZYSTA LOGIKA, bez DOM
     types.js            definicje typów JSDoc (Stan, Wąż, Pocisk, Zdarzenie…)
-    grid.js             kierunki, pozycje, pomocnicze funkcje kratki
+    grid.js             kierunki, pozycje, obrót o 180°, portale (passThrough)
     maze.js             generowanie symetrycznego labiryntu + test spójności
     round.js            createRound(seed), stepRound(stan, komendy) → zdarzenia, ruch węży
     snake.js            skręty, odbicie (zawrócenie węża), odcinanie ogona, śmierć
@@ -103,12 +101,11 @@ RoundState = {
   tick: 0,
   rng,                          // stan generatora z ziarnem
   grid: { w: 48, h: 27 },       // 16:9, pole 20 px → 960×540
-  walls: Uint8Array,            // 1 = ściana, indeks y*w + x
+  walls: Uint8Array,            // 0 puste, 1 czarna, 2 czerwona, 3 niebieska; indeks y*w + x
   snakes: [Snake, Snake],       // [Leon, Hugo]
   bullets: Bullet[],
   food: Pos[],                  // zawsze 3
-  timeLeft: 1800,               // w tickach
-  result: null | { winner: 0 | 1 | 'draw' },
+  result: null | { winner: 0 | 1 | 'draw' },   // bez limitu czasu
 }
 
 Snake = {
@@ -117,10 +114,10 @@ Snake = {
   dir: Dir, nextDirs: Dir[],    // kolejka max 2 skrętów
   growPending: 0,
   cooldown: 0,
-  alive: true,
+  alive: true, death: null,     // null | 'shot' | 'wall'
 }
 
-Bullet = { owner: 0 | 1, pos: Pos, dir: Dir, bounces: 0 }
+Bullet = { owner: 0 | 1, pos: Pos, dir: Dir }
 
 Commands = [{ turn?: Dir, shoot: boolean }, { … }]   // na gracza, na tick
 ```
@@ -132,18 +129,19 @@ Commands = [{ turn?: Dir, shoot: boolean }, { … }]   // na gracza, na tick
 Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocześnie**.
 
 1. **Komendy**: przyjmij skręt (bez zawracania) i żądanie strzału.
-2. **Timery**: zmniejsz cooldown i czas rundy.
+2. **Timery**: zmniejsz cooldown.
 3. **Strzały**: jeśli długość > 1 i cooldown = 0, to zabierz
    segment z ogona i stwórz pocisk na polu przed głową.
-4. **Pociski**: przesuń każdy o 1 pole. Ściana przed pociskiem → zawraca w miejscu
-   (po 3 odbiciach kolejna ściana go niszczy). Potem inny pocisk i węże
+4. **Pociski**: przesuń o 1 lub 2 pola (3 pola na 2 ticki), sprawdzając kolizje po każdym polu.
+   Ściana lub krawędź → pocisk znika. Potem inny pocisk i węże poza strzelającym
    (głowa → śmierć, ciało → odcięcie ogona).
-5. **Węże** (co 2. tick): policz obie nowe głowy naraz. Przeszkoda (ściana, ciało,
-   głowa w głowę, zamiana miejscami) → wąż się odbija, czyli odwraca ciało i nie rusza się
+5. **Węże** (co 2. tick): policz obie nowe głowy naraz (`passThrough`: krawędź i niebieskie
+   ściany przenoszą na drugą stronę). Czerwona ściana → śmierć. Czarna ściana, ciało,
+   głowa w głowę, zamiana miejscami → wąż się odbija, czyli odwraca ciało i nie rusza się
    w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
-   Na koniec głowa w pocisk → śmierć.
+   Na koniec głowa w cudzy pocisk → śmierć.
 6. **Jedzenie**: zjedzenie daje `growPending++`, uzupełnij owoce do 3.
-7. **Koniec rundy**: sprawdź śmierć lub upływ czasu i ustaw `result`.
+7. **Koniec rundy**: ktoś zginął → ustaw `result` (obaj naraz → remis).
 
 Funkcja zwraca listę zdarzeń z tego ticka.
 Kolizje sprawdzamy po każdym przesunięciu o 1 pole, więc nic nie „przeskoczy” przez wroga.
@@ -181,8 +179,8 @@ Każda scena ma `enter()`, `update(tick)`, `render(ctx, alpha)`, `exit()`.
 ## 10. Testowanie
 
 - **Automatyczne** (`npm test`): całe `src/game/`. Przykłady:
-  labirynt jest symetryczny i spójny, strzał zabiera segment, trafienie w głowę zabija, pocisk odbija się 3 razy,
-  zderzenie głowami odbija obu, po 1800 tickach wygrywa dłuższy.
+  labirynt jest symetryczny i spójny, strzał zabiera segment, trafienie w głowę zabija, czerwona ściana zabija, niebieska przenosi,
+  zderzenie głowami odbija obu, własny pocisk jest niegroźny.
   Dzięki ziarnu RNG każdy scenariusz jest powtarzalny.
 - **Ręczne**: lista kontrolna rozgrywki w przeglądarce (w planie, etap 3).
 

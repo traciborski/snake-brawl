@@ -69,7 +69,7 @@ export class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'ricochet' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
+  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
   play(name) {
     switch (name) {
       case 'shoot':
@@ -85,8 +85,8 @@ export class Sfx {
       case 'bounce':
         this.tone({ freq: 160, to: 320, dur: 0.1, type: 'triangle', vol: 0.5 });
         break;
-      case 'ricochet':
-        this.tone({ freq: 1800, to: 2600, dur: 0.06, type: 'triangle', vol: 0.25 });
+      case 'warp':
+        this.tone({ freq: 300, to: 1500, dur: 0.12, type: 'sine', vol: 0.4 });
         break;
       case 'wall':
         this.noise({ dur: 0.05, vol: 0.15, freq: 1500 });
@@ -122,7 +122,7 @@ export class Sfx {
       ate: 'eat',
       bodyHit: 'hit',
       bounced: 'bounce',
-      bulletBounce: 'ricochet',
+      teleported: 'warp',
       bulletWall: 'wall',
       bulletClash: 'clash',
       died: 'die',

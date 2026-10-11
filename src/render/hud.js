@@ -1,17 +1,10 @@
-// Pasek nad planszą: gracze, wygrane rundy, długość, czas.
+// Pasek nad planszą: gracze, wygrane rundy, długość, numer rundy.
 
-import { COLORS, HUD_H, PLAYERS, TICKS_PER_SECOND, VIEW_W, WINS_TO_MATCH } from '../config.js';
+import { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
 /** @typedef {import('../game/match.js').MatchState} MatchState */
-
-export function formatTime(ticks) {
-  const total = Math.max(0, Math.ceil(ticks / TICKS_PER_SECOND));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 
 function drawPips(ctx, x, y, wins, color, alignRight) {
   const size = 12;
@@ -39,9 +32,8 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
  * @param {RoundState} round
  * @param {MatchState} match
  * @param {number} roundNumber
- * @param {number} time ms
  */
-export function drawHud(ctx, round, match, roundNumber, time) {
+export function drawHud(ctx, round, match, roundNumber) {
   const mid = HUD_H / 2;
   const [leon, hugo] = round.snakes;
 
@@ -55,10 +47,7 @@ export function drawHud(ctx, round, match, roundNumber, time) {
   drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
   drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid, { size: 12, color: COLORS.dim, align: 'right' });
 
-  // Czas na środku: ostatnie 10 s na czerwono, miga
-  const last = round.timeLeft <= 10 * TICKS_PER_SECOND && !round.result;
-  const color = last ? COLORS.danger : COLORS.text;
-  const alpha = last && Math.floor(time / 250) % 2 ? 0.5 : 1;
-  drawText(ctx, formatTime(round.timeLeft), VIEW_W / 2, mid - 6, { size: 22, color, glow: last ? 10 : 0, alpha });
-  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid + 18, { size: 8, color: COLORS.dim });
+  // Numer rundy na środku (rundy nie mają limitu czasu)
+  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });
+  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, mid + 16, { size: 8, color: COLORS.dim });
 }

@@ -24,22 +24,25 @@ function buildLayer(walls, grid, scale) {
     for (let x = 1; x < grid.w; x++) c.fillRect(x * CELL - 1, y * CELL - 1, 2, 2);
   }
 
-  const wallPath = new Path2D();
-  const innerPath = new Path2D();
-  for (let y = 0; y < grid.h; y++) {
-    for (let x = 0; x < grid.w; x++) {
-      if (!walls[y * grid.w + x]) continue;
-      wallPath.rect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-      innerPath.rect(x * CELL + 4, y * CELL + 4, CELL - 8, CELL - 8);
+  // Każdy rodzaj ściany: świecąca krawędź + ciemny środek
+  for (const [kind, [edge, fill]] of Object.entries(COLORS.walls)) {
+    const wallPath = new Path2D();
+    const innerPath = new Path2D();
+    for (let y = 0; y < grid.h; y++) {
+      for (let x = 0; x < grid.w; x++) {
+        if (walls[y * grid.w + x] !== Number(kind)) continue;
+        wallPath.rect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+        innerPath.rect(x * CELL + 4, y * CELL + 4, CELL - 8, CELL - 8);
+      }
     }
+    c.shadowColor = edge;
+    c.shadowBlur = 10;
+    c.fillStyle = edge;
+    c.fill(wallPath);
+    c.shadowBlur = 0;
+    c.fillStyle = fill;
+    c.fill(innerPath);
   }
-  c.shadowColor = COLORS.wallGlow;
-  c.shadowBlur = 10;
-  c.fillStyle = COLORS.wallEdge;
-  c.fill(wallPath);
-  c.shadowBlur = 0;
-  c.fillStyle = COLORS.wallFill;
-  c.fill(innerPath);
 
   return canvas;
 }

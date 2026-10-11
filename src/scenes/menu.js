@@ -44,8 +44,9 @@ export function createMenuScene(app) {
         drawText(ctx, p.help, colX[i], 355, { size: 10, color: COLORS.text });
       });
 
-      drawText(ctx, 'Ściany odbijają węże i pociski. Giniesz tylko od strzału w głowę.', VIEW_W / 2, 400, { size: 10, color: COLORS.dim });
-      drawText(ctx, 'Strzał kosztuje 1 segment. Trafiony ogon odpada.', VIEW_W / 2, 422, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 400, { size: 10, color: COLORS.text });
+      drawText(ctx, 'Strzał w głowę wygrywa rundę. Trafiony ogon odpada.', VIEW_W / 2, 425, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Strzał kosztuje 1 segment. Własne pociski są niegroźne.', VIEW_W / 2, 447, { size: 10, color: COLORS.dim });
 
       if (blink(time)) {
         drawText(ctx, 'SPACJA / ENTER  —  START', VIEW_W / 2, 500, { size: 16, color: COLORS.text, glow: 8 });

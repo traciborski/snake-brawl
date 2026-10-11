@@ -52,11 +52,8 @@ export class Effects {
         case 'shot':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
           break;
-        case 'bulletBounce':
-          this.burstAt(e.pos, COLORS.wallEdge, 6, 80, 0.2, 3);
-          break;
         case 'bulletWall':
-          this.burstAt(e.pos, COLORS.wallEdge, 14, 120, 0.35, 3);
+          this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
           break;
         case 'bulletClash':
           this.burstAt(e.pos, '#ffffff', 16, 160, 0.35, 3);
@@ -65,6 +62,9 @@ export class Effects {
         case 'bodyHit':
           for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
           this.addShake(5);
+          break;
+        case 'teleported':
+          this.burstAt(e.pos, COLORS.walls[3][0], 12, 120, 0.35, 3);
           break;
         case 'bounced':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);

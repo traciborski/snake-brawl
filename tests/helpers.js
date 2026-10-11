@@ -1,5 +1,5 @@
 import { createRound, stepRound } from '../src/game/round.js';
-import { GRID_H, GRID_W } from '../src/config.js';
+import { GRID_H, GRID_W, WALL } from '../src/config.js';
 
 /** Pusta plansza bez ścian i bez jedzenia: idealna do testów reguł. */
 export function emptyRound(options = {}) {
@@ -15,8 +15,9 @@ export function place(state, id, cells, dir) {
   return s;
 }
 
-export function wall(state, x, y) {
-  state.walls[y * state.grid.w + x] = 1;
+/** Stawia ścianę danego rodzaju (domyślnie czarną, odbijającą). */
+export function wall(state, x, y, kind = WALL.BOUNCE) {
+  state.walls[y * state.grid.w + x] = kind;
 }
 
 /** Wykonuje n ticków z tymi samymi komendami (tylko pierwszy tick dostaje komendy). */

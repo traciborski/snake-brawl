@@ -58,18 +58,16 @@ export function drawBullets(ctx, round) {
   for (const b of round.bullets) {
     const color = PLAYERS[b.owner].color;
     const v = DIR_VEC[b.dir];
-    // Każde odbicie przygasza pocisk: widać, ile mu jeszcze zostało
-    const fade = 1 - b.bounces * 0.2;
     const x = px(b.pos);
     const y = py(b.pos);
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 14;
     // Smuga za pociskiem
-    ctx.globalAlpha = 0.35 * fade;
+    ctx.globalAlpha = 0.35;
     ctx.fillStyle = color;
     ctx.fillRect(x - v.x * CELL + 6, y - v.y * CELL + 6, CELL - 12, CELL - 12);
-    ctx.globalAlpha = fade;
+    ctx.globalAlpha = 1;
     ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 7, y + 7, CELL - 14, CELL - 14);

@@ -1,26 +1,19 @@
 // Runda: stan początkowy i jeden krok symulacji.
 // Czysta logika: bez DOM, bez czasu systemowego, losowość tylko z RNG w stanie.
 
-import {
-  FOOD_COUNT,
-  GRID_H,
-  GRID_W,
-  MAZE_DENSITY,
-  ROUND_TICKS,
-  SNAKE_MOVE_EVERY,
-  START_LENGTH,
-} from '../config.js';
+import { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } from '../config.js';
 import { createRng } from '../core/rng.js';
 import { fire, moveBullets } from './bullets.js';
 import { eatFood, refillFood } from './food.js';
-import { isBlocked, samePos, step } from './grid.js';
+import { cellIndex, passThrough, samePos } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
-import { applyHit, bounce, createSnake, queueTurn, tickTimers } from './snake.js';
+import { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } from './snake.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
 /** @typedef {import('./types.js').GameEvent} GameEvent */
 /** @typedef {import('./types.js').Pos} Pos */
+/** @typedef {import('./types.js').Dir} Dir */
 
 /**
  * @param {number} seed
@@ -43,7 +36,6 @@ export function createRound(seed, options = {}) {
     bullets: [],
     food: [],
     foodCount: options.foodCount ?? FOOD_COUNT,
-    timeLeft: ROUND_TICKS,
     result: null,
   };
   refillFood(state);
@@ -70,7 +62,6 @@ export function stepRound(state, commands = []) {
 
   // 2. Timery
   for (const snake of state.snakes) tickTimers(snake);
-  state.timeLeft--;
 
   // 3. Strzały
   state.snakes.forEach((snake, i) => {
@@ -95,29 +86,33 @@ export function stepRound(state, commands = []) {
 /**
  * Oba węże ruszają się równocześnie: najpierw liczymy nowe pozycje,
  * potem sprawdzamy przeszkody na podstawie stanu „po ruchu”.
- * Przeszkoda (ściana, krawędź, dowolne ciało, czołówka) nie zabija, tylko odbija:
- * wąż zawraca w miejscu. Odbity wąż nie zwalnia pola ogona, więc sprawdzamy
- * ponownie, aż nic się nie zmieni.
+ * - czerwona ściana → śmierć,
+ * - czarna ściana, dowolne ciało, czołówka → odbicie (wąż zawraca w miejscu),
+ * - krawędź i niebieska ściana → przeniesienie na drugą stronę (`passThrough`).
+ * Odbity albo martwy wąż nie zwalnia pola ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
  */
 function moveSnakes(state, events) {
+  const { grid, walls } = state;
   const plans = state.snakes.map((snake) => {
     if (!snake.alive) return null;
     const dir = snake.nextDirs.length ? snake.nextDirs[0] : snake.dir;
     const oldHead = snake.body[0];
-    const head = step(oldHead, dir);
+    const { pos: head, teleported } = passThrough(grid, walls, oldHead, dir);
     const grows = snake.growPending > 0;
     const body = [head, ...(grows ? snake.body : snake.body.slice(0, -1))];
-    return { snake, dir, oldHead, head, grows, body, bounce: false };
+    const cell = walls[cellIndex(grid, head)];
+    return { snake, dir, oldHead, head, teleported, grows, body, dies: cell === WALL.DEADLY, bounce: false };
   });
+  const moving = (plan) => plan && !plan.bounce && !plan.dies;
 
   const blocked = (i, bodies) => {
     const plan = plans[i];
-    if (isBlocked(state.grid, state.walls, plan.head)) return true;
+    if (walls[cellIndex(grid, plan.head)] !== WALL.NONE) return true;
     if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return true;
     for (let j = 0; j < plans.length; j++) {
       if (j === i || !state.snakes[j].alive) continue;
       const other = plans[j];
-      if (other && !other.bounce) {
+      if (moving(other)) {
         if (samePos(other.head, plan.head)) return true;
         if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return true;
       }
@@ -128,9 +123,9 @@ function moveSnakes(state, events) {
 
   for (let changed = true; changed; ) {
     changed = false;
-    const bodies = state.snakes.map((s, i) => (plans[i] && !plans[i].bounce ? plans[i].body : s.body));
+    const bodies = state.snakes.map((s, i) => (moving(plans[i]) ? plans[i].body : s.body));
     plans.forEach((plan, i) => {
-      if (plan && !plan.bounce && blocked(i, bodies)) {
+      if (moving(plan) && blocked(i, bodies)) {
         plan.bounce = true;
         changed = true;
       }
@@ -140,8 +135,13 @@ function moveSnakes(state, events) {
   for (const plan of plans) {
     if (!plan) continue;
     const { snake } = plan;
+    if (plan.dies) {
+      snake.body = plan.body;
+      kill(snake, 'wall', null, events);
+      continue;
+    }
     if (plan.bounce) {
-      bounce(snake);
+      bounce(snake, grid);
       events.push({ type: 'bounced', snake: snake.id, pos: { ...plan.oldHead } });
       continue;
     }
@@ -149,30 +149,24 @@ function moveSnakes(state, events) {
     snake.dir = plan.dir;
     snake.body = plan.body;
     if (plan.grows) snake.growPending--;
+    if (plan.teleported) events.push({ type: 'teleported', snake: snake.id, pos: { ...plan.head } });
   }
 
-  // Głowa wjeżdżająca w pocisk
+  // Głowa wjeżdżająca w cudzy pocisk
   for (const snake of state.snakes) {
     if (!snake.alive) continue;
-    const i = state.bullets.findIndex((b) => samePos(b.pos, snake.body[0]));
+    const i = state.bullets.findIndex((b) => b.owner !== snake.id && samePos(b.pos, snake.body[0]));
     if (i < 0) continue;
     const [bullet] = state.bullets.splice(i, 1);
     applyHit(snake, 0, bullet.owner, events);
   }
 }
 
+/** Runda kończy się, gdy ktoś zginie. Obaj naraz → remis. */
 function checkRoundEnd(state, events) {
   const alive = state.snakes.filter((s) => s.alive);
-  let result = null;
-  if (alive.length < state.snakes.length) {
-    result = { winner: alive.length === 1 ? alive[0].id : 'draw', reason: 'ko' };
-  } else if (state.timeLeft <= 0) {
-    const [a, b] = state.snakes;
-    const winner = a.body.length === b.body.length ? 'draw' : a.body.length > b.body.length ? a.id : b.id;
-    result = { winner, reason: 'time' };
-  }
-  if (result) {
-    state.result = result;
-    events.push({ type: 'roundOver', result });
-  }
+  if (alive.length === state.snakes.length) return;
+  const result = { winner: alive.length === 1 ? alive[0].id : 'draw' };
+  state.result = result;
+  events.push({ type: 'roundOver', result });
 }

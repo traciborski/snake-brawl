@@ -6,7 +6,8 @@
 ## 1. Jedno zdanie
 
 Arcade'owy pojedynek dwóch węży na jednej klawiaturze: rośniesz, zjadając jedzenie,
-strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi rywala w głowę.
+strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi rywala w głowę
+(albo komu rywal wjedzie w czerwoną ścianę).
 
 ## 2. Ustalenia
 
@@ -30,11 +31,10 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 
 1. **Menu**: start meczu, ekran sterowania.
 2. **Odliczanie** 3-2-1, węże startują w przeciwległych rogach planszy, długość 3.
-3. **Runda** trwa do śmierci węża albo 90 s.
+3. **Runda** nie ma limitu czasu: trwa, aż któryś wąż zginie.
 4. **Wynik rundy**:
-   - jeden wąż dostał strzał w głowę, więc wygrywa drugi;
-   - obaj dostali w głowę w tym samym momencie, więc jest remis;
-   - po 90 s wygrywa dłuższy wąż, a przy równej długości jest remis.
+   - jeden wąż zginął (strzał w głowę albo czerwona ściana), więc wygrywa drugi;
+   - obaj zginęli w tym samym momencie, więc jest remis.
 5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
    i rewanż jednym klawiszem.
 
@@ -43,33 +43,34 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 **Ruch**
 - Plansza w kratkę, ruch krok po kroku ze stałą prędkością (~10 kratek/s).
 - Nie można zawrócić w miejscu klawiszem.
-- **Giniesz tylko od strzału w głowę.** Ściana, krawędź planszy, własne ciało, ciało rywala
-  i zderzenie głowami nie zabijają, tylko **odbijają**: wąż zawraca, czyli ogon staje się
-  głową i wąż jedzie dalej w przeciwną stronę.
+- **Trzy rodzaje ścian** (każdy to ok. 1/3 ścian):
+  - 🔴 **czerwona** zabija,
+  - ⚫ **czarna** odbija: wąż zawraca, czyli ogon staje się głową i wąż jedzie w przeciwną stronę,
+  - 🔵 **niebieska** przenosi: wąż przeskakuje ją i wyjeżdża po jej drugiej stronie.
+- **Krawędź planszy** działa jak niebieska ściana: wyjeżdżasz z drugiej strony planszy.
+- Własne ciało, ciało rywala i zderzenie głowami **odbijają** (jak czarna ściana).
 
 **Jedzenie**
 - Na planszy zawsze leżą 3 owoce. Zjedzenie daje +1 segment.
 
 **Strzelanie**
 - Strzał kosztuje 1 segment ogona. Z samą głową (długość 1) nie można strzelać.
-- Cooldown 0,3 s. Pocisk leci prosto, 2× szybciej niż wąż.
+- Cooldown 0,3 s. Pocisk leci prosto, **3× szybciej niż wąż** (30 pól/s).
 - **Trafienie w ciało** odcina ogon od trafionego segmentu do końca.
-- **Trafienie w głowę** zabija i kończy rundę. Wjazd głową w pocisk też.
-- Pociski trafiają każdego węża, także strzelającego.
-- Pocisk **odbija się** od ścian i krawędzi (zawraca). Odbija się 3 razy,
-  a przy czwartej ścianie znika. Każde odbicie trochę go przygasza.
-- Strzał prosto w ścianę tuż przed głową od razu gaśnie (nie da się zastrzelić samego siebie z bliska).
+- **Trafienie w głowę** zabija rywala, więc strzelający wygrywa rundę. Wjazd głową w cudzy pocisk też.
+- **Własne pociski są niegroźne**: przelatują przez strzelającego bez śladu.
+- Pocisk **znika** na każdej ścianie (dowolnego koloru) i na krawędzi planszy.
 - Ściany są niezniszczalne.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 
 **Labirynt**
 - Generowany losowo, ale symetrycznie (obrót o 180° wokół środka), żeby oba spawny były w identycznej sytuacji.
-- Okolice spawnów są zawsze wolne, a każde wolne pole jest osiągalne.
+- Okolice spawnów są zawsze wolne, a każde wolne pole jest osiągalne (licząc przejścia przez portale).
 
 ## 6. Styl i oprawa
 
 - Kratka w stylu pikselowym, węże i pociski z neonową poświatą, ciemne tło.
-- Efekty: eksplozje cząsteczek, potrząsanie ekranem przy trafieniu i odbiciu.
+- Efekty: eksplozje cząsteczek, potrząsanie ekranem przy trafieniu i odbiciu, błysk przy teleporcie.
 - Dźwięk: krótkie efekty (strzał, jedzenie, trafienie, śmierć), na razie bez muzyki.
 
 ## 7. Poza pierwszą wersją (później)

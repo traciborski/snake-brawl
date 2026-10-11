@@ -1,6 +1,6 @@
 // Wąż: tworzenie, skręty, odbicie, reakcja na trafienie.
 
-import { DIR_VEC, OPPOSITE } from './grid.js';
+import { OPPOSITE, dirBetween } from './grid.js';
 
 /** @typedef {import('./types.js').Snake} Snake */
 /** @typedef {import('./types.js').Dir} Dir */
@@ -19,6 +19,7 @@ export function createSnake(id, body, dir) {
     growPending: 0,
     cooldown: 0,
     alive: true,
+    death: null,
   };
 }
 
@@ -47,21 +48,23 @@ export function canShoot(snake) {
 /**
  * Odbicie od przeszkody: wąż zawraca, czyli ogon staje się głową
  * i dalej jedzie w stronę, w którą „patrzył” ogon.
- * @param {Snake} snake
+ * @param {Snake} snake @param {import('./types.js').Grid} grid
  */
-export function bounce(snake) {
+export function bounce(snake, grid) {
   snake.nextDirs = [];
   if (snake.body.length === 1) {
     snake.dir = OPPOSITE[snake.dir];
     return;
   }
   snake.body.reverse();
-  const [head, neck] = snake.body;
-  const dx = head.x - neck.x;
-  const dy = head.y - neck.y;
-  snake.dir = /** @type {Dir} */ (
-    Object.keys(DIR_VEC).find((d) => DIR_VEC[d].x === dx && DIR_VEC[d].y === dy) ?? OPPOSITE[snake.dir]
-  );
+  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]);
+}
+
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall'} cause */
+export function kill(snake, cause, by, events) {
+  snake.alive = false;
+  snake.death = cause;
+  events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] }, cause });
 }
 
 /**
@@ -71,8 +74,7 @@ export function bounce(snake) {
  */
 export function applyHit(snake, index, by, events) {
   if (index === 0) {
-    snake.alive = false;
-    events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] } });
+    kill(snake, 'shot', by, events);
     return;
   }
   const cells = snake.body.splice(index);

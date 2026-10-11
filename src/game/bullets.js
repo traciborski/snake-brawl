@@ -1,7 +1,8 @@
-// Pociski: strzał (koszt segmentu), lot, odbicia od ścian i kolizje.
+// Pociski: strzał (koszt segmentu), lot i kolizje.
+// Pocisk znika na każdej ścianie i na krawędzi planszy. Własne pociski przelatują przez strzelającego.
 
-import { BULLET_MAX_BOUNCES, SHOT_COOLDOWN } from '../config.js';
-import { OPPOSITE, isBlocked, samePos, step } from './grid.js';
+import { BULLET_CELLS, BULLET_PER_TICKS, SHOT_COOLDOWN } from '../config.js';
+import { isBlocked, samePos, step } from './grid.js';
 import { applyHit, canShoot, segmentAt } from './snake.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
@@ -9,9 +10,14 @@ import { applyHit, canShoot, segmentAt } from './snake.js';
 /** @typedef {import('./types.js').Bullet} Bullet */
 /** @typedef {import('./types.js').GameEvent} GameEvent */
 
+/** Ile pól pocisk przelatuje w danym ticku (rozkłada BULLET_CELLS równo na BULLET_PER_TICKS). */
+export function bulletStepsAt(tick) {
+  const at = (t) => Math.floor((t * BULLET_CELLS) / BULLET_PER_TICKS);
+  return at(tick) - at(tick - 1);
+}
+
 /**
  * Strzał: zabiera segment z ogona i tworzy pocisk na polu przed głową.
- * Strzał prosto w przyległą ścianę od razu gaśnie (nie da się zastrzelić samego siebie z bliska).
  * @param {RoundState} state @param {Snake} snake @param {GameEvent[]} events
  * @returns {boolean} czy strzał padł
  */
@@ -21,7 +27,7 @@ export function fire(state, snake, events) {
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */
-  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir, bounces: 0 };
+  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir };
   events.push({ type: 'shot', snake: snake.id, pos: { ...snake.body[0] } });
 
   if (isBlocked(state.grid, state.walls, bullet.pos)) {
@@ -39,12 +45,12 @@ export function fire(state, snake, events) {
 }
 
 /**
- * Trafienie węża na polu pocisku.
+ * Trafienie węża (innego niż strzelający) na polu pocisku.
  * @returns {boolean} true, jeśli pocisk kogoś trafił (i znika)
  */
 export function bulletHitsSnake(state, bullet, events) {
   for (const snake of state.snakes) {
-    if (!snake.alive) continue;
+    if (!snake.alive || snake.id === bullet.owner) continue;
     const index = segmentAt(snake, bullet.pos);
     if (index < 0) continue;
     applyHit(snake, index, bullet.owner, events);
@@ -53,29 +59,27 @@ export function bulletHitsSnake(state, bullet, events) {
   return false;
 }
 
+/** Przesuwa pociski o tyle pól, ile wypada w tym ticku, sprawdzając kolizje po każdym polu. */
+export function moveBullets(state, events) {
+  const steps = bulletStepsAt(state.tick);
+  for (let i = 0; i < steps && state.bullets.length; i++) stepBullets(state, events);
+}
+
 /**
- * Przesuwa wszystkie pociski o 1 pole. Pocisk, który trafia na ścianę, zawraca
- * (w tym ticku zostaje w miejscu). Po BULLET_MAX_BOUNCES odbiciach kolejna ściana go niszczy.
+ * Jeden krok wszystkich pocisków o 1 pole. Ściana albo krawędź → pocisk znika.
  * Pociski, które wejdą na to samo pole albo się miną, znoszą się nawzajem.
  * @param {RoundState} state @param {GameEvent[]} events
  */
-export function moveBullets(state, events) {
+function stepBullets(state, events) {
   const gone = new Set();
-  const moves = state.bullets.map((b) => {
-    const from = b.pos;
-    const next = step(from, b.dir);
-    if (!isBlocked(state.grid, state.walls, next)) return { b, from, to: next };
+  const moves = state.bullets.map((b) => ({ b, from: b.pos, to: step(b.pos, b.dir) }));
 
-    if (b.bounces >= BULLET_MAX_BOUNCES) {
-      gone.add(b);
-      events.push({ type: 'bulletWall', pos: next });
-    } else {
-      b.bounces++;
-      b.dir = OPPOSITE[b.dir];
-      events.push({ type: 'bulletBounce', pos: next });
+  for (const m of moves) {
+    if (isBlocked(state.grid, state.walls, m.to)) {
+      gone.add(m.b);
+      events.push({ type: 'bulletWall', pos: m.to });
     }
-    return { b, from, to: from };
-  });
+  }
 
   for (let i = 0; i < moves.length; i++) {
     for (let j = i + 1; j < moves.length; j++) {

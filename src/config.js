@@ -18,12 +18,21 @@ export const VIEW_H = HUD_H + GRID_H * CELL; // 600
 export const SNAKE_MOVE_EVERY = 2; // 10 pól/s
 export const START_LENGTH = 3;
 export const SHOT_COOLDOWN = 6; // 0,3 s
-export const BULLET_MAX_BOUNCES = 3; // pocisk odbija się 3 razy, przy 4. ścianie znika
-export const ROUND_TICKS = 90 * TICKS_PER_SECOND;
+// Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
+export const BULLET_CELLS = 3;
+export const BULLET_PER_TICKS = 2;
 export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 export const FOOD_COUNT = 3;
 export const WINS_TO_MATCH = 3;
 export const MAZE_DENSITY = 0.08;
+
+// Rodzaje pól planszy. Krawędź planszy działa jak PORTAL.
+export const WALL = {
+  NONE: 0,
+  BOUNCE: 1, // czarna: odbija
+  DEADLY: 2, // czerwona: zabija
+  PORTAL: 3, // niebieska: przenosi na jej drugą stronę
+};
 
 // Gracze: kody klawiszy (KeyboardEvent.code), niezależne od układu klawiatury
 export const PLAYERS = [
@@ -66,10 +75,13 @@ export const COLORS = {
   background: '#05060f',
   board: '#090b1c',
   gridDot: '#1b2040',
-  border: '#7c4dff',
-  wallEdge: '#b388ff',
-  wallGlow: '#7c4dff',
-  wallFill: '#1a1240',
+  border: '#3d5afe',
+  // [krawędź, środek] dla każdego rodzaju ściany
+  walls: {
+    1: ['#9aa0b8', '#000000'],
+    2: ['#ff3d5a', '#4a0712'],
+    3: ['#3d5afe', '#0c1450'],
+  },
   food: '#ff2e88',
   text: '#e8ecff',
   dim: '#7a80a8',

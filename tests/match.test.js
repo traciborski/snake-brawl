@@ -5,17 +5,17 @@ import { createRound, stepRound } from '../src/game/round.js';
 
 test('mecz kończy się po 3 wygranych', () => {
   const m = createMatch(1);
-  assert.equal(recordRound(m, { winner: 0, reason: 'ko' }), null);
-  assert.equal(recordRound(m, { winner: 1, reason: 'ko' }), null);
-  assert.equal(recordRound(m, { winner: 0, reason: 'time' }), null);
-  assert.equal(recordRound(m, { winner: 0, reason: 'ko' }), 0);
+  assert.equal(recordRound(m, { winner: 0 }), null);
+  assert.equal(recordRound(m, { winner: 1 }), null);
+  assert.equal(recordRound(m, { winner: 0 }), null);
+  assert.equal(recordRound(m, { winner: 0 }), 0);
   assert.deepEqual(m.wins, [3, 1]);
   assert.equal(m.round, 4);
 });
 
 test('remis nie daje punktu', () => {
   const m = createMatch(1);
-  recordRound(m, { winner: 'draw', reason: 'ko' });
+  recordRound(m, { winner: 'draw' });
   assert.deepEqual(m.wins, [0, 0]);
   assert.equal(m.winner, null);
 });
@@ -23,7 +23,7 @@ test('remis nie daje punktu', () => {
 test('każda runda ma inne ziarno', () => {
   const m = createMatch(123);
   const a = nextRoundSeed(m);
-  recordRound(m, { winner: 'draw', reason: 'ko' });
+  recordRound(m, { winner: 'draw' });
   assert.notEqual(nextRoundSeed(m), a);
 });
 

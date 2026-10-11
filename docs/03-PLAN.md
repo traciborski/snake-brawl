@@ -23,17 +23,18 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] `game/snake.js`: ruch co 2 ticki, kolejka 2 skrętów, zakaz zawracania, wzrost
 - [x] `game/food.js`: 3 owoce na wolnych polach
 - [x] `game/round.js`: `createRound`, `stepRound` (kroki 1, 2, 5, 6, 7)
-- [x] Odbicia: ściana, krawędź, własne ciało, rywal, głowa w głowę, zamiana miejscami
+- [x] Ściany: czerwona zabija, czarna odbija, niebieska i krawędź przenoszą na drugą stronę
+- [x] Odbicia od ciał: własne ciało, rywal, głowa w głowę, zamiana miejscami
 - **Testy:** każdy rodzaj odbicia, wzrost po zjedzeniu.
 
 ## Krok 3: Strzelanie
 - [x] `game/bullets.js`: koszt segmentu, cooldown, lot 1 pole/tick
-- [x] Trafienie w ciało odcina ogon, trafienie w głowę zabija
-- [x] Pocisk odbija się od ścian 3 razy, potem znika; dwa pociski się znoszą
+- [x] Trafienie w ciało odcina ogon, trafienie w głowę zabija, własne pociski niegroźne
+- [x] Pocisk 3× szybszy od węża, znika na ścianie i krawędzi; dwa pociski się znoszą
 - **Testy:** każda z reguł strzelania osobno.
 
 ## Krok 4: Runda i mecz
-- [x] Koniec rundy: KO, remis, czas (dłuższy wygrywa)
+- [x] Koniec rundy: śmierć jednego (wygrana drugiego) albo obu naraz (remis), bez limitu czasu
 - [x] `game/match.js`: mecz do 3 wygranych, remis bez punktu
 - **Testy:** wyniki rund i meczu.
 
@@ -57,10 +58,10 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony
 - [ ] Strzał skraca strzelającego, a z samą głową nie da się strzelić
+- [ ] Własny pocisk przelatuje przez strzelającego
 - [ ] Trafienie w ogon odcina go, a w głowę zabija
-- [ ] Wąż odbija się od ścian, krawędzi, ciał i przy zderzeniu głowami
-- [ ] Pocisk odbija się 3 razy, a przy czwartej ścianie znika
+- [ ] Czerwona ściana zabija, czarna odbija, niebieska i krawędź przenoszą na drugą stronę
+- [ ] Pocisk znika na każdej ścianie i krawędzi
 - [ ] Strzał w głowę obu naraz daje remis
-- [ ] Po 90 s wygrywa dłuższy wąż
 - [ ] Mecz kończy się po 3 wygranych i rewanż działa
 - [ ] Gra skaluje się do okna i jest ostra na ekranach HiDPI

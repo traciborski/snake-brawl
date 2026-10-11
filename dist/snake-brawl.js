@@ -93,12 +93,21 @@ const VIEW_H = HUD_H + GRID_H * CELL; // 600
 const SNAKE_MOVE_EVERY = 2; // 10 pól/s
 const START_LENGTH = 3;
 const SHOT_COOLDOWN = 6; // 0,3 s
-const BULLET_MAX_BOUNCES = 3; // pocisk odbija się 3 razy, przy 4. ścianie znika
-const ROUND_TICKS = 90 * TICKS_PER_SECOND;
+// Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
+const BULLET_CELLS = 3;
+const BULLET_PER_TICKS = 2;
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 const FOOD_COUNT = 3;
 const WINS_TO_MATCH = 3;
 const MAZE_DENSITY = 0.08;
+
+// Rodzaje pól planszy. Krawędź planszy działa jak PORTAL.
+const WALL = {
+  NONE: 0,
+  BOUNCE: 1, // czarna: odbija
+  DEADLY: 2, // czerwona: zabija
+  PORTAL: 3, // niebieska: przenosi na jej drugą stronę
+};
 
 // Gracze: kody klawiszy (KeyboardEvent.code), niezależne od układu klawiatury
 const PLAYERS = [
@@ -141,10 +150,13 @@ const COLORS = {
   background: '#05060f',
   board: '#090b1c',
   gridDot: '#1b2040',
-  border: '#7c4dff',
-  wallEdge: '#b388ff',
-  wallGlow: '#7c4dff',
-  wallFill: '#1a1240',
+  border: '#3d5afe',
+  // [krawędź, środek] dla każdego rodzaju ściany
+  walls: {
+    1: ['#9aa0b8', '#000000'],
+    2: ['#ff3d5a', '#4a0712'],
+    3: ['#3d5afe', '#0c1450'],
+  },
   food: '#ff2e88',
   text: '#e8ecff',
   dim: '#7a80a8',
@@ -153,7 +165,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, BULLET_MAX_BOUNCES, ROUND_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, PLAYERS, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, PLAYERS, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -414,7 +426,7 @@ class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'ricochet' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
+  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
   play(name) {
     switch (name) {
       case 'shoot':
@@ -430,8 +442,8 @@ class Sfx {
       case 'bounce':
         this.tone({ freq: 160, to: 320, dur: 0.1, type: 'triangle', vol: 0.5 });
         break;
-      case 'ricochet':
-        this.tone({ freq: 1800, to: 2600, dur: 0.06, type: 'triangle', vol: 0.25 });
+      case 'warp':
+        this.tone({ freq: 300, to: 1500, dur: 0.12, type: 'sine', vol: 0.4 });
         break;
       case 'wall':
         this.noise({ dur: 0.05, vol: 0.15, freq: 1500 });
@@ -467,7 +479,7 @@ class Sfx {
       ate: 'eat',
       bodyHit: 'hit',
       bounced: 'bounce',
-      bulletBounce: 'ricochet',
+      teleported: 'warp',
       bulletWall: 'wall',
       bulletClash: 'clash',
       died: 'die',
@@ -537,11 +549,8 @@ class Effects {
         case 'shot':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
           break;
-        case 'bulletBounce':
-          this.burstAt(e.pos, COLORS.wallEdge, 6, 80, 0.2, 3);
-          break;
         case 'bulletWall':
-          this.burstAt(e.pos, COLORS.wallEdge, 14, 120, 0.35, 3);
+          this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
           break;
         case 'bulletClash':
           this.burstAt(e.pos, '#ffffff', 16, 160, 0.35, 3);
@@ -550,6 +559,9 @@ class Effects {
         case 'bodyHit':
           for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
           this.addShake(5);
+          break;
+        case 'teleported':
+          this.burstAt(e.pos, COLORS.walls[3][0], 12, 120, 0.35, 3);
           break;
         case 'bounced':
           this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);
@@ -696,8 +708,9 @@ function createMenuScene(app) {
         drawText(ctx, p.help, colX[i], 355, { size: 10, color: COLORS.text });
       });
 
-      drawText(ctx, 'Ściany odbijają węże i pociski. Giniesz tylko od strzału w głowę.', VIEW_W / 2, 400, { size: 10, color: COLORS.dim });
-      drawText(ctx, 'Strzał kosztuje 1 segment. Trafiony ogon odpada.', VIEW_W / 2, 422, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 400, { size: 10, color: COLORS.text });
+      drawText(ctx, 'Strzał w głowę wygrywa rundę. Trafiony ogon odpada.', VIEW_W / 2, 425, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Strzał kosztuje 1 segment. Własne pociski są niegroźne.', VIEW_W / 2, 447, { size: 10, color: COLORS.dim });
 
       if (blink(time)) {
         drawText(ctx, 'SPACJA / ENTER  —  START', VIEW_W / 2, 500, { size: 16, color: COLORS.text, glow: 8 });
@@ -904,26 +917,19 @@ __factories["src/game/round.js"] = function (__exports) {
 // Runda: stan początkowy i jeden krok symulacji.
 // Czysta logika: bez DOM, bez czasu systemowego, losowość tylko z RNG w stanie.
 
-const {
-  FOOD_COUNT,
-  GRID_H,
-  GRID_W,
-  MAZE_DENSITY,
-  ROUND_TICKS,
-  SNAKE_MOVE_EVERY,
-  START_LENGTH,
-} = __require("src/config.js");
+const { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } = __require("src/config.js");
 const { createRng } = __require("src/core/rng.js");
 const { fire, moveBullets } = __require("src/game/bullets.js");
 const { eatFood, refillFood } = __require("src/game/food.js");
-const { isBlocked, samePos, step } = __require("src/game/grid.js");
+const { cellIndex, passThrough, samePos } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
-const { applyHit, bounce, createSnake, queueTurn, tickTimers } = __require("src/game/snake.js");
+const { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } = __require("src/game/snake.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
 /** @typedef {import('./types.js').GameEvent} GameEvent */
 /** @typedef {import('./types.js').Pos} Pos */
+/** @typedef {import('./types.js').Dir} Dir */
 
 /**
  * @param {number} seed
@@ -946,7 +952,6 @@ function createRound(seed, options = {}) {
     bullets: [],
     food: [],
     foodCount: options.foodCount ?? FOOD_COUNT,
-    timeLeft: ROUND_TICKS,
     result: null,
   };
   refillFood(state);
@@ -973,7 +978,6 @@ function stepRound(state, commands = []) {
 
   // 2. Timery
   for (const snake of state.snakes) tickTimers(snake);
-  state.timeLeft--;
 
   // 3. Strzały
   state.snakes.forEach((snake, i) => {
@@ -998,29 +1002,33 @@ function stepRound(state, commands = []) {
 /**
  * Oba węże ruszają się równocześnie: najpierw liczymy nowe pozycje,
  * potem sprawdzamy przeszkody na podstawie stanu „po ruchu”.
- * Przeszkoda (ściana, krawędź, dowolne ciało, czołówka) nie zabija, tylko odbija:
- * wąż zawraca w miejscu. Odbity wąż nie zwalnia pola ogona, więc sprawdzamy
- * ponownie, aż nic się nie zmieni.
+ * - czerwona ściana → śmierć,
+ * - czarna ściana, dowolne ciało, czołówka → odbicie (wąż zawraca w miejscu),
+ * - krawędź i niebieska ściana → przeniesienie na drugą stronę (`passThrough`).
+ * Odbity albo martwy wąż nie zwalnia pola ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
  */
 function moveSnakes(state, events) {
+  const { grid, walls } = state;
   const plans = state.snakes.map((snake) => {
     if (!snake.alive) return null;
     const dir = snake.nextDirs.length ? snake.nextDirs[0] : snake.dir;
     const oldHead = snake.body[0];
-    const head = step(oldHead, dir);
+    const { pos: head, teleported } = passThrough(grid, walls, oldHead, dir);
     const grows = snake.growPending > 0;
     const body = [head, ...(grows ? snake.body : snake.body.slice(0, -1))];
-    return { snake, dir, oldHead, head, grows, body, bounce: false };
+    const cell = walls[cellIndex(grid, head)];
+    return { snake, dir, oldHead, head, teleported, grows, body, dies: cell === WALL.DEADLY, bounce: false };
   });
+  const moving = (plan) => plan && !plan.bounce && !plan.dies;
 
   const blocked = (i, bodies) => {
     const plan = plans[i];
-    if (isBlocked(state.grid, state.walls, plan.head)) return true;
+    if (walls[cellIndex(grid, plan.head)] !== WALL.NONE) return true;
     if (bodies[i].slice(1).some((p) => samePos(p, plan.head))) return true;
     for (let j = 0; j < plans.length; j++) {
       if (j === i || !state.snakes[j].alive) continue;
       const other = plans[j];
-      if (other && !other.bounce) {
+      if (moving(other)) {
         if (samePos(other.head, plan.head)) return true;
         if (samePos(other.head, plan.oldHead) && samePos(plan.head, other.oldHead)) return true;
       }
@@ -1031,9 +1039,9 @@ function moveSnakes(state, events) {
 
   for (let changed = true; changed; ) {
     changed = false;
-    const bodies = state.snakes.map((s, i) => (plans[i] && !plans[i].bounce ? plans[i].body : s.body));
+    const bodies = state.snakes.map((s, i) => (moving(plans[i]) ? plans[i].body : s.body));
     plans.forEach((plan, i) => {
-      if (plan && !plan.bounce && blocked(i, bodies)) {
+      if (moving(plan) && blocked(i, bodies)) {
         plan.bounce = true;
         changed = true;
       }
@@ -1043,8 +1051,13 @@ function moveSnakes(state, events) {
   for (const plan of plans) {
     if (!plan) continue;
     const { snake } = plan;
+    if (plan.dies) {
+      snake.body = plan.body;
+      kill(snake, 'wall', null, events);
+      continue;
+    }
     if (plan.bounce) {
-      bounce(snake);
+      bounce(snake, grid);
       events.push({ type: 'bounced', snake: snake.id, pos: { ...plan.oldHead } });
       continue;
     }
@@ -1052,32 +1065,26 @@ function moveSnakes(state, events) {
     snake.dir = plan.dir;
     snake.body = plan.body;
     if (plan.grows) snake.growPending--;
+    if (plan.teleported) events.push({ type: 'teleported', snake: snake.id, pos: { ...plan.head } });
   }
 
-  // Głowa wjeżdżająca w pocisk
+  // Głowa wjeżdżająca w cudzy pocisk
   for (const snake of state.snakes) {
     if (!snake.alive) continue;
-    const i = state.bullets.findIndex((b) => samePos(b.pos, snake.body[0]));
+    const i = state.bullets.findIndex((b) => b.owner !== snake.id && samePos(b.pos, snake.body[0]));
     if (i < 0) continue;
     const [bullet] = state.bullets.splice(i, 1);
     applyHit(snake, 0, bullet.owner, events);
   }
 }
 
+/** Runda kończy się, gdy ktoś zginie. Obaj naraz → remis. */
 function checkRoundEnd(state, events) {
   const alive = state.snakes.filter((s) => s.alive);
-  let result = null;
-  if (alive.length < state.snakes.length) {
-    result = { winner: alive.length === 1 ? alive[0].id : 'draw', reason: 'ko' };
-  } else if (state.timeLeft <= 0) {
-    const [a, b] = state.snakes;
-    const winner = a.body.length === b.body.length ? 'draw' : a.body.length > b.body.length ? a.id : b.id;
-    result = { winner, reason: 'time' };
-  }
-  if (result) {
-    state.result = result;
-    events.push({ type: 'roundOver', result });
-  }
+  if (alive.length === state.snakes.length) return;
+  const result = { winner: alive.length === 1 ? alive[0].id : 'draw' };
+  state.result = result;
+  events.push({ type: 'roundOver', result });
 }
 
 Object.assign(__exports, { createRound, stepRound });
@@ -1085,10 +1092,11 @@ Object.assign(__exports, { createRound, stepRound });
 
 // ---- src/game/bullets.js ----
 __factories["src/game/bullets.js"] = function (__exports) {
-// Pociski: strzał (koszt segmentu), lot, odbicia od ścian i kolizje.
+// Pociski: strzał (koszt segmentu), lot i kolizje.
+// Pocisk znika na każdej ścianie i na krawędzi planszy. Własne pociski przelatują przez strzelającego.
 
-const { BULLET_MAX_BOUNCES, SHOT_COOLDOWN } = __require("src/config.js");
-const { OPPOSITE, isBlocked, samePos, step } = __require("src/game/grid.js");
+const { BULLET_CELLS, BULLET_PER_TICKS, SHOT_COOLDOWN } = __require("src/config.js");
+const { isBlocked, samePos, step } = __require("src/game/grid.js");
 const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
@@ -1096,9 +1104,14 @@ const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
 /** @typedef {import('./types.js').Bullet} Bullet */
 /** @typedef {import('./types.js').GameEvent} GameEvent */
 
+/** Ile pól pocisk przelatuje w danym ticku (rozkłada BULLET_CELLS równo na BULLET_PER_TICKS). */
+function bulletStepsAt(tick) {
+  const at = (t) => Math.floor((t * BULLET_CELLS) / BULLET_PER_TICKS);
+  return at(tick) - at(tick - 1);
+}
+
 /**
  * Strzał: zabiera segment z ogona i tworzy pocisk na polu przed głową.
- * Strzał prosto w przyległą ścianę od razu gaśnie (nie da się zastrzelić samego siebie z bliska).
  * @param {RoundState} state @param {Snake} snake @param {GameEvent[]} events
  * @returns {boolean} czy strzał padł
  */
@@ -1108,7 +1121,7 @@ function fire(state, snake, events) {
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */
-  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir, bounces: 0 };
+  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir };
   events.push({ type: 'shot', snake: snake.id, pos: { ...snake.body[0] } });
 
   if (isBlocked(state.grid, state.walls, bullet.pos)) {
@@ -1126,12 +1139,12 @@ function fire(state, snake, events) {
 }
 
 /**
- * Trafienie węża na polu pocisku.
+ * Trafienie węża (innego niż strzelający) na polu pocisku.
  * @returns {boolean} true, jeśli pocisk kogoś trafił (i znika)
  */
 function bulletHitsSnake(state, bullet, events) {
   for (const snake of state.snakes) {
-    if (!snake.alive) continue;
+    if (!snake.alive || snake.id === bullet.owner) continue;
     const index = segmentAt(snake, bullet.pos);
     if (index < 0) continue;
     applyHit(snake, index, bullet.owner, events);
@@ -1140,29 +1153,27 @@ function bulletHitsSnake(state, bullet, events) {
   return false;
 }
 
+/** Przesuwa pociski o tyle pól, ile wypada w tym ticku, sprawdzając kolizje po każdym polu. */
+function moveBullets(state, events) {
+  const steps = bulletStepsAt(state.tick);
+  for (let i = 0; i < steps && state.bullets.length; i++) stepBullets(state, events);
+}
+
 /**
- * Przesuwa wszystkie pociski o 1 pole. Pocisk, który trafia na ścianę, zawraca
- * (w tym ticku zostaje w miejscu). Po BULLET_MAX_BOUNCES odbiciach kolejna ściana go niszczy.
+ * Jeden krok wszystkich pocisków o 1 pole. Ściana albo krawędź → pocisk znika.
  * Pociski, które wejdą na to samo pole albo się miną, znoszą się nawzajem.
  * @param {RoundState} state @param {GameEvent[]} events
  */
-function moveBullets(state, events) {
+function stepBullets(state, events) {
   const gone = new Set();
-  const moves = state.bullets.map((b) => {
-    const from = b.pos;
-    const next = step(from, b.dir);
-    if (!isBlocked(state.grid, state.walls, next)) return { b, from, to: next };
+  const moves = state.bullets.map((b) => ({ b, from: b.pos, to: step(b.pos, b.dir) }));
 
-    if (b.bounces >= BULLET_MAX_BOUNCES) {
-      gone.add(b);
-      events.push({ type: 'bulletWall', pos: next });
-    } else {
-      b.bounces++;
-      b.dir = OPPOSITE[b.dir];
-      events.push({ type: 'bulletBounce', pos: next });
+  for (const m of moves) {
+    if (isBlocked(state.grid, state.walls, m.to)) {
+      gone.add(m.b);
+      events.push({ type: 'bulletWall', pos: m.to });
     }
-    return { b, from, to: from };
-  });
+  }
 
   for (let i = 0; i < moves.length; i++) {
     for (let j = i + 1; j < moves.length; j++) {
@@ -1186,12 +1197,14 @@ function moveBullets(state, events) {
   state.bullets = state.bullets.filter((b) => !gone.has(b));
 }
 
-Object.assign(__exports, { fire, bulletHitsSnake, moveBullets });
+Object.assign(__exports, { bulletStepsAt, fire, bulletHitsSnake, moveBullets });
 };
 
 // ---- src/game/grid.js ----
 __factories["src/game/grid.js"] = function (__exports) {
 // Kratka: kierunki, pozycje i pomocnicze funkcje.
+
+const { WALL } = __require("src/config.js");
 
 /** @typedef {import('./types.js').Dir} Dir */
 /** @typedef {import('./types.js').Pos} Pos */
@@ -1234,19 +1247,55 @@ function rotate180(grid, p) {
   return { x: grid.w - 1 - p.x, y: grid.h - 1 - p.y };
 }
 
-/** Czy pole jest poza planszą albo jest ścianą. */
+/** Czy pole jest poza planszą albo jest ścianą (dowolnego rodzaju). */
 function isBlocked(grid, walls, p) {
-  return !inBounds(grid, p) || walls[cellIndex(grid, p)] === 1;
+  return !inBounds(grid, p) || walls[cellIndex(grid, p)] !== 0;
 }
 
-Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex, rotate180, isBlocked });
+/** Zawija pozycję na drugą stronę planszy (krawędź działa jak portal). */
+function wrap(grid, p) {
+  return { x: (p.x + grid.w) % grid.w, y: (p.y + grid.h) % grid.h };
+}
+
+/**
+ * Pole, na które wjeżdża wąż z `from` w kierunku `dir`. Krawędź planszy i niebieskie
+ * ściany przenoszą na drugą stronę: wąż przeskakuje je dalej w tym samym kierunku.
+ * @param {Grid} grid @param {Uint8Array} walls @param {Pos} from @param {Dir} dir
+ * @returns {{ pos: Pos, teleported: boolean }}
+ */
+function passThrough(grid, walls, from, dir) {
+  const next = step(from, dir);
+  let teleported = !inBounds(grid, next);
+  let pos = wrap(grid, next);
+  for (let i = 0; i < grid.w + grid.h && walls[cellIndex(grid, pos)] === WALL.PORTAL; i++) {
+    pos = wrap(grid, step(pos, dir));
+    teleported = true;
+  }
+  return { pos, teleported };
+}
+
+/**
+ * Kierunek od pola `from` do sąsiedniego pola `to`, także gdy leżą po dwóch
+ * stronach portalu (przeskok przez niebieską ścianę albo krawędź planszy).
+ * @returns {Dir}
+ */
+function dirBetween(grid, from, to) {
+  let dx = to.x - from.x;
+  let dy = to.y - from.y;
+  if (Math.abs(dx) > grid.w / 2) dx = -dx;
+  if (Math.abs(dy) > grid.h / 2) dy = -dy;
+  if (dx !== 0) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}
+
+Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex, rotate180, isBlocked, wrap, passThrough, dirBetween });
 };
 
 // ---- src/game/snake.js ----
 __factories["src/game/snake.js"] = function (__exports) {
 // Wąż: tworzenie, skręty, odbicie, reakcja na trafienie.
 
-const { DIR_VEC, OPPOSITE } = __require("src/game/grid.js");
+const { OPPOSITE, dirBetween } = __require("src/game/grid.js");
 
 /** @typedef {import('./types.js').Snake} Snake */
 /** @typedef {import('./types.js').Dir} Dir */
@@ -1265,6 +1314,7 @@ function createSnake(id, body, dir) {
     growPending: 0,
     cooldown: 0,
     alive: true,
+    death: null,
   };
 }
 
@@ -1293,21 +1343,23 @@ function canShoot(snake) {
 /**
  * Odbicie od przeszkody: wąż zawraca, czyli ogon staje się głową
  * i dalej jedzie w stronę, w którą „patrzył” ogon.
- * @param {Snake} snake
+ * @param {Snake} snake @param {import('./types.js').Grid} grid
  */
-function bounce(snake) {
+function bounce(snake, grid) {
   snake.nextDirs = [];
   if (snake.body.length === 1) {
     snake.dir = OPPOSITE[snake.dir];
     return;
   }
   snake.body.reverse();
-  const [head, neck] = snake.body;
-  const dx = head.x - neck.x;
-  const dy = head.y - neck.y;
-  snake.dir = /** @type {Dir} */ (
-    Object.keys(DIR_VEC).find((d) => DIR_VEC[d].x === dx && DIR_VEC[d].y === dy) ?? OPPOSITE[snake.dir]
-  );
+  snake.dir = dirBetween(grid, snake.body[1], snake.body[0]);
+}
+
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall'} cause */
+function kill(snake, cause, by, events) {
+  snake.alive = false;
+  snake.death = cause;
+  events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] }, cause });
 }
 
 /**
@@ -1317,8 +1369,7 @@ function bounce(snake) {
  */
 function applyHit(snake, index, by, events) {
   if (index === 0) {
-    snake.alive = false;
-    events.push({ type: 'died', snake: snake.id, by, pos: { ...snake.body[0] } });
+    kill(snake, 'shot', by, events);
     return;
   }
   const cells = snake.body.splice(index);
@@ -1330,7 +1381,7 @@ function segmentAt(snake, pos) {
   return snake.body.findIndex((p) => p.x === pos.x && p.y === pos.y);
 }
 
-Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers, canShoot, bounce, applyHit, segmentAt });
+Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers, canShoot, bounce, kill, applyHit, segmentAt });
 };
 
 // ---- src/game/food.js ----
@@ -1390,7 +1441,8 @@ __factories["src/game/maze.js"] = function (__exports) {
 // a wszystkie wolne pola są osiągalne.
 
 const { nextFloat, randInt } = __require("src/core/rng.js");
-const { DIR_VEC, cellIndex, inBounds, rotate180, step } = __require("src/game/grid.js");
+const { WALL } = __require("src/config.js");
+const { DIR_VEC, cellIndex, inBounds, passThrough, rotate180, step } = __require("src/game/grid.js");
 
 /** @typedef {import('./types.js').Grid} Grid */
 /** @typedef {import('./types.js').Pos} Pos */
@@ -1435,7 +1487,7 @@ function protectedCells(grid, spawns) {
   return mask;
 }
 
-/** Flood fill od pola start. Zwraca maskę osiągalnych pól. */
+/** Flood fill od pola start, poruszając się jak wąż (przez portale i krawędź). Zwraca maskę osiągalnych pól. */
 function reachable(grid, walls, start) {
   const seen = new Uint8Array(grid.w * grid.h);
   const stack = [start];
@@ -1443,8 +1495,7 @@ function reachable(grid, walls, start) {
   while (stack.length) {
     const p = stack.pop();
     for (const d of Object.keys(DIR_VEC)) {
-      const q = step(p, /** @type {Dir} */ (d));
-      if (!inBounds(grid, q)) continue;
+      const { pos: q } = passThrough(grid, walls, p, /** @type {Dir} */ (d));
       const i = cellIndex(grid, q);
       if (seen[i] || walls[i]) continue;
       seen[i] = 1;
@@ -1484,11 +1535,13 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
       }
       if (cells.some((p) => forbidden[cellIndex(grid, p)])) continue;
 
+      // Każdy odcinek ma jeden rodzaj: czarna, czerwona albo niebieska, po równo
+      const kind = 1 + randInt(rng, 3);
       for (const p of cells) {
         for (const q of [p, rotate180(grid, p)]) {
           const i = cellIndex(grid, q);
           if (!walls[i]) {
-            walls[i] = 1;
+            walls[i] = kind;
             count++;
           }
         }
@@ -1500,9 +1553,13 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
     const start = spawns[0].body[0];
     const seen = reachable(grid, walls, start);
     if (!seen[cellIndex(grid, spawns[1].body[0])]) continue;
+    let total = 0;
     for (let i = 0; i < size; i++) {
-      if (!seen[i]) walls[i] = 1;
+      if (!seen[i] && !walls[i]) walls[i] = WALL.BOUNCE;
+      if (walls[i]) total++;
     }
+    // Za duże zamknięte kieszenie psują planszę: losujemy od nowa
+    if (total > size * density * 1.6) continue;
     return walls;
   }
 
@@ -1540,7 +1597,7 @@ function drawRoundView(app, time) {
   effects.draw(ctx);
   ctx.restore();
 
-  drawHud(ctx, round, match, app.roundNumber, time);
+  drawHud(ctx, round, match, app.roundNumber);
 }
 
 Object.assign(__exports, { drawRoundView });
@@ -1574,22 +1631,25 @@ function buildLayer(walls, grid, scale) {
     for (let x = 1; x < grid.w; x++) c.fillRect(x * CELL - 1, y * CELL - 1, 2, 2);
   }
 
-  const wallPath = new Path2D();
-  const innerPath = new Path2D();
-  for (let y = 0; y < grid.h; y++) {
-    for (let x = 0; x < grid.w; x++) {
-      if (!walls[y * grid.w + x]) continue;
-      wallPath.rect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-      innerPath.rect(x * CELL + 4, y * CELL + 4, CELL - 8, CELL - 8);
+  // Każdy rodzaj ściany: świecąca krawędź + ciemny środek
+  for (const [kind, [edge, fill]] of Object.entries(COLORS.walls)) {
+    const wallPath = new Path2D();
+    const innerPath = new Path2D();
+    for (let y = 0; y < grid.h; y++) {
+      for (let x = 0; x < grid.w; x++) {
+        if (walls[y * grid.w + x] !== Number(kind)) continue;
+        wallPath.rect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+        innerPath.rect(x * CELL + 4, y * CELL + 4, CELL - 8, CELL - 8);
+      }
     }
+    c.shadowColor = edge;
+    c.shadowBlur = 10;
+    c.fillStyle = edge;
+    c.fill(wallPath);
+    c.shadowBlur = 0;
+    c.fillStyle = fill;
+    c.fill(innerPath);
   }
-  c.shadowColor = COLORS.wallGlow;
-  c.shadowBlur = 10;
-  c.fillStyle = COLORS.wallEdge;
-  c.fill(wallPath);
-  c.shadowBlur = 0;
-  c.fillStyle = COLORS.wallFill;
-  c.fill(innerPath);
 
   return canvas;
 }
@@ -1681,18 +1741,16 @@ function drawBullets(ctx, round) {
   for (const b of round.bullets) {
     const color = PLAYERS[b.owner].color;
     const v = DIR_VEC[b.dir];
-    // Każde odbicie przygasza pocisk: widać, ile mu jeszcze zostało
-    const fade = 1 - b.bounces * 0.2;
     const x = px(b.pos);
     const y = py(b.pos);
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 14;
     // Smuga za pociskiem
-    ctx.globalAlpha = 0.35 * fade;
+    ctx.globalAlpha = 0.35;
     ctx.fillStyle = color;
     ctx.fillRect(x - v.x * CELL + 6, y - v.y * CELL + 6, CELL - 12, CELL - 12);
-    ctx.globalAlpha = fade;
+    ctx.globalAlpha = 1;
     ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 7, y + 7, CELL - 14, CELL - 14);
@@ -1721,20 +1779,13 @@ Object.assign(__exports, { drawSnake, drawBullets, drawFood });
 
 // ---- src/render/hud.js ----
 __factories["src/render/hud.js"] = function (__exports) {
-// Pasek nad planszą: gracze, wygrane rundy, długość, czas.
+// Pasek nad planszą: gracze, wygrane rundy, długość, numer rundy.
 
-const { COLORS, HUD_H, PLAYERS, TICKS_PER_SECOND, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
+const { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
 const { drawText } = __require("src/render/text.js");
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
 /** @typedef {import('../game/match.js').MatchState} MatchState */
-
-function formatTime(ticks) {
-  const total = Math.max(0, Math.ceil(ticks / TICKS_PER_SECOND));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 
 function drawPips(ctx, x, y, wins, color, alignRight) {
   const size = 12;
@@ -1762,9 +1813,8 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
  * @param {RoundState} round
  * @param {MatchState} match
  * @param {number} roundNumber
- * @param {number} time ms
  */
-function drawHud(ctx, round, match, roundNumber, time) {
+function drawHud(ctx, round, match, roundNumber) {
   const mid = HUD_H / 2;
   const [leon, hugo] = round.snakes;
 
@@ -1778,15 +1828,12 @@ function drawHud(ctx, round, match, roundNumber, time) {
   drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
   drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid, { size: 12, color: COLORS.dim, align: 'right' });
 
-  // Czas na środku: ostatnie 10 s na czerwono, miga
-  const last = round.timeLeft <= 10 * TICKS_PER_SECOND && !round.result;
-  const color = last ? COLORS.danger : COLORS.text;
-  const alpha = last && Math.floor(time / 250) % 2 ? 0.5 : 1;
-  drawText(ctx, formatTime(round.timeLeft), VIEW_W / 2, mid - 6, { size: 22, color, glow: last ? 10 : 0, alpha });
-  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid + 18, { size: 8, color: COLORS.dim });
+  // Numer rundy na środku (rundy nie mają limitu czasu)
+  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });
+  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, mid + 16, { size: 8, color: COLORS.dim });
 }
 
-Object.assign(__exports, { formatTime, drawHud });
+Object.assign(__exports, { drawHud });
 };
 
 // ---- src/scenes/play.js ----
@@ -1859,27 +1906,23 @@ const { blink, dimScreen, drawPanel, drawText } = __require("src/render/text.js"
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
-/** @param {import('../game/types.js').RoundResult} result */
-function describe(result) {
-  if (result.winner === 'draw') {
-    return {
-      title: 'REMIS!',
-      color: COLORS.text,
-      detail: result.reason === 'ko' ? 'Obaj trafieni w głowę naraz' : 'Koniec czasu — równe długości',
-    };
+const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę' };
+
+/** @param {import('../game/types.js').RoundState} round */
+function describe(round) {
+  const { winner } = round.result;
+  if (winner === 'draw') {
+    return { title: 'REMIS!', color: COLORS.text, detail: 'Obaj odpadli w tym samym momencie' };
   }
-  const p = PLAYERS[result.winner];
-  return {
-    title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`,
-    color: p.color,
-    detail: result.reason === 'ko' ? 'Strzał w głowę' : 'Koniec czasu — dłuższy wąż wygrywa',
-  };
+  const p = PLAYERS[winner];
+  const loser = round.snakes.find((s) => !s.alive);
+  return { title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`, color: p.color, detail: DEATH[loser.death] };
 }
 
 /** @param {any} app */
 function createRoundEndScene(app) {
   let ticks = 0;
-  let info = describe({ winner: 'draw', reason: 'ko' });
+  let info = { title: '', color: COLORS.text, detail: '' };
 
   const next = () => app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
 
@@ -1887,7 +1930,7 @@ function createRoundEndScene(app) {
     enter() {
       const result = app.round.result;
       recordRound(app.match, result);
-      info = describe(result);
+      info = describe(app.round);
       ticks = 0;
       if (app.match.winner === null) app.audio.play('round');
     },

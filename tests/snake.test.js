@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stepRound } from '../src/game/round.js';
+import { WALL } from '../src/config.js';
 import { emptyRound, place, pos, run, wall } from './helpers.js';
 
 test('wąż rusza się o 1 pole co 2 ticki', () => {
@@ -73,20 +74,82 @@ test('ściana odbija: wąż zawraca (ogon staje się głową) i żyje', () => {
   assert.deepEqual(pos(s.snakes[0])[0], [7, 10]);
 });
 
-test('krawędź planszy odbija', () => {
+test('krawędź planszy przenosi na drugą stronę', () => {
   const s = emptyRound();
   place(s, 0, [[0, 5], [1, 5], [2, 5]], 'left');
   const events = run(s, 2);
-  assert.ok(bounced(events, 0));
-  assert.equal(s.snakes[0].alive, true);
-  assert.equal(s.snakes[0].dir, 'right');
+  assert.ok(events.some((e) => e.type === 'teleported' && e.snake === 0));
+  assert.deepEqual(pos(s.snakes[0]), [[47, 5], [0, 5], [1, 5]]);
+  assert.equal(s.snakes[0].dir, 'left');
+});
+
+test('niebieska ściana przenosi na jej drugą stronę', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  for (const x of [11, 12, 13]) wall(s, x, 10, WALL.PORTAL);
+  const events = run(s, 2);
+  assert.ok(events.some((e) => e.type === 'teleported'));
+  assert.deepEqual(pos(s.snakes[0])[0], [14, 10]);
+  run(s, 2);
+  assert.deepEqual(pos(s.snakes[0]), [[15, 10], [14, 10], [10, 10]]);
+});
+
+test('za niebieską ścianą stoi czarna: wąż się odbija', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10, WALL.PORTAL);
+  wall(s, 12, 10, WALL.BOUNCE);
+  const events = run(s, 2);
+  assert.ok(events.some((e) => e.type === 'bounced'));
+  assert.equal(s.snakes[0].dir, 'left');
+});
+
+test('za niebieską ścianą stoi czerwona: wąż ginie', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10, WALL.PORTAL);
+  wall(s, 12, 10, WALL.DEADLY);
+  run(s, 2);
+  assert.equal(s.snakes[0].alive, false);
+});
+
+test('czerwona ściana zabija, rywal wygrywa rundę', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10, WALL.DEADLY);
+  const events = run(s, 2);
+  const died = events.find((e) => e.type === 'died');
+  assert.deepEqual([died.snake, died.cause, died.by], [0, 'wall', null]);
+  assert.equal(s.snakes[0].death, 'wall');
+  assert.deepEqual(s.result, { winner: 1 });
+});
+
+test('obaj w czerwoną ścianę w tym samym ticku: remis', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  place(s, 1, [[30, 20], [31, 20], [32, 20]], 'left');
+  wall(s, 11, 10, WALL.DEADLY);
+  wall(s, 29, 20, WALL.DEADLY);
+  run(s, 2);
+  assert.deepEqual(s.result, { winner: 'draw' });
+});
+
+test('odbicie po przejściu przez krawędź: wąż jedzie z powrotem przez krawędź', () => {
+  const s = emptyRound();
+  // ogon po drugiej stronie krawędzi
+  place(s, 0, [[1, 5], [0, 5], [47, 5]], 'right');
+  wall(s, 2, 5);
+  run(s, 2);
+  assert.deepEqual(pos(s.snakes[0]), [[47, 5], [0, 5], [1, 5]]);
+  assert.equal(s.snakes[0].dir, 'left');
 });
 
 test('wąż z samą głową odbija się, zmieniając kierunek', () => {
   const s = emptyRound();
-  place(s, 0, [[0, 5]], 'left');
+  place(s, 0, [[10, 5]], 'left');
+  wall(s, 9, 5);
   run(s, 2);
-  assert.deepEqual(pos(s.snakes[0]), [[0, 5]]);
+  assert.deepEqual(pos(s.snakes[0]), [[10, 5]]);
   assert.equal(s.snakes[0].dir, 'right');
 });
 
@@ -158,26 +221,17 @@ test('odbity wąż nie zwalnia ogona, więc rywal jadący w jego ogon też się 
   assert.ok(bounced(events, 1));
 });
 
-test('po upływie czasu wygrywa dłuższy wąż', () => {
+test('bez limitu czasu: runda trwa, dopóki nikt nie zginie', () => {
   const s = emptyRound();
-  place(s, 0, [[10, 5], [9, 5], [8, 5], [7, 5]], 'right');
-  place(s, 1, [[30, 20], [31, 20], [32, 20]], 'left');
-  s.timeLeft = 1;
-  stepRound(s);
-  assert.deepEqual(s.result, { winner: 0, reason: 'time' });
-});
-
-test('po upływie czasu przy równych długościach jest remis', () => {
-  const s = emptyRound();
-  s.timeLeft = 1;
-  stepRound(s);
-  assert.deepEqual(s.result, { winner: 'draw', reason: 'time' });
+  run(s, 5000);
+  assert.equal(s.result, null);
 });
 
 test('po końcu rundy symulacja stoi', () => {
   const s = emptyRound();
-  s.timeLeft = 1;
-  stepRound(s);
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  wall(s, 11, 10, WALL.DEADLY);
+  run(s, 2);
   const tick = s.tick;
   assert.deepEqual(stepRound(s), []);
   assert.equal(s.tick, tick);

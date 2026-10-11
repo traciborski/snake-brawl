@@ -3,7 +3,8 @@
 // a wszystkie wolne pola są osiągalne.
 
 import { nextFloat, randInt } from '../core/rng.js';
-import { DIR_VEC, cellIndex, inBounds, rotate180, step } from './grid.js';
+import { WALL } from '../config.js';
+import { DIR_VEC, cellIndex, inBounds, passThrough, rotate180, step } from './grid.js';
 
 /** @typedef {import('./types.js').Grid} Grid */
 /** @typedef {import('./types.js').Pos} Pos */
@@ -48,7 +49,7 @@ function protectedCells(grid, spawns) {
   return mask;
 }
 
-/** Flood fill od pola start. Zwraca maskę osiągalnych pól. */
+/** Flood fill od pola start, poruszając się jak wąż (przez portale i krawędź). Zwraca maskę osiągalnych pól. */
 export function reachable(grid, walls, start) {
   const seen = new Uint8Array(grid.w * grid.h);
   const stack = [start];
@@ -56,8 +57,7 @@ export function reachable(grid, walls, start) {
   while (stack.length) {
     const p = stack.pop();
     for (const d of Object.keys(DIR_VEC)) {
-      const q = step(p, /** @type {Dir} */ (d));
-      if (!inBounds(grid, q)) continue;
+      const { pos: q } = passThrough(grid, walls, p, /** @type {Dir} */ (d));
       const i = cellIndex(grid, q);
       if (seen[i] || walls[i]) continue;
       seen[i] = 1;
@@ -97,11 +97,13 @@ export function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 
       }
       if (cells.some((p) => forbidden[cellIndex(grid, p)])) continue;
 
+      // Każdy odcinek ma jeden rodzaj: czarna, czerwona albo niebieska, po równo
+      const kind = 1 + randInt(rng, 3);
       for (const p of cells) {
         for (const q of [p, rotate180(grid, p)]) {
           const i = cellIndex(grid, q);
           if (!walls[i]) {
-            walls[i] = 1;
+            walls[i] = kind;
             count++;
           }
         }
@@ -113,9 +115,13 @@ export function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 
     const start = spawns[0].body[0];
     const seen = reachable(grid, walls, start);
     if (!seen[cellIndex(grid, spawns[1].body[0])]) continue;
+    let total = 0;
     for (let i = 0; i < size; i++) {
-      if (!seen[i]) walls[i] = 1;
+      if (!seen[i] && !walls[i]) walls[i] = WALL.BOUNCE;
+      if (walls[i]) total++;
     }
+    // Za duże zamknięte kieszenie psują planszę: losujemy od nowa
+    if (total > size * density * 1.6) continue;
     return walls;
   }
 

@@ -6,27 +6,23 @@ import { blink, dimScreen, drawPanel, drawText } from '../render/text.js';
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
-/** @param {import('../game/types.js').RoundResult} result */
-function describe(result) {
-  if (result.winner === 'draw') {
-    return {
-      title: 'REMIS!',
-      color: COLORS.text,
-      detail: result.reason === 'ko' ? 'Obaj trafieni w głowę naraz' : 'Koniec czasu — równe długości',
-    };
+const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę' };
+
+/** @param {import('../game/types.js').RoundState} round */
+function describe(round) {
+  const { winner } = round.result;
+  if (winner === 'draw') {
+    return { title: 'REMIS!', color: COLORS.text, detail: 'Obaj odpadli w tym samym momencie' };
   }
-  const p = PLAYERS[result.winner];
-  return {
-    title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`,
-    color: p.color,
-    detail: result.reason === 'ko' ? 'Strzał w głowę' : 'Koniec czasu — dłuższy wąż wygrywa',
-  };
+  const p = PLAYERS[winner];
+  const loser = round.snakes.find((s) => !s.alive);
+  return { title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`, color: p.color, detail: DEATH[loser.death] };
 }
 
 /** @param {any} app */
 export function createRoundEndScene(app) {
   let ticks = 0;
-  let info = describe({ winner: 'draw', reason: 'ko' });
+  let info = { title: '', color: COLORS.text, detail: '' };
 
   const next = () => app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
 
@@ -34,7 +30,7 @@ export function createRoundEndScene(app) {
     enter() {
       const result = app.round.result;
       recordRound(app.match, result);
-      info = describe(result);
+      info = describe(app.round);
       ticks = 0;
       if (app.match.winner === null) app.audio.play('round');
     },

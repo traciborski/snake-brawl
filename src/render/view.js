@@ -24,5 +24,5 @@ export function drawRoundView(app, time) {
   effects.draw(ctx);
   ctx.restore();
 
-  drawHud(ctx, round, match, app.roundNumber, time);
+  drawHud(ctx, round, match, app.roundNumber);
 }

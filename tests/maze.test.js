@@ -16,15 +16,18 @@ for (const seed of [1, 2, 3, 42, 1234, 99999]) {
     const walls = generateMaze(grid, createRng(seed), spawns);
 
     let wallCount = 0;
+    const kinds = new Set();
     for (let y = 0; y < grid.h; y++) {
       for (let x = 0; x < grid.w; x++) {
         const p = { x, y };
         const w = walls[cellIndex(grid, p)];
-        wallCount += w;
+        if (w) wallCount++;
+        kinds.add(w);
         assert.equal(w, walls[cellIndex(grid, rotate180(grid, p))], `asymetria w ${x},${y}`);
       }
     }
     assert.ok(wallCount > 0, 'labirynt nie może być pusty');
+    assert.deepEqual([...kinds].sort(), [0, 1, 2, 3], 'są wszystkie trzy rodzaje ścian');
     assert.ok(wallCount < grid.w * grid.h * 0.2, 'za dużo ścian');
 
     for (const { body } of spawns) {
