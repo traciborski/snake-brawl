@@ -73,7 +73,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 ## Krok 10: Wystawienie w internecie (Cloudflare)
 - [x] Przygotowane: `server/worker.js`, `wrangler.toml` (pliki gry + pokoje), instrukcja [04-WYSTAWIENIE.md](04-WYSTAWIENIE.md)
 - [x] Sprawdzone lokalnie w środowisku Cloudflare (`wrangler dev`): mecz w 3 przeglądarkach
-- [ ] Konto Cloudflare i `npm run deploy:server`, robi właściciel repo (repo zostaje prywatne)
+- [ ] Konto Cloudflare i podpięcie repo (Workers Builds: automatyczne budowanie po pushu na `main`), robi właściciel repo
 - **Sprawdzenie:** mecz z sąsiadami.
 
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)

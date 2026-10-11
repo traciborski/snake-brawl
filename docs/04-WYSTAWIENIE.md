@@ -9,24 +9,44 @@ Całość stoi na **Cloudflare Workers**, pod jednym adresem:
 
 Repo może zostać **prywatne**. Do internetu trafiają tylko trzy pliki gry (folder `site/`
 składany automatycznie przy wystawianiu), a nie reszta repo. Darmowy plan Cloudflare wystarczy.
+Po jednorazowym podpięciu repo Cloudflare sam buduje i wystawia grę po każdym pushu na `main`.
 
 ## 1. Konto Cloudflare
 
 Załóż darmowe konto: https://dash.cloudflare.com/sign-up
 
-## 2. Wystawienie (pierwszy raz i po każdej zmianie gry)
+## 2. Automatyczne budowanie z GitHuba (raz)
 
-Na swoim komputerze, w folderze z repo (potrzebny Node.js):
+Cloudflare sam pobiera kod z GitHuba po każdym pushu na `main`, buduje grę
+(`node scripts/build.js --site`, ustawione w `wrangler.toml`) i wystawia ją razem z serwerem pokoi.
+Repo może być prywatne: Cloudflare dostaje dostęp tylko do wskazanego repo.
+
+1. Panel Cloudflare → **Workers & Pages** → **Create** → **Import a repository**
+   (*Connect GitHub*, zezwól aplikacji Cloudflare na dostęp do repo `snake-brawl`).
+2. Wybierz repo `snake-brawl` i ustaw:
+   - **Project / Worker name:** `snake-brawl` (musi być taka sama jak `name` w `wrangler.toml`,
+     inaczej budowanie się nie uda),
+   - **Build command:** puste (budowanie robi `wrangler.toml`),
+   - **Deploy command:** `npx wrangler deploy` (domyślne),
+   - **Root directory:** puste (główny folder repo),
+   - **Branch:** `main`.
+3. **Deploy**. Po minucie gra działa pod adresem w rodzaju
+   **https://snake-brawl.twoja-nazwa.workers.dev** (widać go w panelu Workera).
+
+Od teraz każdy push na `main` sam aktualizuje grę w internecie. Przebieg każdego budowania widać
+w panelu Workera, w zakładce **Deployments** / **Builds**.
+
+> Nazwy przycisków w panelu Cloudflare mogą się trochę różnić. Gdy Worker już istnieje, repo podpina się
+> w **Settings → Builds → Connect**.
+
+### Wystawienie ręczne (zapasowe)
+
+Bez podpinania GitHuba też się da, z własnego komputera (potrzebny Node.js):
 
 ```bash
-npx wrangler login         # tylko pierwszy raz: otworzy przeglądarkę, zaloguj się i zatwierdź
+npx wrangler login         # tylko pierwszy raz: logowanie w przeglądarce
 npm run deploy:server      # skleja grę i wystawia ją razem z serwerem pokoi
 ```
-
-Przy pierwszym razie Cloudflare może poprosić o wybranie nazwy subdomeny `workers.dev`.
-Na końcu wrangler wypisze adres gry, np. **https://snake-brawl.twoja-nazwa.workers.dev**.
-
-Po każdej zmianie w grze wystarczy znowu `npm run deploy:server`.
 
 ## 3. Gra z sąsiadami
 
