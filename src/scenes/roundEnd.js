@@ -1,5 +1,7 @@
 import { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
 import { recordRound } from '../game/match.js';
+import { formatTime } from '../render/hud.js';
+import { load, save } from '../ui/storage.js';
 import { drawRoundView } from '../render/view.js';
 import { blink, dimScreen, drawPanel, drawScore, drawText } from '../render/text.js';
 
@@ -13,6 +15,28 @@ const DEATH = {
   crash: 'Zderzenie głowami',
   left: 'Rywal wyszedł z gry',
 };
+
+const SOLO_DEATH = {
+  wall: 'Czerwona ściana',
+  left: 'Koniec treningu',
+};
+
+/**
+ * Trening: wynik to zjedzone owoce, najlepszy zapamiętujemy w przeglądarce.
+ * @param {import('../game/types.js').RoundState} round
+ */
+function describeSolo(round) {
+  const snake = round.snakes[0];
+  const best = load('soloBest', 0);
+  const record = snake.eaten > best;
+  if (record) save('soloBest', snake.eaten);
+  return {
+    title: record ? 'NOWY REKORD!' : 'KONIEC PRÓBY',
+    subtitle: `OWOCE: ${snake.eaten}   CZAS: ${formatTime(round.tick)}`,
+    color: record ? COLORS.food : COLORS.text,
+    detail: `${SOLO_DEATH[snake.death] ?? 'Wąż odpadł'} · rekord: ${Math.max(best, snake.eaten)} owoców`,
+  };
+}
 
 /**
  * @param {import('../game/types.js').RoundState} round
@@ -36,6 +60,7 @@ function describe(round, players) {
 export function createRoundEndScene(app) {
   let ticks = 0;
   let info = { title: '', subtitle: '', color: COLORS.text, detail: '' };
+  let solo = false;
 
   const next = () => {
     // Online: gdy w pokoju zostało mniej niż dwóch graczy, mecz kończy się powrotem do poczekalni
@@ -48,7 +73,8 @@ export function createRoundEndScene(app) {
       const result = app.round.result;
       app.controller.roundEnded?.(app.match.round, result);
       recordRound(app.match, result);
-      info = describe(app.round, app.players);
+      solo = app.round.snakes.length === 1;
+      info = solo ? describeSolo(app.round) : describe(app.round, app.players);
       ticks = 0;
       if (app.match.winner === null) app.audio.play('round');
     },
@@ -60,7 +86,8 @@ export function createRoundEndScene(app) {
       ticks++;
       // Online wszyscy przechodzą dalej po tym samym czasie, bez przeklikiwania
       const skip = app.controller.canSkip && ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm);
-      if (ticks >= AUTO_TICKS || skip) next();
+      // Trening czeka na gracza (żeby zdążył przeczytać wynik)
+      if ((!solo && ticks >= AUTO_TICKS) || skip) next();
     },
 
     render() {
@@ -74,10 +101,11 @@ export function createRoundEndScene(app) {
       drawText(ctx, info.title, VIEW_W / 2, cy - 70, { size: 28, color: info.color, glow: 16 });
       if (info.subtitle) drawText(ctx, info.subtitle, VIEW_W / 2, cy - 30, { size: 16, color: COLORS.text });
       drawText(ctx, info.detail, VIEW_W / 2, cy + 5, { size: 10, color: COLORS.dim });
-      drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 55);
+      if (!solo) drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 55);
 
       if (app.controller.canSkip && ticks >= MIN_TICKS && blink(time)) {
-        drawText(ctx, 'SPACJA — dalej', VIEW_W / 2, cy + 115, { size: 10, color: COLORS.text });
+        const hint = solo ? 'SPACJA — kolejna próba    ESC — menu' : 'SPACJA — dalej';
+        drawText(ctx, hint, VIEW_W / 2, cy + 115, { size: 10, color: COLORS.text });
       }
     },
   };

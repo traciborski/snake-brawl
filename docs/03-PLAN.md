@@ -95,6 +95,11 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** opis pokoju i zmiany, kolejność listy, wygasanie wpisów, endpoint lokalny i workera.
   ✅ Sprawdzone w `wrangler dev` i w przeglądarce (dwa pokoje, dołączenie z listy, wyjście gracza).
 
+## Krok 14: Offline 1–4 graczy i trening
+- [x] Wybór liczby graczy (1–4, zapamiętywany), klawisze dla graczy 3 (IJKL + U) i 4 (numpad)
+- [x] Trening: runda trwa, dopóki wąż żyje, wynik = owoce i czas, rekord w przeglądarce
+- **Testy:** koniec rundy w treningu, własne pociski i ciało niegroźne, unikalne klawisze, kontroler.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

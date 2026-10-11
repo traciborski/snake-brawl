@@ -1,7 +1,8 @@
-// Pasek nad planszą: 2–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// Pasek nad planszą: 1–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// W treningu (jeden wąż) zamiast rund: czas i zjedzone owoce.
 // Gracze 0 i 2 po lewej, 1 i 3 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
 
-import { COLORS, VIEW_W, WINS_TO_MATCH } from '../config.js';
+import { COLORS, TICK_MS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
@@ -38,6 +39,7 @@ const SLOT_X = [16, 216];
  * @param {number} roundNumber
  */
 export function drawHud(ctx, round, match, players, roundNumber) {
+  const solo = round.snakes.length === 1;
   round.snakes.forEach((snake, i) => {
     const right = i % 2 === 1;
     const offset = SLOT_X[Math.floor(i / 2)];
@@ -49,13 +51,25 @@ export function drawHud(ctx, round, match, players, roundNumber) {
     drawText(ctx, name.toUpperCase(), x, 16, { size: 14, color, align, glow: snake.alive ? 8 : 0, alpha });
     ctx.save();
     ctx.globalAlpha = alpha;
-    drawPips(ctx, x, 27, match.wins[i], color, right);
+    if (!solo) drawPips(ctx, x, 27, match.wins[i], color, right);
     ctx.restore();
     const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : snake.death === 'left' ? 'WYSZEDŁ' : 'ODPADŁ';
     drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
   });
 
+  if (solo) {
+    const snake = round.snakes[0];
+    drawText(ctx, 'TRENING', VIEW_W / 2, 22, { size: 14, color: COLORS.text });
+    drawText(ctx, `CZAS ${formatTime(round.tick)}  OWOCE ${snake.eaten}`, VIEW_W / 2, 44, { size: 7, color: COLORS.dim });
+    return;
+  }
   // Numer rundy na środku (rundy nie mają limitu czasu)
   drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, 22, { size: 14, color: COLORS.text });
   drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, 44, { size: 7, color: COLORS.dim });
+}
+
+/** Czas rundy z liczby ticków, np. „1:05”. */
+export function formatTime(ticks) {
+  const seconds = Math.floor((ticks * TICK_MS) / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }

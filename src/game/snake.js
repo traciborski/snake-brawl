@@ -17,6 +17,7 @@ export function createSnake(id, body, dir) {
     dir,
     nextDirs: [],
     growPending: 0,
+    eaten: 0,
     cooldown: 0,
     ammo: 0,
     alive: true,

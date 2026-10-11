@@ -157,6 +157,23 @@ canvas {
     box-shadow: 0 0 10px #ffd700;
 }
 
+/* Wybór liczby graczy (gra na jednym komputerze) */
+.overlay button.count {
+    padding: 0.5em 0.9em;
+}
+
+.overlay button.count.selected {
+    background: #39ff14;
+    border-color: #39ff14;
+    color: #05060f;
+    box-shadow: 0 0 10px #39ff14;
+}
+
+/* Wiersz ukryty atrybutem hidden (np. gracze ponad wybraną liczbę) */
+.overlay [hidden] {
+    display: none !important;
+}
+
 .overlay button:disabled {
     opacity: 0.4;
     cursor: default;

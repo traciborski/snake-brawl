@@ -171,10 +171,13 @@ function moveSnakes(state, events) {
   }
 }
 
-/** Runda kończy się, gdy zostanie najwyżej jeden żywy wąż. Nikt → remis. */
+/**
+ * Runda kończy się, gdy zostanie najwyżej jeden żywy wąż. Nikt → remis.
+ * Trening (jeden wąż): runda trwa, dopóki wąż żyje.
+ */
 function checkRoundEnd(state, events) {
   const alive = state.snakes.filter((s) => s.alive);
-  if (alive.length > 1) return;
+  if (alive.length > (state.snakes.length > 1 ? 1 : 0)) return;
   const result = { winner: alive.length === 1 ? alive[0].id : 'draw' };
   state.result = result;
   events.push({ type: 'roundOver', result });

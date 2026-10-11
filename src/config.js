@@ -39,14 +39,17 @@ export const WALL = {
 
 // Gracze
 export const MAX_PLAYERS = 4;
-export const OFFLINE_PLAYERS = 2;
+export const OFFLINE_MIN_PLAYERS = 1; // jeden gracz = trening
+export const OFFLINE_MAX_PLAYERS = 4;
+export const OFFLINE_DEFAULT_PLAYERS = 2;
 export const NAME_MAX = 12;
 // Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
 export const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
 export const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4'];
 
 // Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
-// Offline: zestaw i = gracz i. Online: oba zestawy sterują własnym wężem.
+// Offline: zestaw i = gracz i (trening: wszystkie zestawy sterują jednym wężem).
+// Online: wszystkie zestawy sterują własnym wężem.
 export const KEYMAPS = [
   {
     keys: {
@@ -68,7 +71,29 @@ export const KEYMAPS = [
     },
     help: 'STRZAŁKI  +  ENTER',
   },
+  {
+    keys: {
+      up: ['KeyI'],
+      down: ['KeyK'],
+      left: ['KeyJ'],
+      right: ['KeyL'],
+      shoot: ['KeyU'],
+    },
+    help: 'I J K L  +  U',
+  },
+  {
+    keys: {
+      up: ['Numpad8'],
+      down: ['Numpad5', 'Numpad2'],
+      left: ['Numpad4'],
+      right: ['Numpad6'],
+      shoot: ['Numpad0'],
+    },
+    help: 'NUMPAD 8 4 5 6  +  0',
+  },
 ];
+/** Podpowiedź klawiszy w treningu (steruje się dowolnym zestawem). */
+export const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA';
 
 // Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
 // np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`

@@ -94,7 +94,7 @@ src/
     sfx.js              syntezowane efekty, reagują na zdarzenia
   scenes/
     menu.js             tytuł, zasady, wybór trybu
-    setup.js            imiona graczy (offline)
+    setup.js            liczba graczy 1–4 i imiona (offline)
     online.js           pokój: utworzenie, dołączenie, poczekalnia
     countdown.js        3-2-1
     play.js             runda: łączy input → stepRound → efekty
@@ -189,8 +189,11 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 
 ## 8. Sterowanie: szczegóły
 
-- Zestawy klawiszy są w `config.js` (`KEYMAPS`: WASD + Spacja, strzałki + Enter). Offline zestaw i steruje graczem i,
-  online oba zestawy sterują własnym wężem.
+- Zestawy klawiszy są w `config.js` (`KEYMAPS`: WASD + Spacja, strzałki + Enter, IJKL + U,
+  numpad 8456 + 0). Offline zestaw i steruje graczem i, w treningu i online wszystkie zestawy
+  sterują własnym wężem.
+- Trening to zwykła runda z jednym wężem: `checkRoundEnd` kończy ją dopiero, gdy wąż zginie.
+  Wynik (`snake.eaten`, czas z `round.tick`) i rekord (`localStorage`) pokazuje ekran końca rundy.
 - Każdy gracz ma **kolejkę 2 skrętów**, więc szybkie „w górę i w lewo” między tickami nie ginie.
 - Dla klawiszy gry wołamy `preventDefault()`, żeby strzałki i Spacja nie przewijały strony.
 - Ghosting: niektóre klawiatury nie łapią wielu klawiszy naraz. Dlatego klawisze strzału

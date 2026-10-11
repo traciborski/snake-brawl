@@ -39,6 +39,7 @@ export function eatFood(state, events) {
     if (i < 0) continue;
     const [pos] = state.food.splice(i, 1);
     snake.growPending++;
+    snake.eaten++;
     events.push({ type: 'ate', snake: snake.id, pos });
   }
 }

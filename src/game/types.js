@@ -11,6 +11,7 @@
  * @property {Dir} dir           aktualny kierunek
  * @property {Dir[]} nextDirs    kolejka skrętów (max 2)
  * @property {number} growPending
+ * @property {number} eaten      zjedzone owoce w tej rundzie (wynik treningu)
  * @property {number} cooldown   ticki do kolejnego strzału
  * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive

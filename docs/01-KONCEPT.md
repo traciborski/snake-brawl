@@ -5,7 +5,7 @@
 
 ## 1. Jedno zdanie
 
-Arcade'owa walka węży, we dwóch na jednej klawiaturze albo w 2–4 osoby przez internet:
+Arcade'owa walka węży, w 1–4 osoby na jednej klawiaturze albo w 2–4 osoby przez internet:
 rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni
 żywy wąż (strzał w głowę i czerwona ściana eliminują).
 
@@ -14,7 +14,7 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 | Obszar     | Decyzja                                                  |
 |------------|----------------------------------------------------------|
 | Baza       | Rozwijamy pomysł Snake Brawl, kod piszemy od nowa        |
-| Gracze     | Offline: 2 na jednej klawiaturze. Online: 2–4, każdy na swoim komputerze |
+| Gracze     | Offline: 1–4 na jednej klawiaturze (1 = trening). Online: 2–4, każdy na swoim komputerze |
 | Platforma  | Przeglądarka na PC, klawiatura                           |
 | Klimat     | Arcade dla wszystkich: szybko, rywalizacja, krótkie rundy |
 | Styl       | Pikselowa kratka z neonową poświatą na ciemnym tle       |
@@ -26,10 +26,14 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 - Kolory graczy według kolejności: żółty `#FFD700`, cyjan `#00E5FF`, zielony `#39FF14`,
   pomarańczowy `#FF9100` (żaden nie myli się ze ścianami ani jedzeniem).
 
-| Tryb    | Gracz 1             | Gracz 2            |
-|---------|---------------------|--------------------|
-| Offline | `W A S D` + `Spacja` | strzałki + `Enter` |
-| Online  | każdy steruje swoim wężem dowolnym z tych zestawów | |
+| Gracz (offline) | Klawisze |
+|-----------------|----------|
+| 1 | `W A S D` + `Spacja` |
+| 2 | strzałki + `Enter` |
+| 3 | `I J K L` + `U` |
+| 4 | klawiatura numeryczna `8 4 5 6` (albo `2` w dół) + `0` |
+| Trening (sam) | dowolny z tych zestawów |
+| Online | każdy steruje swoim wężem dowolnym z tych zestawów |
 
 **Telefon i tablet** (ta sama strona, bez osobnej wersji): sterowanie dotykiem włącza się samo
 po pierwszym dotknięciu ekranu. Przesunięcie palcem w dowolnym miejscu skręca węża, a przycisk
@@ -40,7 +44,7 @@ do gry przez internet.
 
 ## 4. Mecz i runda
 
-1. **Menu**: wybór trybu (jeden komputer / internet), potem imiona.
+1. **Menu**: wybór trybu (jeden komputer / internet), potem liczba graczy (offline 1–4) i imiona.
 2. **Odliczanie** 3-2-1, węże startują w rogach planszy (przy dwóch graczach w przeciwległych), długość 3.
 3. **Runda** nie ma limitu czasu: trwa, aż zostanie najwyżej jeden żywy wąż.
 4. **Wynik rundy**:
@@ -49,6 +53,9 @@ do gry przez internet.
    - jeśli ostatni odpadną w tym samym momencie, jest remis.
 5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
    i rewanż jednym klawiszem.
+6. **Trening** (offline, jeden gracz): sam wąż na planszy, bez rund i punktów. Próba trwa,
+   dopóki wąż żyje (w pojedynkę zabija tylko czerwona ściana). Wynik to zjedzone owoce i czas,
+   gra pamięta rekord. Spacja zaczyna kolejną próbę na nowym labiryncie.
 
 ## 5. Zasady
 
