@@ -13,7 +13,7 @@
 | Zależności    | **Zero** bibliotek w grze               | Mniej do utrzymania, gra startuje od razu |
 | Testy         | `node --test` (wbudowany w Node 22)     | Logika gry jest czysta, więc testujemy ją bez przeglądarki |
 | Uruchamianie  | Dwuklik w `index.html` albo `npm start` (serwer w Node) | `index.html` ładuje `dist/snake-brawl.js`, czyli moduły sklejone przez `npm run build` w jeden zwykły skrypt, bo przeglądarki blokują ES modules z `file://` |
-| Publikacja    | Gra: GitHub Pages. Serwer online: Cloudflare Workers (Durable Objects) | Pages serwuje tylko pliki, więc ruchy graczy przekazuje osobny mały serwer z WebSocketami |
+| Publikacja    | Cloudflare Workers: pliki gry (folder `site/`) + serwer pokoi (Durable Objects) pod jednym adresem | Jedno wystawienie, repo może zostać prywatne, gra łączy się z serwerem pod tym samym adresem |
 
 ## 2. Główna zasada: logika oddzielona od wyświetlania
 
@@ -223,8 +223,8 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 
 ```
  przeglądarka A ──┐                                   ┌── przeglądarka B
-   (gra z GitHub  │  WebSocket   ┌────────────────┐   │   (ta sama gra)
-    Pages)        └─────────────►│ serwer: pokój  │◄──┘
+   (gra z         │  WebSocket   ┌────────────────┐   │   (ta sama gra)
+    Cloudflare)   └─────────────►│ serwer: pokój  │◄──┘
                                  │ KOT7 (relay)   │◄───── przeglądarka C, D
                                  └────────────────┘
 ```
@@ -232,6 +232,7 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 - `server/room.js`: logika pokoju (poczekalnia, start, przekazywanie ruchów, rozłączenia).
   Czysta, bez sieci, testowana w Node.
 - `server/worker.js`: Cloudflare Worker + Durable Object (jeden obiekt na pokój) opakowuje `room.js`.
+  Pliki gry z folderu `site/` (składanego przez `node scripts/build.js --site`) Cloudflare serwuje sam.
 - `scripts/serve.js`: lokalnie `npm start` ma ten sam serwer pokoi (minimalny WebSocket bez
   zależności, `scripts/ws.js`), więc grę online da się testować na dwóch kartach przeglądarki.
 - `src/net/`: klient po stronie gry (połączenie, lockstep). `src/modes/online.js`: kontroler trybu.

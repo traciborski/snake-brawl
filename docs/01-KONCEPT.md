@@ -86,8 +86,8 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 
 ## 7. Gra przez internet
 
-- **Gra** stoi na GitHub Pages: wchodzisz na link i grasz, bez instalowania.
-- **Mały serwer pośredniczący** (Cloudflare Workers) przekazuje ruchy między graczami.
+- **Gra i mały serwer pośredniczący** stoją razem na Cloudflare Workers, pod jednym adresem:
+  wchodzisz na link i grasz, bez instalowania. Serwer przekazuje ruchy między graczami.
 - **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`), reszta klika *Dołącz*
   i wpisuje kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
 - 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników

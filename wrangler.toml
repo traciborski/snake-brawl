@@ -1,7 +1,15 @@
-# Serwer gry online na Cloudflare Workers: `npx wrangler deploy`
+# Gra + serwer pokoi na Cloudflare Workers: `npm run deploy:server` (czyli `npx wrangler deploy`)
 name = "snake-brawl"
 main = "server/worker.js"
 compatibility_date = "2025-09-01"
+
+# Przed wystawieniem: sklejenie gry i złożenie folderu site/ (tylko pliki potrzebne w przeglądarce)
+[build]
+command = "node scripts/build.js --site"
+
+# Pliki gry serwowane z tego samego adresu co pokoje (/room/KOD trafia do workera)
+[assets]
+directory = "./site"
 
 # Jeden Durable Object na pokój gry
 [[durable_objects.bindings]]

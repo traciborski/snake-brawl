@@ -159,9 +159,9 @@ const KEYMAPS = [
   },
 ];
 
-// Adres serwera gry online (Cloudflare Workers), uzupełniany po wystawieniu, np.
-// 'wss://snake-brawl.twoje-konto.workers.dev'. Przy `npm start` gra łączy się z lokalnym
-// serwerem, a adres można też podać w linku: index.html?server=wss://...
+// Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
+// np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`
+// łączy się z serwerem pod tym samym adresem. Adres można też podać w linku: ?server=wss://...
 const ONLINE_SERVER = '';
 
 // Klawisze globalne
@@ -1273,17 +1273,17 @@ __factories["src/net/client.js"] = function (__exports) {
 
 const { ONLINE_SERVER } = __require("src/config.js");
 
-const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.+\.local)$/;
-
 /**
- * Adres serwera: z linku (?server=…), lokalny przy `npm start`, a w internecie z config.js.
+ * Adres serwera pokoi:
+ * - z linku (?server=wss://…), gdy ktoś chce wskazać inny serwer,
+ * - ten sam adres, z którego przyszła gra (Cloudflare albo `npm start`: gra i pokoje są razem),
+ * - przy grze otwartej z dysku (file://) adres z config.js.
  * @returns {string | null}
  */
 function serverUrl() {
   const fromLink = new URLSearchParams(location.search).get('server');
   if (fromLink) return fromLink.replace(/\/+$/, '');
-  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
-  if (isHttp && LOCAL_HOST_RE.test(location.hostname)) {
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
     return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
   }
   return ONLINE_SERVER || null;

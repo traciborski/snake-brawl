@@ -4,14 +4,18 @@
 // których używamy w projekcie, a na każdą inną rzuca błąd.
 //
 //   npm run build
+//   node scripts/build.js --site   dodatkowo folder site/ z plikami gry (wystawienie na Cloudflare)
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const ENTRY = 'src/main.js';
 export const OUT = 'dist/snake-brawl.js';
+/** Pliki gry potrzebne w przeglądarce (reszta repo nie trafia do internetu). */
+export const SITE_FILES = ['index.html', 'style.css', OUT];
+export const SITE_DIR = 'site';
 
 const IMPORT_RE = /^import\s+([\s\S]*?)\s+from\s+['"](.+?)['"];?[ \t]*$/gm;
 const EXPORT_DECL_RE = /^export\s+(function|class|const|let)\s+([A-Za-z_$][\w$]*)/gm;
@@ -76,4 +80,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, bundle());
   console.log(`Zapisano ${OUT}`);
+
+  if (process.argv.includes('--site')) {
+    const site = join(ROOT, SITE_DIR);
+    rmSync(site, { recursive: true, force: true });
+    for (const file of SITE_FILES) {
+      mkdirSync(dirname(join(site, file)), { recursive: true });
+      copyFileSync(join(ROOT, file), join(site, file));
+    }
+    console.log(`Zapisano ${SITE_DIR}/ (${SITE_FILES.join(', ')})`);
+  }
 }

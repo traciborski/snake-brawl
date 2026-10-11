@@ -70,12 +70,10 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Sprawdzenie:** mecz na dwóch kartach przeglądarki przez `npm start`.
   ✅ Test automatyczny w 3 przeglądarkach: identyczny stan u wszystkich, rozłączenie, rewanż.
 
-## Krok 10: Wystawienie w internecie
-- [x] Przygotowane: `server/worker.js`, `wrangler.toml`, `.nojekyll`, instrukcja [04-WYSTAWIENIE.md](04-WYSTAWIENIE.md)
+## Krok 10: Wystawienie w internecie (Cloudflare)
+- [x] Przygotowane: `server/worker.js`, `wrangler.toml` (pliki gry + pokoje), instrukcja [04-WYSTAWIENIE.md](04-WYSTAWIENIE.md)
 - [x] Sprawdzone lokalnie w środowisku Cloudflare (`wrangler dev`): mecz w 3 przeglądarkach
-- [ ] Gra na GitHub Pages (repo publiczne), robi właściciel repo
-- [ ] Serwer na Cloudflare Workers (konto właściciela, `npm run deploy:server`)
-- [ ] Adres serwera w `src/config.js` (`ONLINE_SERVER`)
+- [ ] Konto Cloudflare i `npm run deploy:server`, robi właściciel repo (repo zostaje prywatne)
 - **Sprawdzenie:** mecz z sąsiadami.
 
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)

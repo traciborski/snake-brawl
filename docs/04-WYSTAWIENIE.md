@@ -1,64 +1,49 @@
 # Snake Brawl: wystawienie gry w internecie
 
-Gra składa się z dwóch części:
+Całość stoi na **Cloudflare Workers**, pod jednym adresem:
 
-| Część | Gdzie | Koszt |
-|-------|-------|-------|
-| Gra (HTML, JS) | GitHub Pages | za darmo (repo musi być publiczne) |
-| Serwer pokoi (przekazuje ruchy) | Cloudflare Workers + Durable Objects | za darmo w ramach darmowego planu |
+| Część | Co robi |
+|-------|---------|
+| Pliki gry (`index.html`, `style.css`, `dist/snake-brawl.js`) | Cloudflare serwuje je jako zwykłą stronę |
+| Serwer pokoi (`server/worker.js`, `/room/KOD`) | przekazuje ruchy między graczami (Durable Objects) |
 
-Wszystko poniżej robi się **raz**. Potem każdy `git push` na `main` aktualizuje grę sam.
+Repo może zostać **prywatne**. Do internetu trafiają tylko trzy pliki gry (folder `site/`
+składany automatycznie przy wystawianiu), a nie reszta repo. Darmowy plan Cloudflare wystarczy.
 
-## 1. Repo publiczne
+## 1. Konto Cloudflare
 
-GitHub → repo `snake-brawl` → **Settings** → **General** → na dole **Danger Zone** →
-**Change repository visibility** → **Public**.
+Załóż darmowe konto: https://dash.cloudflare.com/sign-up
 
-## 2. GitHub Pages (gra)
+## 2. Wystawienie (pierwszy raz i po każdej zmianie gry)
 
-GitHub → repo → **Settings** → **Pages**:
-- **Source:** *Deploy from a branch*
-- **Branch:** `main`, folder `/ (root)` → **Save**
+Na swoim komputerze, w folderze z repo (potrzebny Node.js):
 
-Po 1–2 minutach gra działa pod adresem: **https://traciborski.github.io/snake-brawl/**
-(tryb na jednym komputerze działa od razu, tryb online po kroku 3 i 4).
-
-## 3. Cloudflare (serwer pokoi)
-
-1. Załóż darmowe konto: https://dash.cloudflare.com/sign-up
-2. Na swoim komputerze, w folderze z repo (potrzebny Node.js):
-
-   ```bash
-   npx wrangler login         # otworzy przeglądarkę, zaloguj się i zatwierdź
-   npm run deploy:server      # czyli: npx wrangler deploy
-   ```
-
-   Przy pierwszym razie Cloudflare może poprosić o wybranie nazwy subdomeny `workers.dev`.
-3. Na końcu wrangler wypisze adres, np. `https://snake-brawl.twoja-nazwa.workers.dev`.
-   Otwórz go w przeglądarce: ma się pokazać *„Snake Brawl: serwer pokoi działa.”*
-
-## 4. Adres serwera w grze
-
-W `src/config.js` wpisz adres z kroku 3, zamieniając `https://` na `wss://`:
-
-```js
-export const ONLINE_SERVER = 'wss://snake-brawl.twoja-nazwa.workers.dev';
+```bash
+npx wrangler login         # tylko pierwszy raz: otworzy przeglądarkę, zaloguj się i zatwierdź
+npm run deploy:server      # skleja grę i wystawia ją razem z serwerem pokoi
 ```
 
-Potem `npm run build`, commit i push na `main` (albo po prostu podeślij adres Claude'owi).
+Przy pierwszym razie Cloudflare może poprosić o wybranie nazwy subdomeny `workers.dev`.
+Na końcu wrangler wypisze adres gry, np. **https://snake-brawl.twoja-nazwa.workers.dev**.
 
-Do szybkiego testu bez zmiany kodu można też podać adres w linku:
-`https://traciborski.github.io/snake-brawl/?server=wss://snake-brawl.twoja-nazwa.workers.dev`
+Po każdej zmianie w grze wystarczy znowu `npm run deploy:server`.
 
-## 5. Gra z sąsiadami
+## 3. Gra z sąsiadami
 
-1. Każdy otwiera https://traciborski.github.io/snake-brawl/ i wybiera **Gra przez internet**.
+1. Każdy otwiera adres gry i wybiera **Gra przez internet**.
 2. Jedna osoba klika **Utwórz pokój** i podaje pozostałym 4-znakowy kod.
 3. Pozostali wpisują kod i klikają **Dołącz**.
 4. Założyciel klika **Start**.
 
+Gra sama łączy się z serwerem pokoi pod tym samym adresem, nic nie trzeba konfigurować.
+
+## Gra otwarta z dysku
+
+Dwuklik w `index.html` działa offline. Żeby z takiej kopii grać też online, wpisz adres
+w `src/config.js` (`ONLINE_SERVER = 'wss://snake-brawl.twoja-nazwa.workers.dev'`) i zrób `npm run build`.
+
 ## Limity darmowego planu Cloudflare
 
 Darmowy plan ma dzienny limit zapytań do Durable Objects. Gra wysyła ok. 20 wiadomości na sekundę
-na gracza, co przy kilku meczach dziennie mieści się z zapasem (orientacyjnie kilka godzin gry
-w 4 osoby dziennie). Po przekroczeniu limitu serwer wraca do działania następnego dnia.
+na gracza, co według szacunków mieści kilka godzin gry w 4 osoby dziennie. Po przekroczeniu limitu
+serwer pokoi wraca do działania następnego dnia (tryb na jednym komputerze działa zawsze).

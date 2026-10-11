@@ -34,12 +34,12 @@ Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
 - **Lokalnie / w domu:** `npm start` uruchamia też serwer pokoi. Otwórz http://localhost:8080
   w kilku kartach (albo z innych komputerów w tej samej sieci: `http://ADRES-KOMPUTERA:8080`),
   wybierz *Gra przez internet*, utwórz pokój i dołącz do niego kodem.
-- **W internecie:** gra na GitHub Pages, serwer pokoi na Cloudflare Workers
-  (instrukcja wystawienia: [docs/04-WYSTAWIENIE.md](docs/04-WYSTAWIENIE.md)).
+- **W internecie:** gra i serwer pokoi razem na Cloudflare Workers, `npm run deploy:server`
+  (instrukcja: [docs/04-WYSTAWIENIE.md](docs/04-WYSTAWIENIE.md)). Repo może zostać prywatne.
 
 ## Dokumentacja
 
 1. [Koncept](docs/01-KONCEPT.md): zasady gry
 2. [Architektura](docs/02-ARCHITEKTURA.md): jak zbudowany jest kod
 3. [Plan](docs/03-PLAN.md): kroki i lista kontrolna
-4. [Wystawienie](docs/04-WYSTAWIENIE.md): GitHub Pages + Cloudflare
+4. [Wystawienie](docs/04-WYSTAWIENIE.md): Cloudflare Workers

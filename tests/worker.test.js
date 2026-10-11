@@ -2,11 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../server/worker.js';
 
-test('worker: strona główna i zła ścieżka nie dotykają pokoi', async () => {
+test('worker: ścieżka spoza pokoi to 404 (pliki gry serwuje Cloudflare z folderu site/)', async () => {
   const env = { ROOMS: { idFromName: () => assert.fail('nie powinno tworzyć pokoju') } };
-  const res = await worker.fetch(new Request('https://example.com/'), env);
-  assert.equal(res.status, 200);
-  assert.match(await res.text(), /serwer pokoi działa/);
+  const res = await worker.fetch(new Request('https://example.com/README.md'), env);
+  assert.equal(res.status, 404);
 });
 
 test('worker: pokój wymaga WebSocketu, a kod trafia do właściwego Durable Object', async () => {

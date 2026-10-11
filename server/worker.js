@@ -1,7 +1,8 @@
-// Serwer gry online na Cloudflare Workers. Każdy pokój to osobny Durable Object
-// (jedna instancja na kod pokoju), a logika pokoju jest wspólna z lokalnym serwerem (room.js).
+// Gra i serwer pokoi na Cloudflare Workers. Pliki gry (folder site/) Cloudflare serwuje sam,
+// a tutaj trafia reszta: /room/KOD. Każdy pokój to osobny Durable Object (jedna instancja
+// na kod pokoju), a logika pokoju jest wspólna z lokalnym serwerem (room.js).
 //
-//   npx wrangler deploy      (konfiguracja w wrangler.toml)
+//   npm run deploy:server      (konfiguracja w wrangler.toml)
 
 import { Room } from './room.js';
 import { ROOM_PATH_RE } from '../src/net/protocol.js';
@@ -54,9 +55,7 @@ export default {
   /** @param {Request} request @param {{ ROOMS: any }} env */
   async fetch(request, env) {
     const match = ROOM_PATH_RE.exec(new URL(request.url).pathname);
-    if (!match) {
-      return new Response('Snake Brawl: serwer pokoi działa.', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
-    }
+    if (!match) return new Response('Nie znaleziono', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Oczekiwano połączenia WebSocket', { status: 426 });
     }
