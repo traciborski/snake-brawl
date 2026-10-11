@@ -14,7 +14,7 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const ENTRY = 'src/main.js';
 export const OUT = 'dist/snake-brawl.js';
 /** Pliki gry potrzebne w przeglądarce (reszta repo nie trafia do internetu). */
-export const SITE_FILES = ['index.html', 'style.css', OUT];
+export const SITE_FILES = ['index.html', 'pokoje.html', 'style.css', OUT];
 export const SITE_DIR = 'site';
 
 const IMPORT_RE = /^import\s+([\s\S]*?)\s+from\s+['"](.+?)['"];?[ \t]*$/gm;

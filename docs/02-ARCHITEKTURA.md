@@ -48,6 +48,7 @@
 
 ```
 index.html              jeden <canvas>, ładuje src/main.js
+pokoje.html             strona z listą aktywnych pokoi (osobna, bez canvasa)
 style.css
 package.json            skrypty: start, build, test (bez zależności)
 scripts/serve.js        mini serwer statyczny (dist/ skleja na bieżąco)
@@ -101,7 +102,7 @@ src/
     matchEnd.js         zwycięzca meczu, rewanż
 server/
     room.js             logika pokoju (wspólna dla Cloudflare i lokalnego serwera)
-    worker.js           Cloudflare Worker + Durable Object
+    worker.js           Cloudflare Worker + Durable Objects (pokoje i lista pokoi)
 tests/
     rng.test.js, maze.test.js, snake.test.js, bullets.test.js, match.test.js
 ```
@@ -234,6 +235,10 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
   Czysta, bez sieci, testowana w Node.
 - `server/worker.js`: Cloudflare Worker + Durable Object (jeden obiekt na pokój) opakowuje `room.js`.
   Pliki gry z folderu `site/` (składanego przez `node scripts/build.js --site`) Cloudflare serwuje sam.
+- **Lista pokoi** (`/pokoje`, dane z `GET /api/pokoje`): na Cloudflare każdy pokój zgłasza swój
+  opis (`Room.summary()`: kod, imiona, poczekalnia/mecz, runda, pełny) do jednego Durable Object
+  z listą przy każdej zmianie i co minutę (alarm). Wpis bez wieści od 3 minut znika, więc po
+  restarcie serwera lista sama się czyści. Lokalnie `npm start` czyta pokoje prosto z pamięci.
 - `scripts/serve.js`: lokalnie `npm start` ma ten sam serwer pokoi (minimalny WebSocket bez
   zależności, `scripts/ws.js`), więc grę online da się testować na dwóch kartach przeglądarki.
 - `src/net/`: klient po stronie gry (połączenie, lockstep). `src/modes/online.js`: kontroler trybu.

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#05060f">
+    <title>Pokoje · Snake Brawl</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            background: #05060f;
+            color: #e8ecff;
+            font-family: "Press Start 2P", monospace;
+            line-height: 1.6;
+            padding: 32px 16px 48px;
+        }
+
+        main { max-width: 720px; margin: 0 auto; }
+
+        h1 {
+            font-size: clamp(18px, 5vw, 28px);
+            color: #39FF14;
+            text-shadow: 0 0 12px #39FF14;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .sub { text-align: center; font-size: 10px; color: #8a90b8; margin-bottom: 28px; }
+
+        .room {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 2px solid #2a2f55;
+            background: #0b0d1f;
+        }
+
+        .room.open { border-color: #39FF14; box-shadow: 0 0 10px rgba(57, 255, 20, 0.25); }
+
+        .code {
+            font-size: 20px;
+            color: #FFD700;
+            text-shadow: 0 0 8px #FFD700;
+            min-width: 5em;
+        }
+
+        .info { flex: 1; min-width: 0; }
+        .players { font-size: 11px; overflow-wrap: anywhere; }
+        .status { font-size: 9px; color: #8a90b8; margin-top: 6px; }
+
+        a.btn, button {
+            font: inherit;
+            font-size: 11px;
+            color: #05060f;
+            background: #39FF14;
+            border: none;
+            padding: 10px 14px;
+            text-decoration: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        a.btn:hover, a.btn:focus-visible { background: #e8ecff; outline: none; }
+
+        .full { font-size: 10px; color: #FF3B3B; white-space: nowrap; }
+
+        .room > :last-child { margin-left: auto; }
+
+        .empty { text-align: center; font-size: 11px; color: #8a90b8; padding: 32px 0; }
+
+        .footer { display: flex; justify-content: center; margin-top: 28px; }
+
+        .footer a.btn { background: #00E5FF; }
+
+        @media (max-width: 520px) {
+            .room { flex-wrap: wrap; }
+            .code { min-width: 0; }
+            .info { flex-basis: 100%; order: 3; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>AKTYWNE POKOJE</h1>
+        <p class="sub" id="sub">Ładuję…</p>
+        <div id="list"></div>
+        <div class="footer"><a class="btn" id="game" href="./">UTWÓRZ WŁASNY POKÓJ</a></div>
+    </main>
+    <script>
+        'use strict';
+        // Lista pokoi z serwera gry (ten sam adres co gra albo ?server=wss://… jak w grze).
+        // Odświeża się co kilka sekund. Kolory graczy jak w src/config.js (PLAYER_COLORS).
+        const COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
+        const REFRESH_MS = 3000;
+
+        const server = new URLSearchParams(location.search).get('server');
+        const api = server
+            ? server.replace(/^ws/, 'http').replace(/\/+$/, '') + '/api/pokoje'
+            : '/api/pokoje';
+        const list = document.getElementById('list');
+        const sub = document.getElementById('sub');
+
+        /** Link do gry z kodem pokoju (z zachowaniem ?server=, jeśli był). */
+        function gameLink(code) {
+            const url = new URL('/', location.href);
+            if (server) url.searchParams.set('server', server);
+            if (code) url.searchParams.set('pokoj', code);
+            return url.toString();
+        }
+        document.getElementById('game').href = gameLink(null);
+
+        function el(tag, props, ...children) {
+            const node = Object.assign(document.createElement(tag), props);
+            node.append(...children.filter((c) => c !== null && c !== undefined));
+            return node;
+        }
+
+        function roomRow(room) {
+            const players = el('div', { className: 'players' });
+            room.players.forEach((name, i) => {
+                if (i) players.append(', ');
+                const color = COLORS[i % COLORS.length];
+                players.append(el('span', { style: `color:${color};text-shadow:0 0 6px ${color}` }, name));
+            });
+            const count = `${room.players.length} / 4`;
+            const status = room.playing ? `trwa mecz, runda ${room.round} · ${count}` : `poczekalnia · ${count}`;
+            const action = room.full
+                ? el('span', { className: 'full' }, 'PEŁNY')
+                : el('a', { className: 'btn', href: gameLink(room.code) }, 'DOŁĄCZ');
+            const open = !room.full && !room.playing;
+            return el(
+                'div',
+                { className: open ? 'room open' : 'room' },
+                el('div', { className: 'code' }, room.code),
+                el('div', { className: 'info' }, players, el('div', { className: 'status' }, status)),
+                action,
+            );
+        }
+
+        async function refresh() {
+            try {
+                const res = await fetch(api, { cache: 'no-store' });
+                if (!res.ok) throw new Error(String(res.status));
+                const { rooms } = await res.json();
+                list.replaceChildren(
+                    ...(rooms.length
+                        ? rooms.map(roomRow)
+                        : [el('p', { className: 'empty' }, 'Nie ma teraz żadnego pokoju. Załóż swój i zaproś znajomych!')]),
+                );
+                sub.textContent = rooms.length
+                    ? 'Kliknij DOŁĄCZ, wpisz imię i grasz. Do trwającego meczu wejdziesz od kolejnej rundy.'
+                    : 'Lista odświeża się sama.';
+            } catch {
+                sub.textContent = location.protocol === 'file:'
+                    ? 'Lista pokoi działa na stronie gry w internecie albo przez npm start.'
+                    : 'Nie udało się pobrać listy pokoi. Spróbuję za chwilę…';
+            }
+        }
+
+        refresh();
+        setInterval(() => {
+            if (!document.hidden) refresh();
+        }, REFRESH_MS);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refresh();
+        });
+    </script>
+</body>
+</html>

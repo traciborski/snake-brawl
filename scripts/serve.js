@@ -1,14 +1,15 @@
 // Mini serwer bez zależności: `npm start` → http://localhost:8080
 // - pliki gry (dist/snake-brawl.js sklejany na bieżąco z src/, więc nie trzeba robić builda),
-// - pokoje gry online pod ws://localhost:8080/room/KOD (ta sama logika co na Cloudflare).
+// - pokoje gry online pod ws://localhost:8080/room/KOD (ta sama logika co na Cloudflare),
+// - lista aktywnych pokoi: strona /pokoje i dane /api/pokoje.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bundle, OUT } from './build.js';
 import { acceptWebSocket } from './ws.js';
-import { Room } from '../server/room.js';
-import { ROOM_PATH_RE } from '../src/net/protocol.js';
+import { Room, sortRooms } from '../server/room.js';
+import { ROOM_PATH_RE, ROOMS_API } from '../src/net/protocol.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -24,12 +25,20 @@ const MIME = {
 
 export function createGameServer() {
   /** @type {Map<string, Room>} */
-  const rooms = new Map();
+  const roomsByCode = new Map();
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     let path = decodeURIComponent(url.pathname);
+    if (path === ROOMS_API) {
+      const rooms = [...roomsByCode.values()].map((room) => room.summary()).filter(Boolean);
+      res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ rooms: sortRooms(rooms) }));
+      return;
+    }
     if (path.endsWith('/')) path += 'index.html';
+    // Jak na Cloudflare: /pokoje to strona pokoje.html
+    if (!extname(path)) path += '.html';
 
     const file = normalize(join(ROOT, path));
     if (file !== ROOT && !file.startsWith(ROOT + sep)) {
@@ -58,13 +67,13 @@ export function createGameServer() {
     const ws = acceptWebSocket(req, socket);
     if (!ws) return;
     const code = match[1];
-    const room = rooms.get(code) ?? new Room(code);
-    rooms.set(code, room);
+    const room = roomsByCode.get(code) ?? new Room(code);
+    roomsByCode.set(code, room);
     const conn = room.connect(ws);
     ws.onmessage = (text) => conn.receive(text);
     ws.onclose = () => {
       conn.closed();
-      if (room.isEmpty) rooms.delete(code);
+      if (room.isEmpty) roomsByCode.delete(code);
     };
   });
 

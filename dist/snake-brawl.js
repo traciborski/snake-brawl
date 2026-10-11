@@ -1199,6 +1199,14 @@ function roomLink(code) {
   return url.toString();
 }
 
+/** Strona z listą aktywnych pokoi (z zachowaniem ?server=, jeśli był). */
+function roomsPage() {
+  const url = new URL('/pokoje', location.href);
+  const server = new URLSearchParams(location.search).get('server');
+  if (server) url.searchParams.set('server', server);
+  return url.toString();
+}
+
 /** Ustawia (albo czyści, gdy code = null) kod pokoju w pasku adresu, bez przeładowania strony. */
 function showRoomInAddressBar(code) {
   try {
@@ -1211,7 +1219,7 @@ function showRoomInAddressBar(code) {
   }
 }
 
-Object.assign(__exports, { serverUrl, joinRoom, roomFromLink, roomLink, showRoomInAddressBar });
+Object.assign(__exports, { serverUrl, joinRoom, roomFromLink, roomLink, roomsPage, showRoomInAddressBar });
 };
 
 // ---- src/net/protocol.js ----
@@ -1222,6 +1230,8 @@ __factories["src/net/protocol.js"] = function (__exports) {
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+/** Lista aktywnych pokoi (JSON) dla strony /pokoje. */
+const ROOMS_API = '/api/pokoje';
 
 /** Losowy kod pokoju, np. „KOT7”. */
 function randomCode(random = Math.random) {
@@ -1253,7 +1263,7 @@ function decodeCommand({ d = '', s = 0 }) {
   return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
 }
 
-Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, randomCode, normalizeCode, encodeCommand, decodeCommand });
+Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand });
 };
 
 // ---- src/scenes/setup.js ----
@@ -1477,7 +1487,7 @@ __factories["src/scenes/online.js"] = function (__exports) {
 // Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
 const { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
-const { joinRoom, roomLink, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
+const { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
 const { normalizeCode, randomCode } = __require("src/net/protocol.js");
 const { attachSession, leaveOnline } = __require("src/modes/online.js");
 const { drawText } = __require("src/render/text.js");
@@ -1573,7 +1583,13 @@ function createOnlineScene(app) {
         h('button', { type: 'button', onclick: () => go(false), disabled: !server }, 'DOŁĄCZ'),
       ),
       message,
-      h('div', { className: 'buttons' }, h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ')),
+      h(
+        'div',
+        { className: 'buttons' },
+        h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ'),
+        // Lista pokoi jest stroną serwera gry, więc tylko gdy gra przyszła z serwera (nie z dysku)
+        server && location.protocol !== 'file:' && h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, 'LISTA POKOI'),
+      ),
     );
     app.overlay.show(panel);
     name.select();

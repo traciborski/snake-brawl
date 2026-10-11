@@ -33,10 +33,30 @@ export class Room {
     /** @type {number[]} od której rundy gra gracz o danym numerze */
     this.joinRounds = [];
     this.nextId = 1;
+    /** Wywoływane po każdej zmianie widocznej na liście pokoi (gracze, mecz, runda) */
+    this.onChange = () => {};
   }
 
   get isEmpty() {
     return this.members.length === 0;
+  }
+
+  /** Czy nikt więcej nie zmieści się do pokoju (w trakcie meczu liczą się też ci, którzy wyszli). */
+  get isFull() {
+    return this.members.length >= MAX_PLAYERS || (this.phase === 'game' && this.players.length >= MAX_PLAYERS);
+  }
+
+  /** Opis pokoju na liście aktywnych pokoi albo null, jeśli pokoju nie ma (nikt w nim nie jest). */
+  summary() {
+    if (!this.created || this.isEmpty) return null;
+    const playing = this.phase === 'game';
+    return {
+      code: this.code,
+      players: this.members.map((m) => m.name),
+      playing,
+      round: playing ? this.results.length + 1 : null,
+      full: this.isFull,
+    };
   }
 
   /**
@@ -72,14 +92,14 @@ export class Room {
     };
     if (create && this.created) return reject('exists', 'Pokój o tym kodzie już istnieje');
     if (!create && !this.created) return reject('missing', 'Nie ma pokoju o takim kodzie');
-    const full = this.members.length >= MAX_PLAYERS || (this.phase === 'game' && this.players.length >= MAX_PLAYERS);
-    if (full) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
+    if (this.isFull) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
 
     this.created = true;
     const member = { id: this.nextId++, name: cleanName(name), socket };
     this.members.push(member);
     this.broadcastLobby();
     if (this.phase === 'game') this.joinLate(member);
+    this.onChange();
     return member;
   }
 
@@ -121,6 +141,7 @@ export class Room {
         this.seed = seed;
         const players = this.players.map((m) => ({ id: m.id, name: m.name }));
         this.broadcast({ t: 'start', seed, players });
+        this.onChange();
         return;
       }
       case 'input': {
@@ -142,6 +163,7 @@ export class Room {
         if (r < this.results.length) return;
         this.results.push(w);
         this.broadcast({ t: 'result', r, w });
+        this.onChange();
         return;
       }
       case 'lobby': {
@@ -150,6 +172,7 @@ export class Room {
         this.phase = 'lobby';
         this.players = [];
         this.broadcastLobby();
+        this.onChange();
         return;
       }
     }
@@ -168,9 +191,10 @@ export class Room {
       const at = last ? { r: last.r, f: last.f + 1 } : { r: 0, f: 0 };
       this.broadcast({ t: 'left', p, ...at });
       if (this.members.length === 0) this.phase = 'lobby';
-      return;
+    } else if (this.phase === 'lobby') {
+      this.broadcastLobby();
     }
-    if (this.phase === 'lobby') this.broadcastLobby();
+    this.onChange();
   }
 
   broadcastLobby() {
@@ -184,6 +208,20 @@ export class Room {
     const text = JSON.stringify(msg);
     for (const m of this.members) m.socket.send(text);
   }
+}
+
+/** Pokój bez wieści dłużej niż tyle znika z listy pokoi (np. po restarcie serwera). */
+export const LIST_TTL_MS = 3 * 60 * 1000;
+
+/**
+ * Lista pokoi do pokazania: najpierw poczekalnie z wolnym miejscem, potem trwające mecze,
+ * na końcu pełne; w grupie alfabetycznie. Zostają tylko pola opisu (bez np. czasu zgłoszenia).
+ */
+export function sortRooms(rooms) {
+  const order = (r) => (r.full ? 2 : r.playing ? 1 : 0);
+  return rooms
+    .map(({ code, players, playing, round, full }) => ({ code, players, playing, round, full }))
+    .sort((a, b) => order(a) - order(b) || a.code.localeCompare(b.code));
 }
 
 function send(socket, msg) {

@@ -111,6 +111,14 @@ export function roomLink(code) {
   return url.toString();
 }
 
+/** Strona z listą aktywnych pokoi (z zachowaniem ?server=, jeśli był). */
+export function roomsPage() {
+  const url = new URL('/pokoje', location.href);
+  const server = new URLSearchParams(location.search).get('server');
+  if (server) url.searchParams.set('server', server);
+  return url.toString();
+}
+
 /** Ustawia (albo czyści, gdy code = null) kod pokoju w pasku adresu, bez przeładowania strony. */
 export function showRoomInAddressBar(code) {
   try {

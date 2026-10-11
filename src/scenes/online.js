@@ -1,7 +1,7 @@
 // Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
 import { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } from '../config.js';
-import { joinRoom, roomLink, serverUrl, showRoomInAddressBar } from '../net/client.js';
+import { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } from '../net/client.js';
 import { normalizeCode, randomCode } from '../net/protocol.js';
 import { attachSession, leaveOnline } from '../modes/online.js';
 import { drawText } from '../render/text.js';
@@ -97,7 +97,13 @@ export function createOnlineScene(app) {
         h('button', { type: 'button', onclick: () => go(false), disabled: !server }, 'DOŁĄCZ'),
       ),
       message,
-      h('div', { className: 'buttons' }, h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ')),
+      h(
+        'div',
+        { className: 'buttons' },
+        h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ'),
+        // Lista pokoi jest stroną serwera gry, więc tylko gdy gra przyszła z serwera (nie z dysku)
+        server && location.protocol !== 'file:' && h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, 'LISTA POKOI'),
+      ),
     );
     app.overlay.show(panel);
     name.select();

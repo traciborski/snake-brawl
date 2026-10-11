@@ -38,6 +38,7 @@ Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
 - **W internecie:** gra i serwer pokoi razem na Cloudflare Workers. Cloudflare sam buduje
   i wystawia grę po każdym pushu na `main` (instrukcja: [docs/04-WYSTAWIENIE.md](docs/04-WYSTAWIENIE.md)).
   Repo może zostać prywatne.
+- **Lista otwartych pokoi:** `adres-gry/pokoje` (w grze przycisk *Lista pokoi*).
 
 ## Dokumentacja
 

@@ -100,6 +100,9 @@ do gry przez internet.
 - **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`) oraz link zaproszenia
   (`adres-gry/?pokoj=KOT7`, przycisk *Kopiuj link*). Kto otworzy link, od razu widzi zaproszenie:
   wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
+- **Lista pokoi** (`adres-gry/pokoje`, w grze przycisk *Lista pokoi*): wszystkie otwarte pokoje
+  z kodem, graczami i stanem (poczekalnia albo trwający mecz z numerem rundy). Przycisk *Dołącz*
+  otwiera zaproszenie do pokoju, pełne pokoje są oznaczone. Lista odświeża się sama co kilka sekund.
 - 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników
   (wszyscy przechodzą dalej w tym samym momencie).
 - **Dołączanie w trakcie meczu:** kto wejdzie do pokoju, gdy trwa mecz (i jest wolne miejsce),

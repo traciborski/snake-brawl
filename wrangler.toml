@@ -7,7 +7,7 @@ compatibility_date = "2025-09-01"
 [build]
 command = "node scripts/build.js --site"
 
-# Pliki gry serwowane z tego samego adresu co pokoje (/room/KOD trafia do workera)
+# Pliki gry serwowane z tego samego adresu co pokoje (/room/KOD i /api/pokoje trafiają do workera)
 [assets]
 directory = "./site"
 
@@ -16,7 +16,16 @@ directory = "./site"
 name = "ROOMS"
 class_name = "RoomObject"
 
+# Jeden Durable Object z listą aktywnych pokoi (strona /pokoje)
+[[durable_objects.bindings]]
+name = "ROOM_LIST"
+class_name = "RoomListObject"
+
 # Darmowy plan wymaga Durable Objects z SQLite
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RoomObject"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RoomListObject"]

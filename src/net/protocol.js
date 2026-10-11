@@ -4,6 +4,8 @@
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 4;
 export const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+/** Lista aktywnych pokoi (JSON) dla strony /pokoje. */
+export const ROOMS_API = '/api/pokoje';
 
 /** Losowy kod pokoju, np. „KOT7”. */
 export function randomCode(random = Math.random) {

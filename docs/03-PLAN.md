@@ -88,6 +88,13 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Lockstep i liczba węży w rundzie zależą od rundy dołączenia gracza
 - **Testy:** logika pokoju, lockstep, symulacja 3 klientów z opóźnieniami (identyczny stan).
 
+## Krok 13: Lista aktywnych pokoi
+- [x] `pokoje.html`: kod, gracze, stan pokoju, *Dołącz*, odświeżanie co 3 s, wygląda dobrze na telefonie
+- [x] `GET /api/pokoje`: lokalnie z pamięci, na Cloudflare z Durable Object z listą (zgłoszenia + wygasanie)
+- [x] Przycisk *Lista pokoi* w formularzu gry przez internet
+- **Testy:** opis pokoju i zmiany, kolejność listy, wygasanie wpisów, endpoint lokalny i workera.
+  ✅ Sprawdzone w `wrangler dev` i w przeglądarce (dwa pokoje, dołączenie z listy, wyjście gracza).
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony
