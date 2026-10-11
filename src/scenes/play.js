@@ -15,6 +15,7 @@ export function createPlayScene(app) {
     enter() {
       paused = false;
       endTimer = 0;
+      app.controller.startRound?.(app.match.round);
     },
 
     update() {
@@ -34,13 +35,19 @@ export function createPlayScene(app) {
       }
 
       // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
-      // null = jeszcze nie ma ruchów wszystkich graczy na ten tick, więc czekamy.
-      const commands = app.controller.commands();
-      if (!commands) return;
-      const events = stepRound(app.round, commands);
-      app.effects.handle(events, app.players);
-      app.audio.handle(events);
-      if (app.round.result) endTimer = AFTER_ROUND_TICKS;
+      // null = jeszcze nie ma ruchów wszystkich graczy na tę klatkę, więc czekamy.
+      app.controller.beforeTick?.();
+      for (let i = 0; i < (app.controller.maxSteps ?? 1); i++) {
+        const commands = app.controller.commands();
+        if (!commands) return;
+        const events = stepRound(app.round, commands);
+        app.effects.handle(events, app.players);
+        app.audio.handle(events);
+        if (app.round.result) {
+          endTimer = AFTER_ROUND_TICKS;
+          return;
+        }
+      }
     },
 
     render() {

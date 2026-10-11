@@ -21,7 +21,8 @@ export function createMatchEndScene(app) {
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
       if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(app.players[app.match.winner].color);
-      if (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm)) app.controller.rematch();
+      const auto = app.controller.matchEndTicks && ticks >= app.controller.matchEndTicks;
+      if (auto || (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm))) app.controller.rematch();
     },
 
     render() {

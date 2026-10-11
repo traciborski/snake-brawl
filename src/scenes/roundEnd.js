@@ -6,7 +6,7 @@ import { blink, dimScreen, drawPanel, drawScore, drawText } from '../render/text
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
-const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę' };
+const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę', left: 'Rywal wyszedł z gry' };
 
 /**
  * @param {import('../game/types.js').RoundState} round
@@ -29,7 +29,11 @@ export function createRoundEndScene(app) {
   let ticks = 0;
   let info = { title: '', subtitle: '', color: COLORS.text, detail: '' };
 
-  const next = () => app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
+  const next = () => {
+    // Online: gdy w pokoju zostało mniej niż dwóch graczy, mecz kończy się powrotem do poczekalni
+    if (app.controller.shouldEndMatch?.()) return app.controller.rematch();
+    app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
+  };
 
   return {
     enter() {

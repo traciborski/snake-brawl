@@ -15,7 +15,7 @@ export function h(tag, props = {}, ...children) {
     else if (key in el) el[key] = value;
     else el.setAttribute(key, value);
   }
-  el.append(...children.flat().filter((c) => c != null));
+  el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
 
@@ -34,7 +34,9 @@ export class Overlay {
     this.el.className = `overlay ${position}`;
     this.el.replaceChildren(content);
     this.el.hidden = false;
-    /** @type {HTMLElement | null} */ (content.querySelector('[autofocus], input, button'))?.focus();
+    // Najpierw element z autofocus (o ile aktywny), potem pierwsze pole albo aktywny przycisk
+    const target = content.querySelector('[autofocus]:not(:disabled)') ?? content.querySelector('input, button:not(:disabled)');
+    /** @type {HTMLElement | null} */ (target)?.focus();
   }
 
   hide() {

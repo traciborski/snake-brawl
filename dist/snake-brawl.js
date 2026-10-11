@@ -44,6 +44,10 @@ const app = {
   /** @type {import('./game/types.js').RoundState | null} */
   round: null,
   roundNumber: 0,
+  /** @type {import('./net/client.js').Session | null} sesja w pokoju gry online */
+  session: null,
+  /** @type {((lobby: any) => void) | null} */
+  onLobby: null,
   /** @type {{ name: string, color: string }[]} */
   players: DEFAULT_NAMES.slice(0, 2).map((name, i) => ({ name, color: PLAYER_COLORS[i] })),
   /** Tryb gry: skąd biorą się komendy, co robi Esc i rewanż (offline albo online) */
@@ -155,6 +159,11 @@ const KEYMAPS = [
   },
 ];
 
+// Adres serwera gry online (Cloudflare Workers), uzupełniany po wystawieniu, np.
+// 'wss://snake-brawl.twoje-konto.workers.dev'. Przy `npm start` gra łączy się z lokalnym
+// serwerem, a adres można też podać w linku: index.html?server=wss://...
+const ONLINE_SERVER = '';
+
 // Klawisze globalne
 const KEYS = {
   confirm: ['Space', 'Enter', 'NumpadEnter'],
@@ -183,7 +192,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, MAX_PLAYERS, OFFLINE_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, MAX_PLAYERS, OFFLINE_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -869,7 +878,7 @@ function h(tag, props = {}, ...children) {
     else if (key in el) el[key] = value;
     else el.setAttribute(key, value);
   }
-  el.append(...children.flat().filter((c) => c != null));
+  el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
 
@@ -888,7 +897,9 @@ class Overlay {
     this.el.className = `overlay ${position}`;
     this.el.replaceChildren(content);
     this.el.hidden = false;
-    /** @type {HTMLElement | null} */ (content.querySelector('[autofocus], input, button'))?.focus();
+    // Najpierw element z autofocus (o ile aktywny), potem pierwsze pole albo aktywny przycisk
+    const target = content.querySelector('[autofocus]:not(:disabled)') ?? content.querySelector('input, button:not(:disabled)');
+    /** @type {HTMLElement | null} */ (target)?.focus();
   }
 
   hide() {
@@ -1103,36 +1114,510 @@ Object.assign(__exports, { createOfflineController });
 
 // ---- src/scenes/online.js ----
 __factories["src/scenes/online.js"] = function (__exports) {
-// Gra przez internet: na razie zaślepka (krok 2 planu).
+// Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
-const { PLAYER_COLORS, VIEW_W } = __require("src/config.js");
+const { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
+const { joinRoom, serverUrl } = __require("src/net/client.js");
+const { normalizeCode, randomCode } = __require("src/net/protocol.js");
+const { attachSession, leaveOnline } = __require("src/modes/online.js");
 const { drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
+const { load, save } = __require("src/ui/storage.js");
+const { cleanName } = __require("src/scenes/setup.js");
+
+/** Ile razy próbujemy nowego kodu, gdy wylosowany jest zajęty. */
+const CREATE_ATTEMPTS = 5;
 
 /** @param {any} app */
 function createOnlineScene(app) {
-  return {
-    enter() {
-      const panel = h(
+  let busy = false;
+
+  /** Formularz: imię + utwórz / dołącz. */
+  function showForm(error = '') {
+    const server = serverUrl();
+    const name = h('input', {
+      value: load('onlineName', load('names', DEFAULT_NAMES)[0]),
+      maxLength: NAME_MAX,
+      'aria-label': 'Twoje imię',
+    });
+    const code = h('input', { placeholder: 'KOD', maxLength: 4, 'aria-label': 'Kod pokoju', style: { width: '6em', textTransform: 'uppercase' } });
+    const message = h('p', { className: 'hint error' }, error || (server ? '' : 'Serwer gry online nie jest jeszcze ustawiony.'));
+
+    const go = async (create) => {
+      if (busy || !server) return;
+      const playerName = cleanName(name.value, 0);
+      save('onlineName', playerName);
+      const joinCode = create ? null : normalizeCode(code.value);
+      if (!create && !joinCode) {
+        message.textContent = 'Wpisz 4-znakowy kod pokoju';
+        code.focus();
+        return;
+      }
+      busy = true;
+      message.textContent = create ? 'Tworzę pokój…' : 'Łączę…';
+      try {
+        let session = null;
+        for (let i = 0; !session; i++) {
+          try {
+            session = await joinRoom(server, create ? randomCode() : joinCode, playerName, create);
+          } catch (err) {
+            if (!(create && err.code === 'exists' && i < CREATE_ATTEMPTS)) throw err;
+          }
+        }
+        attachSession(app, session);
+        showLobby();
+      } catch (err) {
+        message.textContent = err?.msg ?? 'Coś poszło nie tak';
+      } finally {
+        busy = false;
+      }
+    };
+
+    const panel = h(
+      'form',
+      {
+        className: 'panel',
+        onsubmit: (e) => {
+          e.preventDefault();
+          go(!code.value.trim());
+        },
+        onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu'),
+      },
+      h('h2', {}, 'GRA PRZEZ INTERNET'),
+      h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
+      h(
         'div',
-        { className: 'panel', onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu') },
-        h('h2', {}, 'GRA PRZEZ INTERNET'),
-        h('p', { className: 'hint' }, 'Już wkrótce.'),
-        h('div', { className: 'buttons' }, h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ')),
-      );
-      app.overlay.show(panel);
+        { className: 'buttons' },
+        h('button', { type: 'button', onclick: () => go(true), disabled: !server }, 'UTWÓRZ POKÓJ'),
+      ),
+      h('p', { className: 'hint' }, 'albo dołącz do znajomych:'),
+      h(
+        'div',
+        { className: 'row', style: { justifyContent: 'center' } },
+        code,
+        h('button', { type: 'button', onclick: () => go(false), disabled: !server }, 'DOŁĄCZ'),
+      ),
+      message,
+      h('div', { className: 'buttons' }, h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ')),
+    );
+    app.overlay.show(panel);
+    name.select();
+  }
+
+  /** Poczekalnia: kod pokoju, lista graczy, start dla założyciela. */
+  function showLobby() {
+    const lobby = app.session?.lobby;
+    if (!lobby) return showForm();
+    const isHost = lobby.host === lobby.you;
+    const canStart = lobby.players.length >= 2;
+
+    const rows = lobby.players.map((p, i) =>
+      h(
+        'div',
+        { className: 'row' },
+        h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
+        h('span', { style: { color: PLAYER_COLORS[i] } }, p.name),
+        h('small', {}, [p.id === lobby.host ? '★ założyciel' : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
+      ),
+    );
+
+    const panel = h(
+      'div',
+      { className: 'panel', onkeydown: (e) => e.code === 'Escape' && leaveOnline(app) },
+      h('h2', {}, `POKÓJ  ${lobby.code}`),
+      h('p', { className: 'hint' }, 'Podaj ten kod znajomym, żeby dołączyli.'),
+      rows,
+      h('p', { className: 'hint' }, `${lobby.players.length} / ${MAX_PLAYERS} graczy`),
+      h(
+        'div',
+        { className: 'buttons' },
+        h('button', { type: 'button', onclick: () => leaveOnline(app) }, 'WYJDŹ'),
+        isHost && h('button', { type: 'button', autofocus: true, disabled: !canStart, onclick: () => app.session?.send({ t: 'start' }) }, 'START'),
+      ),
+      h(
+        'p',
+        { className: 'hint' },
+        isHost ? (canStart ? 'Kliknij START, gdy wszyscy są.' : 'Czekamy na co najmniej jednego gracza…') : 'Czekamy, aż założyciel zacznie mecz…',
+      ),
+    );
+    app.overlay.show(panel);
+  }
+
+  return {
+    /** @param {{ lobby?: boolean, error?: string }} [params] */
+    enter(params = {}) {
+      app.onLobby = () => showLobby();
+      if (params.lobby && app.session) showLobby();
+      else showForm(params.error);
     },
+
     exit() {
+      app.onLobby = null;
       app.overlay.hide();
     },
+
     render() {
       app.renderer.begin();
-      drawText(app.renderer.ctx, 'GRA PRZEZ INTERNET', VIEW_W / 2, 80, { size: 20, color: PLAYER_COLORS[1], glow: 12 });
+      drawText(app.renderer.ctx, 'GRA PRZEZ INTERNET', VIEW_W / 2, 70, { size: 20, color: PLAYER_COLORS[1], glow: 12 });
+      drawText(app.renderer.ctx, '2–4 graczy, każdy na swoim komputerze', VIEW_W / 2, 105, { size: 10, color: '#7a80a8' });
     },
   };
 }
 
 Object.assign(__exports, { createOnlineScene });
+};
+
+// ---- src/net/client.js ----
+__factories["src/net/client.js"] = function (__exports) {
+// Połączenie z serwerem pokoi (WebSocket) i wybór adresu serwera.
+
+const { ONLINE_SERVER } = __require("src/config.js");
+
+const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.+\.local)$/;
+
+/**
+ * Adres serwera: z linku (?server=…), lokalny przy `npm start`, a w internecie z config.js.
+ * @returns {string | null}
+ */
+function serverUrl() {
+  const fromLink = new URLSearchParams(location.search).get('server');
+  if (fromLink) return fromLink.replace(/\/+$/, '');
+  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if (isHttp && LOCAL_HOST_RE.test(location.hostname)) {
+    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+  }
+  return ONLINE_SERVER || null;
+}
+
+/**
+ * Sesja w pokoju gry. Po połączeniu `onMessage` dostaje wszystkie wiadomości serwera.
+ * @typedef {object} Session
+ * @property {string} code
+ * @property {any} lobby                  ostatni stan poczekalni
+ * @property {(msg: object) => void} send
+ * @property {() => void} close
+ * @property {((msg: any) => void) | null} onMessage
+ * @property {(() => void) | null} onClose  zerwanie połączenia (nie wywoływane po close())
+ */
+
+/**
+ * Łączy z pokojem. Kończy się po pierwszym stanie poczekalni albo błędem
+ * (np. { code: 'exists' | 'missing' | 'full' | 'playing' | 'network', msg }).
+ * @returns {Promise<Session>}
+ */
+function joinRoom(baseUrl, code, name, create) {
+  return new Promise((resolve, reject) => {
+    const networkError = { code: 'network', msg: 'Nie udało się połączyć z serwerem gry' };
+    /** @type {WebSocket} */
+    let ws;
+    try {
+      ws = new WebSocket(`${baseUrl}/room/${code}`);
+    } catch {
+      reject(networkError);
+      return;
+    }
+
+    let settled = false;
+    let closing = false;
+    /** @type {Session} */
+    const session = {
+      code,
+      lobby: null,
+      onMessage: null,
+      onClose: null,
+      send: (msg) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      },
+      close: () => {
+        closing = true;
+        ws.close();
+      },
+    };
+
+    ws.onopen = () => session.send({ t: 'hello', name, create });
+    ws.onmessage = (e) => {
+      let msg;
+      try {
+        msg = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (msg.t === 'lobby') session.lobby = msg;
+      if (!settled) {
+        if (msg.t === 'lobby') {
+          settled = true;
+          resolve(session);
+        } else if (msg.t === 'error') {
+          settled = true;
+          reject(msg);
+        }
+        return;
+      }
+      session.onMessage?.(msg);
+    };
+    ws.onclose = () => {
+      if (!settled) {
+        settled = true;
+        reject(networkError);
+      } else if (!closing) {
+        session.onClose?.();
+      }
+    };
+  });
+}
+
+Object.assign(__exports, { serverUrl, joinRoom });
+};
+
+// ---- src/net/protocol.js ----
+__factories["src/net/protocol.js"] = function (__exports) {
+// Wspólne dla gry i serwera: kody pokoi i zapis komend w wiadomościach sieciowych.
+
+/** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_LENGTH = 4;
+const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+
+/** Losowy kod pokoju, np. „KOT7”. */
+function randomCode(random = Math.random) {
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)];
+  return code;
+}
+
+/** Kod wpisany przez gracza: wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
+function normalizeCode(raw) {
+  const code = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
+  return ROOM_PATH_RE.test(`/room/${code}`) ? code : null;
+}
+
+const DIR_TO_CHAR = { up: 'u', down: 'd', left: 'l', right: 'r' };
+const CHAR_TO_DIR = { u: 'up', d: 'down', l: 'left', r: 'right' };
+
+/**
+ * Komenda gry → zwarta postać do wiadomości: { d: 'ul', s: 1 } (max 3 skręty).
+ * @param {import('../game/types.js').Command} cmd
+ */
+function encodeCommand(cmd) {
+  const d = (cmd.turns ?? []).slice(0, 3).map((t) => DIR_TO_CHAR[t]).join('');
+  return { d, s: cmd.shoot ? 1 : 0 };
+}
+
+/** @returns {import('../game/types.js').Command} */
+function decodeCommand({ d = '', s = 0 }) {
+  return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
+}
+
+Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, randomCode, normalizeCode, encodeCommand, decodeCommand });
+};
+
+// ---- src/modes/online.js ----
+__factories["src/modes/online.js"] = function (__exports) {
+// Gra przez internet: komendy wszystkich graczy przez serwer (lockstep).
+
+const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
+const { createMatch } = __require("src/game/match.js");
+const { Lockstep } = __require("src/net/lockstep.js");
+const { drawPanel, drawText } = __require("src/render/text.js");
+
+/** Ile ticków przestoju, zanim pokażemy „czekam na…” (żeby nie migało przy zwykłym pingu). */
+const STALL_NOTICE = 10;
+
+/**
+ * Podłącza sesję do aplikacji: obsługuje start meczu, ruchy i rozłączenia.
+ * @param {any} app @param {import('../net/client.js').Session} session
+ */
+function attachSession(app, session) {
+  app.session = session;
+  session.onMessage = (msg) => {
+    if (msg.t === 'start') startMatch(app, session, msg);
+    else if (msg.t === 'lobby') app.onLobby?.(msg);
+    else app.controller.receive?.(msg);
+  };
+  session.onClose = () => {
+    app.session = null;
+    app.scenes.go('online', { error: 'Połączenie z serwerem zostało zerwane' });
+  };
+}
+
+/** Wyjście z pokoju i powrót do menu. */
+function leaveOnline(app) {
+  app.session?.close();
+  app.session = null;
+  app.scenes.go('menu');
+}
+
+function startMatch(app, session, { seed, players }) {
+  const me = players.findIndex((p) => p.id === session.lobby?.you);
+  app.players = players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.match = createMatch(seed, players.length);
+  app.controller = createOnlineController(app, session, me);
+  app.scenes.go('countdown');
+}
+
+/** @param {any} app @param {import('../net/client.js').Session} session @param {number} me */
+function createOnlineController(app, session, me) {
+  const lock = new Lockstep(app.players.length, me);
+  let stalled = 0;
+
+  return {
+    canPause: false,
+    canSkip: false,
+    maxSteps: 4, // kto został w tyle (np. karta była w tle), nadrabia kilka klatek naraz
+    matchEndTicks: 8 * TICKS_PER_SECOND,
+    rematchHint: 'Za chwilę powrót do poczekalni   ESC — wyjście',
+    me,
+
+    receive(msg) {
+      if (msg.t === 'input') lock.receive(msg);
+      else if (msg.t === 'left') lock.markLeft(msg.p, msg.r, msg.f);
+    },
+
+    startRound(r) {
+      lock.startRound(r);
+      stalled = 0;
+    },
+
+    /** Raz na tick: wysyłamy własne komendy (z klawiatury tylko pierwszą, przy nadrabianiu puste). */
+    beforeTick() {
+      let first = true;
+      while (lock.canSend()) {
+        session.send(lock.makeInput(first ? app.keyboard.consumeMerged() : {}));
+        first = false;
+      }
+    },
+
+    commands() {
+      const commands = lock.take();
+      stalled = commands ? 0 : stalled + 1;
+      return commands;
+    },
+
+    /** Mniej niż dwóch graczy w pokoju: mecz nie ma sensu, wracamy do poczekalni. */
+    shouldEndMatch: () => lock.activePlayers() < 2,
+
+    drawStatus(ctx) {
+      if (stalled < STALL_NOTICE) return;
+      const names = lock.waitingFor().map((p) => app.players[p].name);
+      if (!names.length) return;
+      drawPanel(ctx, VIEW_W / 2, BOARD_Y + 30, 520, 40);
+      drawText(ctx, `Czekam na: ${names.join(', ')}`, VIEW_W / 2, BOARD_Y + 30, { size: 10, color: COLORS.text });
+    },
+
+    leave: () => leaveOnline(app),
+
+    rematch() {
+      session.send({ t: 'lobby' });
+      app.scenes.go('online', { lobby: true });
+    },
+  };
+}
+
+Object.assign(__exports, { attachSession, leaveOnline, createOnlineController });
+};
+
+// ---- src/net/lockstep.js ----
+__factories["src/net/lockstep.js"] = function (__exports) {
+// Lockstep: każdy komputer liczy tę samą symulację z tych samych komend.
+// Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
+// żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
+// Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
+
+const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
+
+const INPUT_DELAY = 3; // 150 ms
+
+class Lockstep {
+  /** @param {number} players liczba graczy @param {number} me mój numer gracza */
+  constructor(players, me) {
+    this.players = players;
+    this.me = me;
+    /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
+    this.buffer = new Map();
+    /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
+    this.left = new Map();
+    this.round = -1;
+    this.frame = 0;
+    this.sent = 0;
+  }
+
+  /** Początek rundy: pierwsze INPUT_DELAY klatek są puste u wszystkich. */
+  startRound(r) {
+    this.round = r;
+    this.frame = 0;
+    this.sent = INPUT_DELAY;
+    for (const key of this.buffer.keys()) {
+      if (Number(key.split(':')[0]) < r) this.buffer.delete(key);
+    }
+  }
+
+  /** Czy można wysłać kolejną własną komendę (nie wyprzedzamy symulacji o więcej niż opóźnienie). */
+  canSend() {
+    return this.round >= 0 && this.sent <= this.frame + INPUT_DELAY;
+  }
+
+  /** Zapisuje własną komendę na kolejną klatkę i zwraca wiadomość do wysłania. */
+  makeInput(cmd) {
+    const f = this.sent++;
+    const enc = encodeCommand(cmd);
+    this.buffer.set(`${this.round}:${f}:${this.me}`, decodeCommand(enc));
+    return { t: 'input', r: this.round, f, ...enc };
+  }
+
+  /** Komenda innego gracza z serwera (własne echo pomijamy, bo już ją mamy). */
+  receive({ p, r, f, d, s }) {
+    if (p === this.me) return;
+    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s }));
+  }
+
+  /** Gracz się rozłączył: od klatki (r, f) jego wąż ginie. */
+  markLeft(p, r, f) {
+    this.left.set(p, { r, f });
+  }
+
+  isLeft(p, r = this.round, f = this.frame) {
+    const at = this.left.get(p);
+    return !!at && (r > at.r || (r === at.r && f >= at.f));
+  }
+
+  /** Ilu graczy jeszcze gra (nie rozłączyło się). */
+  activePlayers() {
+    let n = 0;
+    for (let p = 0; p < this.players; p++) if (!this.isLeft(p, Infinity, 0)) n++;
+    return n;
+  }
+
+  /** Gracze, na których komendy czekamy w bieżącej klatce. */
+  waitingFor() {
+    const missing = [];
+    for (let p = 0; p < this.players; p++) {
+      if (this.frame < INPUT_DELAY || this.isLeft(p)) continue;
+      if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
+    }
+    return missing;
+  }
+
+  /**
+   * Komendy wszystkich graczy na bieżącą klatkę (i przejście do następnej)
+   * albo null, jeśli czegoś jeszcze brakuje.
+   * @returns {import('../game/types.js').Command[] | null}
+   */
+  take() {
+    if (this.round < 0 || this.waitingFor().length) return null;
+    const { round, frame } = this;
+    const commands = [];
+    for (let p = 0; p < this.players; p++) {
+      const key = `${round}:${frame}:${p}`;
+      if (this.isLeft(p)) commands.push({ quit: true });
+      else commands.push(this.buffer.get(key) ?? {});
+      this.buffer.delete(key);
+    }
+    this.frame++;
+    return commands;
+  }
+}
+
+Object.assign(__exports, { INPUT_DELAY, Lockstep });
 };
 
 // ---- src/scenes/countdown.js ----
@@ -1249,9 +1734,10 @@ function stepRound(state, commands = []) {
   if (state.result) return events;
   state.tick++;
 
-  // 1. Komendy: skręty
+  // 1. Komendy: skręty (i wyjście z gry online: wąż gracza, który się rozłączył, ginie)
   state.snakes.forEach((snake, i) => {
     if (!snake.alive) return;
+    if (commands[i]?.quit) return kill(snake, 'left', null, events);
     for (const dir of commands[i]?.turns ?? []) queueTurn(snake, dir);
   });
 
@@ -1644,7 +2130,7 @@ function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'left'} cause */
 function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;
@@ -2143,7 +2629,7 @@ function drawHud(ctx, round, match, players, roundNumber) {
     ctx.globalAlpha = alpha;
     drawPips(ctx, x, 27, match.wins[i], color, right);
     ctx.restore();
-    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : 'ODPADŁ';
+    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : snake.death === 'left' ? 'WYSZEDŁ' : 'ODPADŁ';
     drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
   });
 
@@ -2174,6 +2660,7 @@ function createPlayScene(app) {
     enter() {
       paused = false;
       endTimer = 0;
+      app.controller.startRound?.(app.match.round);
     },
 
     update() {
@@ -2193,13 +2680,19 @@ function createPlayScene(app) {
       }
 
       // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
-      // null = jeszcze nie ma ruchów wszystkich graczy na ten tick, więc czekamy.
-      const commands = app.controller.commands();
-      if (!commands) return;
-      const events = stepRound(app.round, commands);
-      app.effects.handle(events, app.players);
-      app.audio.handle(events);
-      if (app.round.result) endTimer = AFTER_ROUND_TICKS;
+      // null = jeszcze nie ma ruchów wszystkich graczy na tę klatkę, więc czekamy.
+      app.controller.beforeTick?.();
+      for (let i = 0; i < (app.controller.maxSteps ?? 1); i++) {
+        const commands = app.controller.commands();
+        if (!commands) return;
+        const events = stepRound(app.round, commands);
+        app.effects.handle(events, app.players);
+        app.audio.handle(events);
+        if (app.round.result) {
+          endTimer = AFTER_ROUND_TICKS;
+          return;
+        }
+      }
     },
 
     render() {
@@ -2230,7 +2723,7 @@ const { blink, dimScreen, drawPanel, drawScore, drawText } = __require("src/rend
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
-const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę' };
+const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę', left: 'Rywal wyszedł z gry' };
 
 /**
  * @param {import('../game/types.js').RoundState} round
@@ -2253,7 +2746,11 @@ function createRoundEndScene(app) {
   let ticks = 0;
   let info = { title: '', subtitle: '', color: COLORS.text, detail: '' };
 
-  const next = () => app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
+  const next = () => {
+    // Online: gdy w pokoju zostało mniej niż dwóch graczy, mecz kończy się powrotem do poczekalni
+    if (app.controller.shouldEndMatch?.()) return app.controller.rematch();
+    app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
+  };
 
   return {
     enter() {
@@ -2322,7 +2819,8 @@ function createMatchEndScene(app) {
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
       if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(app.players[app.match.winner].color);
-      if (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm)) app.controller.rematch();
+      const auto = app.controller.matchEndTicks && ticks >= app.controller.matchEndTicks;
+      if (auto || (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm))) app.controller.rematch();
     },
 
     render() {

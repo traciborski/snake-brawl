@@ -62,12 +62,13 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** 3–4 graczy, ostatni żywy wygrywa, martwy wąż nie blokuje, imiona.
 
 ## Krok 9: Gra przez internet, lokalnie
-- [ ] `server/room.js`: pokoje, poczekalnia, start, przekazywanie ruchów, rozłączenia
-- [ ] Lokalny serwer pokoi w `npm start` (WebSocket bez zależności)
-- [ ] Klient: łączenie, lockstep z opóźnieniem 3 klatek, czekanie na brakujące ruchy
-- [ ] Scena online: utwórz pokój / dołącz kodem, poczekalnia, start, powrót po meczu
+- [x] `server/room.js`: pokoje, poczekalnia, start, przekazywanie ruchów, rozłączenia
+- [x] Lokalny serwer pokoi w `npm start` (WebSocket bez zależności)
+- [x] Klient: łączenie, lockstep z opóźnieniem 3 klatek, czekanie na brakujące ruchy
+- [x] Scena online: utwórz pokój / dołącz kodem, poczekalnia, start, powrót po meczu
 - **Testy:** logika pokoju, bufor lockstep, rozłączenie w trakcie rundy.
 - **Sprawdzenie:** mecz na dwóch kartach przeglądarki przez `npm start`.
+  ✅ Test automatyczny w 3 przeglądarkach: identyczny stan u wszystkich, rozłączenie, rewanż.
 
 ## Krok 10: Wystawienie w internecie
 - [ ] Gra na GitHub Pages (repo publiczne)

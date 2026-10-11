@@ -30,6 +30,10 @@ const app = {
   /** @type {import('./game/types.js').RoundState | null} */
   round: null,
   roundNumber: 0,
+  /** @type {import('./net/client.js').Session | null} sesja w pokoju gry online */
+  session: null,
+  /** @type {((lobby: any) => void) | null} */
+  onLobby: null,
   /** @type {{ name: string, color: string }[]} */
   players: DEFAULT_NAMES.slice(0, 2).map((name, i) => ({ name, color: PLAYER_COLORS[i] })),
   /** Tryb gry: skąd biorą się komendy, co robi Esc i rewanż (offline albo online) */

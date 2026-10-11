@@ -56,9 +56,10 @@ export function stepRound(state, commands = []) {
   if (state.result) return events;
   state.tick++;
 
-  // 1. Komendy: skręty
+  // 1. Komendy: skręty (i wyjście z gry online: wąż gracza, który się rozłączył, ginie)
   state.snakes.forEach((snake, i) => {
     if (!snake.alive) return;
+    if (commands[i]?.quit) return kill(snake, 'left', null, events);
     for (const dir of commands[i]?.turns ?? []) queueTurn(snake, dir);
   });
 

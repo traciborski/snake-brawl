@@ -68,6 +68,11 @@ export const KEYMAPS = [
   },
 ];
 
+// Adres serwera gry online (Cloudflare Workers), uzupełniany po wystawieniu, np.
+// 'wss://snake-brawl.twoje-konto.workers.dev'. Przy `npm start` gra łączy się z lokalnym
+// serwerem, a adres można też podać w linku: index.html?server=wss://...
+export const ONLINE_SERVER = '';
+
 // Klawisze globalne
 export const KEYS = {
   confirm: ['Space', 'Enter', 'NumpadEnter'],

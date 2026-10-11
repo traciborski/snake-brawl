@@ -51,7 +51,7 @@ export function drawHud(ctx, round, match, players, roundNumber) {
     ctx.globalAlpha = alpha;
     drawPips(ctx, x, 27, match.wins[i], color, right);
     ctx.restore();
-    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : 'ODPADŁ';
+    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : snake.death === 'left' ? 'WYSZEDŁ' : 'ODPADŁ';
     drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
   });
 

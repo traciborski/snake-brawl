@@ -14,7 +14,7 @@
  * @property {number} cooldown   ticki do kolejnego strzału
  * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive
- * @property {null | 'shot' | 'wall'} death   przyczyna śmierci
+ * @property {null | 'shot' | 'wall' | 'left'} death   przyczyna śmierci (left = rozłączenie online)
  */
 
 /** @typedef {{ owner: number, pos: Pos, dir: Dir }} Bullet */
@@ -34,7 +34,7 @@
  * @property {RoundResult | null} result
  */
 
-/** @typedef {{ turns?: Dir[], shoot?: boolean }} Command */
+/** @typedef {{ turns?: Dir[], shoot?: boolean, quit?: boolean }} Command */
 
 /**
  * Zdarzenia zwracane przez stepRound, czytane przez render i audio.
@@ -46,7 +46,7 @@
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |
  *   { type: 'ate', snake: number, pos: Pos } |
- *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' } |
+ *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'left' } |
  *   { type: 'roundOver', result: RoundResult }
  * )} GameEvent
  */

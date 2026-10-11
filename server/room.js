@@ -1,0 +1,156 @@
+// Pokój gry online: poczekalnia, start meczu, przekazywanie ruchów, rozłączenia.
+// Czysta logika bez sieci: gniazdo to dowolny obiekt z send(tekst) i close().
+// Używają jej lokalny serwer (scripts/serve.js) i Cloudflare (server/worker.js).
+
+import { MAX_PLAYERS, NAME_MAX } from '../src/config.js';
+
+const DIRS_RE = /^[udlr]{0,3}$/;
+
+/** @typedef {{ send(text: string): void, close(): void }} Socket */
+/** @typedef {{ id: number, name: string, socket: Socket }} Member */
+
+export class Room {
+  /** @param {string} code @param {{ random?: () => number }} [opts] */
+  constructor(code, { random = Math.random } = {}) {
+    this.code = code;
+    this.random = random;
+    this.created = false;
+    /** @type {Member[]} kolejność = kolejność dołączenia; pierwszy to założyciel */
+    this.members = [];
+    /** @type {'lobby' | 'game'} */
+    this.phase = 'lobby';
+    /** @type {Member[]} gracze trwającego meczu (indeks = numer gracza w grze) */
+    this.players = [];
+    /** @type {Map<number, { r: number, f: number }>} ostatni przekazany ruch gracza */
+    this.last = new Map();
+    this.nextId = 1;
+  }
+
+  get isEmpty() {
+    return this.members.length === 0;
+  }
+
+  /**
+   * Nowe połączenie. Zwraca obsługę kolejnych wiadomości i zamknięcia.
+   * @param {Socket} socket
+   */
+  connect(socket) {
+    /** @type {Member | null} */
+    let member = null;
+    return {
+      receive: (text) => {
+        const msg = parse(text);
+        if (!msg) return;
+        if (!member) {
+          if (msg.t === 'hello') member = this.join(socket, msg);
+          return;
+        }
+        this.message(member, msg);
+      },
+      closed: () => {
+        if (member) this.leave(member);
+        member = null;
+      },
+    };
+  }
+
+  /** @returns {Member | null} */
+  join(socket, { name, create }) {
+    const reject = (code, msg) => {
+      send(socket, { t: 'error', code, msg });
+      socket.close();
+      return null;
+    };
+    if (create && this.created) return reject('exists', 'Pokój o tym kodzie już istnieje');
+    if (!create && !this.created) return reject('missing', 'Nie ma pokoju o takim kodzie');
+    if (this.phase === 'game') return reject('playing', 'W tym pokoju trwa właśnie mecz');
+    if (this.members.length >= MAX_PLAYERS) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
+
+    this.created = true;
+    const member = { id: this.nextId++, name: cleanName(name), socket };
+    this.members.push(member);
+    this.broadcastLobby();
+    return member;
+  }
+
+  /** @param {Member} member */
+  message(member, msg) {
+    switch (msg.t) {
+      case 'start': {
+        if (this.phase !== 'lobby' || member !== this.members[0] || this.members.length < 2) return;
+        this.phase = 'game';
+        this.players = [...this.members];
+        this.last.clear();
+        const seed = Math.floor(this.random() * 0x100000000) >>> 0;
+        const players = this.players.map((m) => ({ id: m.id, name: m.name }));
+        this.broadcast({ t: 'start', seed, players });
+        return;
+      }
+      case 'input': {
+        const p = this.players.indexOf(member);
+        if (this.phase !== 'game' || p < 0) return;
+        const { r, f, d = '', s = 0 } = msg;
+        if (!Number.isInteger(r) || !Number.isInteger(f) || r < 0 || f < 0) return;
+        if (typeof d !== 'string' || !DIRS_RE.test(d)) return;
+        this.last.set(member.id, { r, f });
+        this.broadcast({ t: 'input', p, r, f, d, s: s ? 1 : 0 });
+        return;
+      }
+      case 'lobby': {
+        // Koniec meczu: wszyscy wracają do poczekalni (wystarczy pierwszy, który o to poprosi)
+        if (this.phase !== 'game') return;
+        this.phase = 'lobby';
+        this.players = [];
+        this.broadcastLobby();
+        return;
+      }
+    }
+  }
+
+  /** @param {Member} member */
+  leave(member) {
+    const i = this.members.indexOf(member);
+    if (i < 0) return;
+    this.members.splice(i, 1);
+
+    const p = this.players.indexOf(member);
+    if (this.phase === 'game' && p >= 0) {
+      // Od pierwszej klatki, której gracz już nie wysłał, jego wąż ginie u wszystkich
+      const last = this.last.get(member.id);
+      const at = last ? { r: last.r, f: last.f + 1 } : { r: 0, f: 0 };
+      this.broadcast({ t: 'left', p, ...at });
+      if (this.members.length === 0) this.phase = 'lobby';
+      return;
+    }
+    if (this.phase === 'lobby') this.broadcastLobby();
+  }
+
+  broadcastLobby() {
+    const players = this.members.map((m) => ({ id: m.id, name: m.name }));
+    const host = this.members[0]?.id ?? null;
+    for (const m of this.members) send(m.socket, { t: 'lobby', code: this.code, you: m.id, host, players });
+  }
+
+  broadcast(msg) {
+    const text = JSON.stringify(msg);
+    for (const m of this.members) m.socket.send(text);
+  }
+}
+
+function send(socket, msg) {
+  socket.send(JSON.stringify(msg));
+}
+
+function parse(text) {
+  try {
+    const msg = JSON.parse(String(text));
+    return msg && typeof msg === 'object' && typeof msg.t === 'string' ? msg : null;
+  } catch {
+    return null;
+  }
+}
+
+export function cleanName(raw) {
+  const name = String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+  return name || 'Gracz';
+}
