@@ -53,3 +53,28 @@ export function drawPanel(ctx, cx, cy, w, h, color = COLORS.border) {
   ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
   ctx.restore();
 }
+
+/**
+ * Wynik meczu w kolorach graczy, np. „2 : 0 : 1” (środek w cx).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number[]} wins
+ * @param {{ color: string }[]} players
+ */
+export function drawScore(ctx, wins, players, cx, y, size = 36) {
+  const parts = [];
+  wins.forEach((w, i) => {
+    if (i > 0) parts.push({ str: ':', color: COLORS.text });
+    parts.push({ str: String(w), color: players[i].color });
+  });
+  ctx.save();
+  ctx.font = `${size}px ${FONT}`;
+  const gap = size * 0.6;
+  const widths = parts.map((p) => ctx.measureText(p.str).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (parts.length - 1);
+  ctx.restore();
+  let x = cx - total / 2;
+  parts.forEach((p, i) => {
+    drawText(ctx, p.str, x + widths[i] / 2, y, { size, color: p.color, glow: p.str === ':' ? 0 : 12 });
+    x += widths[i] + gap;
+  });
+}

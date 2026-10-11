@@ -9,7 +9,7 @@ import { OPPOSITE, dirBetween } from './grid.js';
 
 export const MAX_QUEUED_TURNS = 2;
 
-/** @param {0 | 1} id @param {Pos[]} body @param {Dir} dir @returns {Snake} */
+/** @param {number} id @param {Pos[]} body @param {Dir} dir @returns {Snake} */
 export function createSnake(id, body, dir) {
   return {
     id,

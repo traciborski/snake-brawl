@@ -5,36 +5,41 @@
 
 ## 1. Jedno zdanie
 
-Arcade'owy pojedynek dwóch węży na jednej klawiaturze: rośniesz, zjadając jedzenie,
-strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi rywala w głowę
-(albo komu rywal wjedzie w czerwoną ścianę).
+Arcade'owa walka węży, we dwóch na jednej klawiaturze albo w 2–4 osoby przez internet:
+rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni
+żywy wąż (strzał w głowę i czerwona ściana eliminują).
 
 ## 2. Ustalenia
 
 | Obszar     | Decyzja                                                  |
 |------------|----------------------------------------------------------|
 | Baza       | Rozwijamy pomysł Snake Brawl, kod piszemy od nowa        |
-| Gracze     | 2 graczy lokalnie, jedna klawiatura                      |
+| Gracze     | Offline: 2 na jednej klawiaturze. Online: 2–4, każdy na swoim komputerze |
 | Platforma  | Przeglądarka na PC, klawiatura                           |
 | Klimat     | Arcade dla wszystkich: szybko, rywalizacja, krótkie rundy |
 | Styl       | Pikselowa kratka z neonową poświatą na ciemnym tle       |
 | Język UI   | Polski                                                   |
 
-## 3. Bohaterowie i sterowanie
+## 3. Gracze i sterowanie
 
-| Gracz | Kolor              | Ruch       | Strzał   |
-|-------|--------------------|------------|----------|
-| Leon  | żółty `#FFD700`    | `W A S D`  | `Spacja` |
-| Hugo  | cyjan `#00E5FF`    | strzałki   | `Enter`  |
+- Na starcie każdy gracz wpisuje imię (do 12 znaków). Gra je zapamiętuje.
+- Kolory graczy według kolejności: żółty `#FFD700`, cyjan `#00E5FF`, zielony `#39FF14`,
+  pomarańczowy `#FF9100` (żaden nie myli się ze ścianami ani jedzeniem).
+
+| Tryb    | Gracz 1             | Gracz 2            |
+|---------|---------------------|--------------------|
+| Offline | `W A S D` + `Spacja` | strzałki + `Enter` |
+| Online  | każdy steruje swoim wężem dowolnym z tych zestawów | |
 
 ## 4. Mecz i runda
 
-1. **Menu**: start meczu, ekran sterowania.
-2. **Odliczanie** 3-2-1, węże startują w przeciwległych rogach planszy, długość 3.
-3. **Runda** nie ma limitu czasu: trwa, aż któryś wąż zginie.
+1. **Menu**: wybór trybu (jeden komputer / internet), potem imiona.
+2. **Odliczanie** 3-2-1, węże startują w rogach planszy (przy dwóch graczach w przeciwległych), długość 3.
+3. **Runda** nie ma limitu czasu: trwa, aż zostanie najwyżej jeden żywy wąż.
 4. **Wynik rundy**:
-   - jeden wąż zginął (strzał w głowę albo czerwona ściana), więc wygrywa drugi;
-   - obaj zginęli w tym samym momencie, więc jest remis.
+   - wąż ginie od strzału w głowę albo czerwonej ściany i dalej tylko ogląda;
+   - ostatni żywy wygrywa rundę;
+   - jeśli ostatni odpadną w tym samym momencie, jest remis.
 5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
    i rewanż jednym klawiszem.
 
@@ -68,7 +73,9 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 
 **Labirynt**
-- Generowany losowo, ale symetrycznie (obrót o 180° wokół środka), żeby oba spawny były w identycznej sytuacji.
+- Generowany losowo, ale symetrycznie w obu osiach, żeby wszystkie cztery rogi były w identycznej sytuacji.
+- Na środku górnego i dolnego brzegu stoją stałe czarne osłony: węże z sąsiednich rogów
+  startują w tym samym rzędzie i nie mogą mieć się od razu na muszce.
 - Okolice spawnów są zawsze wolne, a każde wolne pole jest osiągalne (licząc przejścia przez portale).
 
 ## 6. Styl i oprawa
@@ -77,9 +84,20 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 - Efekty: eksplozje cząsteczek, potrząsanie ekranem przy trafieniu i odbiciu, błysk przy teleporcie.
 - Dźwięk: krótkie efekty (strzał, jedzenie, trafienie, śmierć), na razie bez muzyki.
 
-## 7. Poza pierwszą wersją (później)
+## 7. Gra przez internet
+
+- **Gra** stoi na GitHub Pages: wchodzisz na link i grasz, bez instalowania.
+- **Mały serwer pośredniczący** (Cloudflare Workers) przekazuje ruchy między graczami.
+- **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`), reszta klika *Dołącz*
+  i wpisuje kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
+- 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników
+  (wszyscy przechodzą dalej w tym samym momencie).
+- Rozłączenie: wąż gracza ginie, reszta gra dalej.
+- Po meczu wszyscy wracają do poczekalni, skąd założyciel może zacząć rewanż.
+
+## 8. Poza pierwszą wersją (później)
 
 - Power-upy: przyspieszenie, tarcza, potrójny strzał, duch.
 - Bot (AI) jako tryb treningowy.
 - Muzyka, kilka gotowych map, ustawienia meczu.
-- Gra online, wersja mobilna, tabele wyników.
+- Wersja mobilna, tabele wyników, rollback w grze online.

@@ -1,6 +1,6 @@
 // Węże, pociski i owoce. Każda grupa to jedna ścieżka = jedna operacja poświaty.
 
-import { BOARD_Y, CELL, COLORS, PLAYERS } from '../config.js';
+import { BOARD_Y, CELL, COLORS } from '../config.js';
 import { DIR_VEC } from '../game/grid.js';
 
 /** @typedef {import('../game/types.js').Snake} Snake */
@@ -12,9 +12,9 @@ const py = (p) => BOARD_Y + p.y * CELL;
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {Snake} snake
+ * @param {string} color
  */
-export function drawSnake(ctx, snake) {
-  const color = PLAYERS[snake.id].color;
+export function drawSnake(ctx, snake, color) {
 
   ctx.save();
   ctx.globalAlpha = snake.alive ? 1 : 0.35;
@@ -53,10 +53,10 @@ export function drawSnake(ctx, snake) {
   ctx.restore();
 }
 
-/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
-export function drawBullets(ctx, round) {
+/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round @param {{ color: string }[]} players */
+export function drawBullets(ctx, round, players) {
   for (const b of round.bullets) {
-    const color = PLAYERS[b.owner].color;
+    const color = players[b.owner].color;
     const v = DIR_VEC[b.dir];
     const x = px(b.pos);
     const y = py(b.pos);

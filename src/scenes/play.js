@@ -19,9 +19,9 @@ export function createPlayScene(app) {
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
-      if (k.consumePressed(KEYS.pause) && !app.round.result) paused = !paused;
+      if (k.consumePressed(KEYS.pause) && app.controller.canPause && !app.round.result) paused = !paused;
 
       if (paused) {
         k.consumeCommands();
@@ -33,14 +33,19 @@ export function createPlayScene(app) {
         return;
       }
 
-      const events = stepRound(app.round, k.consumeCommands());
-      app.effects.handle(events);
+      // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
+      // null = jeszcze nie ma ruchów wszystkich graczy na ten tick, więc czekamy.
+      const commands = app.controller.commands();
+      if (!commands) return;
+      const events = stepRound(app.round, commands);
+      app.effects.handle(events, app.players);
       app.audio.handle(events);
       if (app.round.result) endTimer = AFTER_ROUND_TICKS;
     },
 
     render() {
       drawRoundView(app, performance.now());
+      app.controller.drawStatus?.(app.renderer.ctx);
       if (paused) {
         const { ctx } = app.renderer;
         const cy = BOARD_Y + (GRID_H * CELL) / 2;

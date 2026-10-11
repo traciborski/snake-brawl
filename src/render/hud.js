@@ -1,14 +1,15 @@
-// Pasek nad planszą: gracze, wygrane rundy, długość, amunicja, numer rundy.
+// Pasek nad planszą: 2–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// Gracze 0 i 2 po lewej, 1 i 3 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
 
-import { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } from '../config.js';
+import { COLORS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
 /** @typedef {import('../game/match.js').MatchState} MatchState */
 
 function drawPips(ctx, x, y, wins, color, alignRight) {
-  const size = 12;
-  const gap = 6;
+  const size = 10;
+  const gap = 5;
   for (let i = 0; i < WINS_TO_MATCH; i++) {
     const offset = i * (size + gap);
     const px = alignRight ? x - offset - size : x + offset;
@@ -27,29 +28,34 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
   }
 }
 
+const SLOT_X = [16, 216];
+
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {RoundState} round
  * @param {MatchState} match
+ * @param {{ name: string, color: string }[]} players
  * @param {number} roundNumber
  */
-export function drawHud(ctx, round, match, roundNumber) {
-  const mid = HUD_H / 2;
-  const [leon, hugo] = round.snakes;
+export function drawHud(ctx, round, match, players, roundNumber) {
+  round.snakes.forEach((snake, i) => {
+    const right = i % 2 === 1;
+    const offset = SLOT_X[Math.floor(i / 2)];
+    const x = right ? VIEW_W - offset : offset;
+    const align = right ? 'right' : 'left';
+    const { name, color } = players[i];
+    const alpha = snake.alive ? 1 : 0.4;
 
-  // Leon po lewej
-  drawText(ctx, PLAYERS[0].name.toUpperCase(), 20, mid - 10, { size: 16, color: PLAYERS[0].color, align: 'left', glow: 8 });
-  drawPips(ctx, 20, mid + 6, match.wins[0], PLAYERS[0].color, false);
-  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid - 9, { size: 12, color: COLORS.dim, align: 'left' });
-  drawText(ctx, `AMMO ${leon.ammo}`, 200, mid + 11, { size: 10, color: COLORS.dim, align: 'left' });
-
-  // Hugo po prawej
-  drawText(ctx, PLAYERS[1].name.toUpperCase(), VIEW_W - 20, mid - 10, { size: 16, color: PLAYERS[1].color, align: 'right', glow: 8 });
-  drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
-  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid - 9, { size: 12, color: COLORS.dim, align: 'right' });
-  drawText(ctx, `AMMO ${hugo.ammo}`, VIEW_W - 200, mid + 11, { size: 10, color: COLORS.dim, align: 'right' });
+    drawText(ctx, name.toUpperCase(), x, 16, { size: 14, color, align, glow: snake.alive ? 8 : 0, alpha });
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawPips(ctx, x, 27, match.wins[i], color, right);
+    ctx.restore();
+    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : 'ODPADŁ';
+    drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
+  });
 
   // Numer rundy na środku (rundy nie mają limitu czasu)
-  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });
-  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, mid + 16, { size: 8, color: COLORS.dim });
+  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, 22, { size: 14, color: COLORS.text });
+  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, 44, { size: 7, color: COLORS.dim });
 }

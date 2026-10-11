@@ -1,7 +1,7 @@
 // Efekty czysto wizualne: cząsteczki i potrząsanie ekranem.
 // Reagują na zdarzenia z symulacji, ale nigdy nie wpływają na logikę.
 
-import { BOARD_Y, CELL, COLORS, PLAYERS, VIEW_W } from '../config.js';
+import { BOARD_Y, CELL, COLORS, VIEW_W } from '../config.js';
 
 /** @typedef {import('../game/types.js').GameEvent} GameEvent */
 /** @typedef {import('../game/types.js').Pos} Pos */
@@ -45,12 +45,13 @@ export class Effects {
     for (let i = 0; i < 12; i++) this.burst(Math.random() * VIEW_W, 120 + Math.random() * 300, color, 12, 200, 1.2, 5);
   }
 
-  /** @param {GameEvent[]} events */
-  handle(events) {
+  /** @param {GameEvent[]} events @param {{ color: string }[]} players */
+  handle(events, players) {
+    const color = (id) => players[id].color;
     for (const e of events) {
       switch (e.type) {
         case 'shot':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
+          this.burstAt(e.pos, color(e.snake), 6, 80, 0.2, 3);
           break;
         case 'bulletWall':
           this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
@@ -60,21 +61,21 @@ export class Effects {
           this.addShake(3);
           break;
         case 'bodyHit':
-          for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
+          for (const cell of e.cells) this.burstAt(cell, color(e.snake), 6, 110, 0.5, 4);
           this.addShake(5);
           break;
         case 'teleported':
           this.burstAt(e.pos, COLORS.walls[3][0], 12, 120, 0.35, 3);
           break;
         case 'bounced':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);
+          this.burstAt(e.pos, color(e.snake), 8, 90, 0.25, 3);
           this.addShake(2);
           break;
         case 'ate':
           this.burstAt(e.pos, COLORS.food, 12, 100, 0.4, 3);
           break;
         case 'died':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 50, 260, 0.9, 5);
+          this.burstAt(e.pos, color(e.snake), 50, 260, 0.9, 5);
           this.burstAt(e.pos, '#ffffff', 20, 180, 0.5, 3);
           this.addShake(12);
           break;

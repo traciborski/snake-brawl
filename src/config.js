@@ -35,11 +35,18 @@ export const WALL = {
   PORTAL: 3, // niebieska: przenosi na jej drugą stronę
 };
 
-// Gracze: kody klawiszy (KeyboardEvent.code), niezależne od układu klawiatury
-export const PLAYERS = [
+// Gracze
+export const MAX_PLAYERS = 4;
+export const OFFLINE_PLAYERS = 2;
+export const NAME_MAX = 12;
+// Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
+export const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
+export const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4'];
+
+// Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
+// Offline: zestaw i = gracz i. Online: oba zestawy sterują własnym wężem.
+export const KEYMAPS = [
   {
-    name: 'Leon',
-    color: '#FFD700',
     keys: {
       up: ['KeyW'],
       down: ['KeyS'],
@@ -50,8 +57,6 @@ export const PLAYERS = [
     help: 'W A S D  +  SPACJA',
   },
   {
-    name: 'Hugo',
-    color: '#00E5FF',
     keys: {
       up: ['ArrowUp'],
       down: ['ArrowDown'],

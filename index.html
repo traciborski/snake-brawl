@@ -10,7 +10,10 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="game" aria-label="Snake Brawl"></canvas>
+    <div id="stage">
+        <canvas id="game" aria-label="Snake Brawl"></canvas>
+        <div id="overlay"></div>
+    </div>
     <noscript>Snake Brawl wymaga włączonego JavaScriptu.</noscript>
     <!-- Jeden zwykły skrypt (nie moduł), żeby gra działała też po dwukliku w ten plik -->
     <script src="dist/snake-brawl.js"></script>

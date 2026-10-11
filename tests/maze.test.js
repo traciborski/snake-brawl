@@ -1,14 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from '../src/core/rng.js';
-import { generateMaze, reachable, spawnPoints } from '../src/game/maze.js';
-import { cellIndex, rotate180 } from '../src/game/grid.js';
+import { generateMaze, reachable, spawnPoints, symmetric } from '../src/game/maze.js';
+import { cellIndex } from '../src/game/grid.js';
 
 const grid = { w: 48, h: 27 };
 const spawns = spawnPoints(grid, 3);
 
-test('spawny są symetryczne względem środka', () => {
-  spawns[0].body.forEach((p, i) => assert.deepEqual(rotate180(grid, p), spawns[1].body[i]));
+test('cztery spawny w rogach są swoimi lustrzanymi odbiciami', () => {
+  assert.equal(spawns.length, 4);
+  spawns[0].body.forEach((p, i) => {
+    const [, mx, my, rot] = symmetric(grid, p);
+    assert.deepEqual(rot, spawns[1].body[i]);
+    assert.deepEqual(mx, spawns[2].body[i]);
+    assert.deepEqual(my, spawns[3].body[i]);
+  });
 });
 
 for (const seed of [1, 2, 3, 42, 1234, 99999]) {
@@ -23,7 +29,7 @@ for (const seed of [1, 2, 3, 42, 1234, 99999]) {
         const w = walls[cellIndex(grid, p)];
         if (w) wallCount++;
         kinds.add(w);
-        assert.equal(w, walls[cellIndex(grid, rotate180(grid, p))], `asymetria w ${x},${y}`);
+        for (const q of symmetric(grid, p)) assert.equal(w, walls[cellIndex(grid, q)], `asymetria w ${x},${y}`);
       }
     }
     assert.ok(wallCount > 0, 'labirynt nie może być pusty');

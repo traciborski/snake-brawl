@@ -54,6 +54,27 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Dźwięki Web Audio: strzał, jedzenie, trafienie, odbicia, śmierć, odliczanie
 - **Sprawdzenie:** lista kontrolna poniżej.
 
+## Krok 8: Imiona i 2–4 graczy (wspólne dla obu trybów)
+- [x] Menu z wyborem trybu, formularz z imionami (zapamiętywane)
+- [x] Logika dla 2–4 węży: 4 rogi, labirynt symetryczny w obu osiach, osłony startowe
+- [x] Wygrywa ostatni żywy wąż; HUD, wyniki rund i meczu dla 2–4 graczy
+- [x] Kontroler trybu (`app.controller`): sceny gry wspólne dla offline i online
+- **Testy:** 3–4 graczy, ostatni żywy wygrywa, martwy wąż nie blokuje, imiona.
+
+## Krok 9: Gra przez internet, lokalnie
+- [ ] `server/room.js`: pokoje, poczekalnia, start, przekazywanie ruchów, rozłączenia
+- [ ] Lokalny serwer pokoi w `npm start` (WebSocket bez zależności)
+- [ ] Klient: łączenie, lockstep z opóźnieniem 3 klatek, czekanie na brakujące ruchy
+- [ ] Scena online: utwórz pokój / dołącz kodem, poczekalnia, start, powrót po meczu
+- **Testy:** logika pokoju, bufor lockstep, rozłączenie w trakcie rundy.
+- **Sprawdzenie:** mecz na dwóch kartach przeglądarki przez `npm start`.
+
+## Krok 10: Wystawienie w internecie
+- [ ] Gra na GitHub Pages (repo publiczne)
+- [ ] Serwer na Cloudflare Workers (konto właściciela, `wrangler deploy`)
+- [ ] Adres serwera w konfiguracji gry
+- **Sprawdzenie:** mecz z sąsiadami.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

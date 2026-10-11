@@ -23,3 +23,133 @@ canvas {
     display: block;
     outline: none;
 }
+
+/* Scena: canvas + nakładka HTML o tym samym rozmiarze.
+   --u = 1 piksel logiczny gry (960×600) w pikselach ekranu, ustawiane przez Renderer. */
+#stage {
+    position: relative;
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    font-size: calc(var(--u, 1px) * 12);
+    color: #e8ecff;
+}
+
+.overlay[hidden] {
+    display: none;
+}
+
+.overlay.low {
+    align-items: flex-end;
+    padding-bottom: calc(var(--u, 1px) * 70);
+}
+
+.overlay > * {
+    pointer-events: auto;
+}
+
+.panel {
+    background: rgba(5, 6, 15, 0.94);
+    border: 2px solid #3d5afe;
+    box-shadow: 0 0 12px #3d5afe;
+    padding: 1.6em 2em;
+    min-width: 34em;
+}
+
+.panel h2 {
+    font-size: 1.3em;
+    margin-bottom: 1.2em;
+    text-align: center;
+    font-weight: normal;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 0.9em;
+    margin: 0.8em 0;
+}
+
+.swatch {
+    width: 1.2em;
+    height: 1.2em;
+    flex: none;
+}
+
+.overlay input {
+    font: inherit;
+    background: #090b1c;
+    color: #e8ecff;
+    border: 2px solid #1b2040;
+    padding: 0.5em 0.6em;
+    width: 13em;
+}
+
+.overlay input:focus {
+    outline: none;
+    border-color: #00e5ff;
+}
+
+.overlay small,
+.hint {
+    color: #7a80a8;
+    font-size: 0.7em;
+}
+
+.hint {
+    text-align: center;
+    margin-top: 0.8em;
+    line-height: 1.6;
+}
+
+.error {
+    color: #ff3d5a;
+}
+
+.buttons {
+    display: flex;
+    gap: 1em;
+    justify-content: center;
+    margin-top: 1.4em;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9em;
+}
+
+.overlay button {
+    font: inherit;
+    background: #090b1c;
+    color: #e8ecff;
+    border: 2px solid #7a80a8;
+    padding: 0.8em 1.3em;
+    cursor: pointer;
+}
+
+.menu-buttons button {
+    min-width: 30em;
+}
+
+.overlay button:hover,
+.overlay button:focus {
+    outline: none;
+    border-color: #ffd700;
+    color: #ffd700;
+    box-shadow: 0 0 10px #ffd700;
+}
+
+.overlay button:disabled {
+    opacity: 0.4;
+    cursor: default;
+    border-color: #7a80a8;
+    color: #e8ecff;
+    box-shadow: none;
+}

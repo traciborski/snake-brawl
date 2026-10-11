@@ -10,7 +10,7 @@ export function createCountdownScene(app) {
 
   return {
     enter() {
-      app.round = createRound(nextRoundSeed(app.match));
+      app.round = createRound(nextRoundSeed(app.match), { players: app.players.length });
       app.roundNumber = app.match.round + 1;
       app.effects.clear();
       ticks = COUNTDOWN_TICKS;
@@ -19,7 +19,7 @@ export function createCountdownScene(app) {
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
 
       ticks--;

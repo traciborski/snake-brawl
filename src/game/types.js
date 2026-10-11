@@ -6,7 +6,7 @@
 
 /**
  * @typedef {object} Snake
- * @property {0 | 1} id
+ * @property {number} id         numer gracza (0–3)
  * @property {Pos[]} body        body[0] to głowa
  * @property {Dir} dir           aktualny kierunek
  * @property {Dir[]} nextDirs    kolejka skrętów (max 2)
@@ -17,9 +17,9 @@
  * @property {null | 'shot' | 'wall'} death   przyczyna śmierci
  */
 
-/** @typedef {{ owner: 0 | 1, pos: Pos, dir: Dir }} Bullet */
+/** @typedef {{ owner: number, pos: Pos, dir: Dir }} Bullet */
 
-/** @typedef {{ winner: 0 | 1 | 'draw' }} RoundResult */
+/** @typedef {{ winner: number | 'draw' }} RoundResult */
 
 /**
  * @typedef {object} RoundState

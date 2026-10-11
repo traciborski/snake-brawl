@@ -20,6 +20,8 @@ export class Renderer {
     const cssH = Math.max(1, Math.floor(VIEW_H * fit));
     const dpr = window.devicePixelRatio || 1;
 
+    // Nakładka HTML skaluje się razem z canvasem
+    this.canvas.parentElement?.style.setProperty('--u', `${cssW / VIEW_W}px`);
     this.canvas.style.width = `${cssW}px`;
     this.canvas.style.height = `${cssH}px`;
     this.canvas.width = Math.round(cssW * dpr);

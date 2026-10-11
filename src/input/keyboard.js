@@ -4,12 +4,18 @@
 /** @typedef {import('../game/types.js').Command} Command */
 
 const DIRS = new Set(['up', 'down', 'left', 'right']);
+
+/** @param {KeyboardEvent} e */
+function isTyping(e) {
+  const t = /** @type {HTMLElement | null} */ (e.target);
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON');
+}
 const MAX_PENDING_TURNS = 3;
 
 export class Keyboard {
   /**
    * @param {Window} target
-   * @param {{ keys: Record<string, string[]> }[]} players
+   * @param {{ keys: Record<string, string[]> }[]} players  zestawy klawiszy
    */
   constructor(target, players) {
     this.players = players;
@@ -43,6 +49,8 @@ export class Keyboard {
 
   /** @param {KeyboardEvent} e */
   onKeyDown(e) {
+    // Pisanie w polu tekstowym (imię, kod pokoju) i obsługa przycisków nie sterują grą
+    if (isTyping(e)) return;
     const binding = this.bindings.get(e.code);
     // Strzałki i Spacja nie mogą przewijać strony
     if (binding) e.preventDefault();
@@ -88,6 +96,12 @@ export class Keyboard {
   /** Wywoływane po każdym ticku: stare naciśnięcia nie „czekają” na kolejną scenę. */
   endTick() {
     this.pressed.clear();
+  }
+
+  /** Komendy ze wszystkich zestawów klawiszy połączone w jedną (gra online: jeden wąż). */
+  consumeMerged() {
+    const all = this.consumeCommands();
+    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot) };
   }
 
   reset() {

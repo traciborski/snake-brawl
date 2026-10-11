@@ -39,3 +39,10 @@ test('symulacja jest deterministyczna', () => {
   };
   assert.deepEqual(play(), play());
 });
+
+test('mecz dla 4 graczy liczy wygrane każdego z nich', () => {
+  const m = createMatch(1, 4);
+  assert.deepEqual(m.wins, [0, 0, 0, 0]);
+  for (let i = 0; i < 3; i++) recordRound(m, { winner: 3 });
+  assert.equal(m.winner, 3);
+});

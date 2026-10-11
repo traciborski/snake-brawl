@@ -17,14 +17,16 @@ import { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } from './sn
 
 /**
  * @param {number} seed
- * @param {{ walls?: Uint8Array, foodCount?: number, w?: number, h?: number }} [options]
+ * @param {{ players?: number, walls?: Uint8Array, foodCount?: number, w?: number, h?: number }} [options]
  * @returns {RoundState}
  */
 export function createRound(seed, options = {}) {
   const grid = { w: options.w ?? GRID_W, h: options.h ?? GRID_H };
   const rng = createRng(seed);
+  // Labirynt zawsze chroni wszystkie cztery rogi, więc nie zależy od liczby graczy
   const spawns = spawnPoints(grid, START_LENGTH);
   const walls = options.walls ?? generateMaze(grid, rng, spawns, { density: MAZE_DENSITY });
+  const players = options.players ?? 2;
 
   /** @type {RoundState} */
   const state = {
@@ -32,7 +34,7 @@ export function createRound(seed, options = {}) {
     rng,
     grid,
     walls,
-    snakes: spawns.map((s, i) => createSnake(/** @type {0 | 1} */ (i), s.body, s.dir)),
+    snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
     foodCount: options.foodCount ?? FOOD_COUNT,
@@ -162,10 +164,10 @@ function moveSnakes(state, events) {
   }
 }
 
-/** Runda kończy się, gdy ktoś zginie. Obaj naraz → remis. */
+/** Runda kończy się, gdy zostanie najwyżej jeden żywy wąż. Nikt → remis. */
 function checkRoundEnd(state, events) {
   const alive = state.snakes.filter((s) => s.alive);
-  if (alive.length === state.snakes.length) return;
+  if (alive.length > 1) return;
   const result = { winner: alive.length === 1 ? alive[0].id : 'draw' };
   state.result = result;
   events.push({ type: 'roundOver', result });

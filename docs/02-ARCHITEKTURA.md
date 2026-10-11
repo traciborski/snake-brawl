@@ -13,7 +13,7 @@
 | Zależności    | **Zero** bibliotek w grze               | Mniej do utrzymania, gra startuje od razu |
 | Testy         | `node --test` (wbudowany w Node 22)     | Logika gry jest czysta, więc testujemy ją bez przeglądarki |
 | Uruchamianie  | Dwuklik w `index.html` albo `npm start` (serwer w Node) | `index.html` ładuje `dist/snake-brawl.js`, czyli moduły sklejone przez `npm run build` w jeden zwykły skrypt, bo przeglądarki blokują ES modules z `file://` |
-| Publikacja    | Pliki statyczne (np. GitHub Pages)      | Nie ma backendu |
+| Publikacja    | Gra: GitHub Pages. Serwer online: Cloudflare Workers (Durable Objects) | Pages serwuje tylko pliki, więc ruchy graczy przekazuje osobny mały serwer z WebSocketami |
 
 ## 2. Główna zasada: logika oddzielona od wyświetlania
 
@@ -70,7 +70,16 @@ src/
     food.js             losowanie owoców na wolnych polach
     match.js            wynik rundy, licznik meczu, zwycięzca
   input/
-    keyboard.js         nasłuch klawiszy, kolejka kierunków na gracza
+    keyboard.js         nasłuch klawiszy, kolejka kierunków na zestaw klawiszy
+  modes/
+    offline.js          kontroler trybu: jeden komputer
+    online.js           kontroler trybu: internet (lockstep)
+  net/
+    client.js           połączenie z serwerem pokoi
+    lockstep.js         bufor komend (runda, klatka), opóźnienie, rozłączenia
+  ui/
+    dom.js              nakładka HTML: formularze i przyciski
+    storage.js          zapamiętane imiona (localStorage)
   render/
     renderer.js         skalowanie canvasu do okna, HiDPI
     view.js             widok rundy: plansza + obiekty + efekty + HUD
@@ -82,11 +91,16 @@ src/
   audio/
     sfx.js              syntezowane efekty, reagują na zdarzenia
   scenes/
-    menu.js             tytuł, sterowanie, „naciśnij Spację”
+    menu.js             tytuł, zasady, wybór trybu
+    setup.js            imiona graczy (offline)
+    online.js           pokój: utworzenie, dołączenie, poczekalnia
     countdown.js        3-2-1
     play.js             runda: łączy input → stepRound → efekty
     roundEnd.js         kto wygrał rundę
     matchEnd.js         zwycięzca meczu, rewanż
+server/
+    room.js             logika pokoju (wspólna dla Cloudflare i lokalnego serwera)
+    worker.js           Cloudflare Worker + Durable Object
 tests/
     rng.test.js, maze.test.js, snake.test.js, bullets.test.js, match.test.js
 ```
@@ -150,20 +164,31 @@ Kolizje sprawdzamy po każdym przesunięciu o 1 pole, więc nic nie „przeskocz
 ## 7. Sceny (maszyna stanów)
 
 ```
-MENU ──Spacja──► COUNTDOWN ──3 s──► PLAY ──koniec rundy──► ROUND_END
-  ▲                  ▲                                         │
-  │                  └──────────── mecz trwa ──────────────────┤
-  └──── Esc ──── MATCH_END ◄────── ktoś ma 3 wygrane ──────────┘
-                    │
-                    └──Spacja (rewanż)──► COUNTDOWN
+MENU ─1─► SETUP (imiona) ──────────────┐
+  │                                    ▼
+  └─2─► ONLINE (pokój, poczekalnia) ─► COUNTDOWN ──3 s──► PLAY ──koniec rundy──► ROUND_END
+                ▲                         ▲                                          │
+                │                         └──────────── mecz trwa ───────────────────┤
+                └── online: powrót ── MATCH_END ◄──────── ktoś ma 3 wygrane ─────────┘
+                    do poczekalni         │
+                                          └── offline: Spacja (rewanż) ──► COUNTDOWN
 ```
 
 Każda scena ma `enter()`, `update(tick)`, `render(ctx, alpha)`, `exit()`.
-`Esc` w trakcie gry wraca do menu, a `P` pauzuje.
+Sceny gry są wspólne dla obu trybów. Różnice zamyka **kontroler trybu** (`app.controller`):
+
+| Kontroler        | `commands()` (komendy na tick)                | `leave()` (Esc) | `rematch()` | pauza / przeklikiwanie |
+|------------------|-----------------------------------------------|-----------------|-------------|------------------------|
+| `modes/offline`  | z klawiatury, zestaw klawiszy i = gracz i     | menu            | nowy mecz   | tak                    |
+| `modes/online`   | od wszystkich graczy z sieci albo `null` (czekamy) | wyjście z pokoju | poczekalnia | nie                    |
+
+Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML** nad canvasem
+(`src/ui/`), skalowana razem z nim. Klawiatura gry ignoruje klawisze wciskane w polach i przyciskach.
 
 ## 8. Sterowanie: szczegóły
 
-- Klawisze są przypisane w `config.js` (`Leon: WASD + Space`, `Hugo: strzałki + Enter`).
+- Zestawy klawiszy są w `config.js` (`KEYMAPS`: WASD + Spacja, strzałki + Enter). Offline zestaw i steruje graczem i,
+  online oba zestawy sterują własnym wężem.
 - Każdy gracz ma **kolejkę 2 skrętów**, więc szybkie „w górę i w lewo” między tickami nie ginie.
 - Dla klawiszy gry wołamy `preventDefault()`, żeby strzałki i Spacja nie przewijały strony.
 - Ghosting: niektóre klawiatury nie łapią wielu klawiszy naraz. Dlatego klawisze strzału
@@ -189,4 +214,50 @@ Każda scena ma `enter()`, `update(tick)`, `render(ctx, alpha)`, `exit()`.
 
 - **Power-upy**: nowy typ obiektu na planszy + modyfikatory w `Snake`, krok w `stepRound`.
 - **Bot**: generuje `Commands` z odczytu stanu, tak jak klawiatura. Logika się nie zmienia.
-- **Online**: deterministyczna symulacja z komendami to dobra baza (lockstep), ale to odległa przyszłość.
+- **Rollback** w grze online: zamiast czekać na ruchy innych, zgadujemy je i cofamy kilka ticków,
+  gdy przyjdą prawdziwe. Stan rundy jest mały, więc ponowne przeliczenie jest tanie.
+
+## 12. Gra przez internet
+
+**Elementy**
+
+```
+ przeglądarka A ──┐                                   ┌── przeglądarka B
+   (gra z GitHub  │  WebSocket   ┌────────────────┐   │   (ta sama gra)
+    Pages)        └─────────────►│ serwer: pokój  │◄──┘
+                                 │ KOT7 (relay)   │◄───── przeglądarka C, D
+                                 └────────────────┘
+```
+
+- `server/room.js`: logika pokoju (poczekalnia, start, przekazywanie ruchów, rozłączenia).
+  Czysta, bez sieci, testowana w Node.
+- `server/worker.js`: Cloudflare Worker + Durable Object (jeden obiekt na pokój) opakowuje `room.js`.
+- `scripts/serve.js`: lokalnie `npm start` ma ten sam serwer pokoi (minimalny WebSocket bez
+  zależności, `scripts/ws.js`), więc grę online da się testować na dwóch kartach przeglądarki.
+- `src/net/`: klient po stronie gry (połączenie, lockstep). `src/modes/online.js`: kontroler trybu.
+
+**Lockstep**
+- Każdy komputer liczy tę samą symulację z tych samych komend. Serwer tylko przekazuje komendy
+  i ustala ziarno meczu. Stan gry nigdy nie idzie przez sieć.
+- Komendy są numerowane `(runda, klatka)`. Komenda wysłana w klatce `f` działa w klatce `f + 3`
+  (opóźnienie 150 ms ukrywa ping). Pierwsze 3 klatki rundy są puste u wszystkich.
+- Symulacja robi krok tylko, gdy ma komendy wszystkich graczy na daną klatkę. Gdy kogoś brakuje,
+  gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia kilka klatek naraz.
+- Ekrany między rundami trwają tyle samo u wszystkich i nie da się ich przeklikać.
+
+**Protokół (JSON przez WebSocket)**
+
+| Kierunek | Wiadomość | Znaczenie |
+|----------|-----------|-----------|
+| klient → serwer | `hello { name, create }` | dołączenie do pokoju z adresu `/room/KOD` (albo założenie go) |
+| serwer → klient | `lobby { you, host, players }` | stan poczekalni |
+| klient → serwer | `start` | założyciel zaczyna mecz |
+| serwer → wszyscy | `start { seed, players }` | początek meczu; kolejność graczy = kolory i rogi |
+| klient → serwer | `input { r, f, d, s }` | ruch: runda, klatka, skręty (`d`), strzał (`s`) |
+| serwer → wszyscy | `input { p, r, f, d, s }` | ruch gracza `p` |
+| serwer → wszyscy | `left { p, r, f }` | gracz `p` się rozłączył: od klatki `(r, f)` jego wąż ginie |
+| klient → serwer | `lobby` | koniec meczu, powrót do poczekalni |
+| serwer → klient | `error { msg }` | np. pokój nie istnieje, pełny albo trwa w nim gra |
+
+Rozłączenie działa deterministycznie: serwer podaje pierwszą klatkę, której gracz już nie wysłał,
+a wszyscy stosują je w tym samym miejscu, bo i tak nie mogli jej jeszcze policzyć.

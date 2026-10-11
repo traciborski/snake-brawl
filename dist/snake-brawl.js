@@ -14,7 +14,7 @@ function __require(id) {
 __factories["src/main.js"] = function (__exports) {
 // Start aplikacji: łączy canvas, klawiaturę, dźwięk, efekty i sceny w jedną pętlę.
 
-const { PLAYERS, TICK_MS } = __require("src/config.js");
+const { DEFAULT_NAMES, KEYMAPS, PLAYER_COLORS, TICK_MS } = __require("src/config.js");
 const { startLoop } = __require("src/core/loop.js");
 const { SceneManager } = __require("src/core/scenes.js");
 const { Keyboard } = __require("src/input/keyboard.js");
@@ -22,6 +22,10 @@ const { Sfx } = __require("src/audio/sfx.js");
 const { Effects } = __require("src/render/effects.js");
 const { Renderer } = __require("src/render/renderer.js");
 const { createMenuScene } = __require("src/scenes/menu.js");
+const { createSetupScene } = __require("src/scenes/setup.js");
+const { createOnlineScene } = __require("src/scenes/online.js");
+const { createOfflineController } = __require("src/modes/offline.js");
+const { Overlay } = __require("src/ui/dom.js");
 const { createCountdownScene } = __require("src/scenes/countdown.js");
 const { createPlayScene } = __require("src/scenes/play.js");
 const { createRoundEndScene } = __require("src/scenes/roundEnd.js");
@@ -31,7 +35,8 @@ const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game')
 
 const app = {
   renderer: new Renderer(canvas),
-  keyboard: new Keyboard(window, PLAYERS),
+  keyboard: new Keyboard(window, KEYMAPS),
+  overlay: new Overlay(/** @type {HTMLElement} */ (document.getElementById('overlay'))),
   audio: new Sfx(),
   effects: new Effects(),
   /** @type {import('./game/match.js').MatchState | null} */
@@ -39,19 +44,26 @@ const app = {
   /** @type {import('./game/types.js').RoundState | null} */
   round: null,
   roundNumber: 0,
+  /** @type {{ name: string, color: string }[]} */
+  players: DEFAULT_NAMES.slice(0, 2).map((name, i) => ({ name, color: PLAYER_COLORS[i] })),
+  /** Tryb gry: skąd biorą się komendy, co robi Esc i rewanż (offline albo online) */
+  controller: /** @type {any} */ (null),
   /** @type {SceneManager} */
   scenes: /** @type {any} */ (null),
 };
 
 app.scenes = new SceneManager(app);
+app.controller = createOfflineController(app);
 app.scenes.register('menu', createMenuScene(app));
+app.scenes.register('setup', createSetupScene(app));
+app.scenes.register('online', createOnlineScene(app));
 app.scenes.register('countdown', createCountdownScene(app));
 app.scenes.register('play', createPlayScene(app));
 app.scenes.register('roundEnd', createRoundEndScene(app));
 app.scenes.register('matchEnd', createMatchEndScene(app));
 
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
-app.keyboard.onKey(() => app.audio.unlock());
+for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
 app.scenes.go('menu');
 
@@ -110,11 +122,18 @@ const WALL = {
   PORTAL: 3, // niebieska: przenosi na jej drugą stronę
 };
 
-// Gracze: kody klawiszy (KeyboardEvent.code), niezależne od układu klawiatury
-const PLAYERS = [
+// Gracze
+const MAX_PLAYERS = 4;
+const OFFLINE_PLAYERS = 2;
+const NAME_MAX = 12;
+// Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
+const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
+const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4'];
+
+// Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
+// Offline: zestaw i = gracz i. Online: oba zestawy sterują własnym wężem.
+const KEYMAPS = [
   {
-    name: 'Leon',
-    color: '#FFD700',
     keys: {
       up: ['KeyW'],
       down: ['KeyS'],
@@ -125,8 +144,6 @@ const PLAYERS = [
     help: 'W A S D  +  SPACJA',
   },
   {
-    name: 'Hugo',
-    color: '#00E5FF',
     keys: {
       up: ['ArrowUp'],
       down: ['ArrowDown'],
@@ -166,7 +183,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, PLAYERS, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, MAX_PLAYERS, OFFLINE_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -258,12 +275,18 @@ __factories["src/input/keyboard.js"] = function (__exports) {
 /** @typedef {import('../game/types.js').Command} Command */
 
 const DIRS = new Set(['up', 'down', 'left', 'right']);
+
+/** @param {KeyboardEvent} e */
+function isTyping(e) {
+  const t = /** @type {HTMLElement | null} */ (e.target);
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON');
+}
 const MAX_PENDING_TURNS = 3;
 
 class Keyboard {
   /**
    * @param {Window} target
-   * @param {{ keys: Record<string, string[]> }[]} players
+   * @param {{ keys: Record<string, string[]> }[]} players  zestawy klawiszy
    */
   constructor(target, players) {
     this.players = players;
@@ -297,6 +320,8 @@ class Keyboard {
 
   /** @param {KeyboardEvent} e */
   onKeyDown(e) {
+    // Pisanie w polu tekstowym (imię, kod pokoju) i obsługa przycisków nie sterują grą
+    if (isTyping(e)) return;
     const binding = this.bindings.get(e.code);
     // Strzałki i Spacja nie mogą przewijać strony
     if (binding) e.preventDefault();
@@ -342,6 +367,12 @@ class Keyboard {
   /** Wywoływane po każdym ticku: stare naciśnięcia nie „czekają” na kolejną scenę. */
   endTick() {
     this.pressed.clear();
+  }
+
+  /** Komendy ze wszystkich zestawów klawiszy połączone w jedną (gra online: jeden wąż). */
+  consumeMerged() {
+    const all = this.consumeCommands();
+    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot) };
   }
 
   reset() {
@@ -499,7 +530,7 @@ __factories["src/render/effects.js"] = function (__exports) {
 // Efekty czysto wizualne: cząsteczki i potrząsanie ekranem.
 // Reagują na zdarzenia z symulacji, ale nigdy nie wpływają na logikę.
 
-const { BOARD_Y, CELL, COLORS, PLAYERS, VIEW_W } = __require("src/config.js");
+const { BOARD_Y, CELL, COLORS, VIEW_W } = __require("src/config.js");
 
 /** @typedef {import('../game/types.js').GameEvent} GameEvent */
 /** @typedef {import('../game/types.js').Pos} Pos */
@@ -543,12 +574,13 @@ class Effects {
     for (let i = 0; i < 12; i++) this.burst(Math.random() * VIEW_W, 120 + Math.random() * 300, color, 12, 200, 1.2, 5);
   }
 
-  /** @param {GameEvent[]} events */
-  handle(events) {
+  /** @param {GameEvent[]} events @param {{ color: string }[]} players */
+  handle(events, players) {
+    const color = (id) => players[id].color;
     for (const e of events) {
       switch (e.type) {
         case 'shot':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 6, 80, 0.2, 3);
+          this.burstAt(e.pos, color(e.snake), 6, 80, 0.2, 3);
           break;
         case 'bulletWall':
           this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
@@ -558,21 +590,21 @@ class Effects {
           this.addShake(3);
           break;
         case 'bodyHit':
-          for (const cell of e.cells) this.burstAt(cell, PLAYERS[e.snake].color, 6, 110, 0.5, 4);
+          for (const cell of e.cells) this.burstAt(cell, color(e.snake), 6, 110, 0.5, 4);
           this.addShake(5);
           break;
         case 'teleported':
           this.burstAt(e.pos, COLORS.walls[3][0], 12, 120, 0.35, 3);
           break;
         case 'bounced':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 8, 90, 0.25, 3);
+          this.burstAt(e.pos, color(e.snake), 8, 90, 0.25, 3);
           this.addShake(2);
           break;
         case 'ate':
           this.burstAt(e.pos, COLORS.food, 12, 100, 0.4, 3);
           break;
         case 'died':
-          this.burstAt(e.pos, PLAYERS[e.snake].color, 50, 260, 0.9, 5);
+          this.burstAt(e.pos, color(e.snake), 50, 260, 0.9, 5);
           this.burstAt(e.pos, '#ffffff', 20, 180, 0.5, 3);
           this.addShake(12);
           break;
@@ -639,6 +671,8 @@ class Renderer {
     const cssH = Math.max(1, Math.floor(VIEW_H * fit));
     const dpr = window.devicePixelRatio || 1;
 
+    // Nakładka HTML skaluje się razem z canvasem
+    this.canvas.parentElement?.style.setProperty('--u', `${cssW / VIEW_W}px`);
     this.canvas.style.width = `${cssW}px`;
     this.canvas.style.height = `${cssH}px`;
     this.canvas.width = Math.round(cssW * dpr);
@@ -663,25 +697,25 @@ Object.assign(__exports, { Renderer });
 
 // ---- src/scenes/menu.js ----
 __factories["src/scenes/menu.js"] = function (__exports) {
-const { COLORS, KEYS, PLAYERS, VIEW_W } = __require("src/config.js");
-const { randomSeed } = __require("src/core/rng.js");
-const { createMatch } = __require("src/game/match.js");
+const { COLORS, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { blink, drawText } = __require("src/render/text.js");
+const { h } = __require("src/ui/dom.js");
 
 /** @param {any} app */
 function createMenuScene(app) {
   return {
     enter() {
       app.effects.clear();
+      const buttons = [
+        h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
+        h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
+      ];
+      const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
+      app.overlay.show(menu, { position: 'low' });
     },
 
-    update() {
-      const k = app.keyboard;
-      if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
-      if (k.consumePressed(KEYS.confirm)) {
-        app.match = createMatch(randomSeed());
-        app.scenes.go('countdown');
-      }
+    exit() {
+      app.overlay.hide();
     },
 
     render() {
@@ -689,113 +723,45 @@ function createMenuScene(app) {
       const time = performance.now();
       app.renderer.begin();
 
-      // Tło: wolno przesuwające się neonowe paski
+      // Tło: wolno przesuwające się neonowe paski w kolorach graczy
       ctx.save();
       for (let i = 0; i < 12; i++) {
         const y = ((time / 30 + i * 60) % 720) - 60;
         ctx.globalAlpha = 0.06;
-        ctx.fillStyle = i % 2 ? PLAYERS[0].color : PLAYERS[1].color;
+        ctx.fillStyle = PLAYER_COLORS[i % PLAYER_COLORS.length];
         ctx.fillRect(0, y, VIEW_W, 4);
       }
       ctx.restore();
 
-      drawText(ctx, 'SNAKE', VIEW_W / 2, 120, { size: 56, color: PLAYERS[0].color, glow: 24 });
-      drawText(ctx, 'BRAWL', VIEW_W / 2, 190, { size: 56, color: PLAYERS[1].color, glow: 24 });
-      drawText(ctx, 'LEON  vs  HUGO', VIEW_W / 2, 250, { size: 14, color: COLORS.dim });
+      drawText(ctx, 'SNAKE', VIEW_W / 2, 90, { size: 56, color: PLAYER_COLORS[0], glow: 24 });
+      drawText(ctx, 'BRAWL', VIEW_W / 2, 160, { size: 56, color: PLAYER_COLORS[1], glow: 24 });
 
-      const colX = [VIEW_W / 2 - 220, VIEW_W / 2 + 220];
-      PLAYERS.forEach((p, i) => {
-        drawText(ctx, p.name.toUpperCase(), colX[i], 320, { size: 20, color: p.color, glow: 10 });
-        drawText(ctx, p.help, colX[i], 355, { size: 10, color: COLORS.text });
-      });
+      drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 225, { size: 10, color: COLORS.text });
+      drawText(ctx, 'Strzał w głowę eliminuje. Trafiony ogon odpada.', VIEW_W / 2, 250, { size: 10, color: COLORS.dim });
+      drawText(ctx, '1 segment ogona = 10 strzałów. Własne pociski są niegroźne.', VIEW_W / 2, 272, { size: 10, color: COLORS.dim });
 
-      drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 400, { size: 10, color: COLORS.text });
-      drawText(ctx, 'Strzał w głowę wygrywa rundę. Trafiony ogon odpada.', VIEW_W / 2, 425, { size: 10, color: COLORS.dim });
-      drawText(ctx, '1 segment ogona = 10 strzałów. Własne pociski są niegroźne.', VIEW_W / 2, 447, { size: 10, color: COLORS.dim });
-
-      if (blink(time)) {
-        drawText(ctx, 'SPACJA / ENTER  —  START', VIEW_W / 2, 500, { size: 16, color: COLORS.text, glow: 8 });
+      if (blink(time, 1600)) {
+        drawText(ctx, 'wybierz tryb gry', VIEW_W / 2, 330, { size: 10, color: COLORS.dim });
       }
       const sound = app.audio.muted ? 'WYŁ' : 'WŁ';
-      drawText(ctx, `P pauza   ESC menu   M dźwięk: ${sound}`, VIEW_W / 2, 560, { size: 8, color: COLORS.dim });
+      drawText(ctx, `P pauza   ESC menu   M dźwięk: ${sound}`, VIEW_W / 2, 580, { size: 8, color: COLORS.dim });
     },
   };
+
+  /** Strzałki/WS przesuwają wybór, 1/2 wybierają od razu, M wycisza. */
+  function onKey(e, buttons) {
+    const i = buttons.indexOf(document.activeElement);
+    if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
+    else if (['ArrowUp', 'KeyW'].includes(e.code)) buttons[(i - 1 + buttons.length) % buttons.length].focus();
+    else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
+    else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
+    else if (e.code === 'KeyM') app.audio.toggleMute();
+    else return;
+    e.preventDefault();
+  }
 }
 
 Object.assign(__exports, { createMenuScene });
-};
-
-// ---- src/core/rng.js ----
-__factories["src/core/rng.js"] = function (__exports) {
-// Deterministyczny generator losowy (mulberry32). Stan to zwykły obiekt,
-// więc da się go skopiować, zapisać i odtworzyć tę samą rozgrywkę.
-
-/** @param {number} seed */
-function createRng(seed) {
-  return { state: seed >>> 0 };
-}
-
-/** Liczba z przedziału [0, 1). */
-function nextFloat(rng) {
-  rng.state = (rng.state + 0x6d2b79f5) >>> 0;
-  let t = rng.state;
-  t = Math.imul(t ^ (t >>> 15), t | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
-
-/** Liczba całkowita z przedziału [0, n). */
-function randInt(rng, n) {
-  return Math.floor(nextFloat(rng) * n);
-}
-
-/** Ziarno do nowego meczu. Jedyne miejsce, gdzie wchodzi prawdziwa losowość. */
-function randomSeed() {
-  return (Math.random() * 0x100000000) >>> 0;
-}
-
-Object.assign(__exports, { createRng, nextFloat, randInt, randomSeed });
-};
-
-// ---- src/game/match.js ----
-__factories["src/game/match.js"] = function (__exports) {
-// Mecz: seria rund do WINS_TO_MATCH wygranych. Remis nie daje punktu.
-
-const { WINS_TO_MATCH } = __require("src/config.js");
-
-/** @typedef {import('./types.js').RoundResult} RoundResult */
-
-/**
- * @typedef {object} MatchState
- * @property {number} seed
- * @property {number} round       liczba rozegranych rund
- * @property {[number, number]} wins
- * @property {RoundResult[]} history
- * @property {0 | 1 | null} winner
- */
-
-/** @param {number} seed @returns {MatchState} */
-function createMatch(seed) {
-  return { seed: seed >>> 0, round: 0, wins: [0, 0], history: [], winner: null };
-}
-
-/** Ziarno kolejnej rundy: każda runda ma inny labirynt, ale cały mecz jest powtarzalny. */
-function nextRoundSeed(match) {
-  return (match.seed + Math.imul(match.round + 1, 0x9e3779b9)) >>> 0;
-}
-
-/** @param {MatchState} match @param {RoundResult} result @returns {0 | 1 | null} */
-function recordRound(match, result) {
-  match.round++;
-  match.history.push(result);
-  if (result.winner !== 'draw') {
-    match.wins[result.winner]++;
-    if (match.wins[result.winner] >= WINS_TO_MATCH) match.winner = result.winner;
-  }
-  return match.winner;
-}
-
-Object.assign(__exports, { createMatch, nextRoundSeed, recordRound });
 };
 
 // ---- src/render/text.js ----
@@ -856,7 +822,317 @@ function drawPanel(ctx, cx, cy, w, h, color = COLORS.border) {
   ctx.restore();
 }
 
-Object.assign(__exports, { drawText, dimScreen, blink, drawPanel });
+/**
+ * Wynik meczu w kolorach graczy, np. „2 : 0 : 1” (środek w cx).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number[]} wins
+ * @param {{ color: string }[]} players
+ */
+function drawScore(ctx, wins, players, cx, y, size = 36) {
+  const parts = [];
+  wins.forEach((w, i) => {
+    if (i > 0) parts.push({ str: ':', color: COLORS.text });
+    parts.push({ str: String(w), color: players[i].color });
+  });
+  ctx.save();
+  ctx.font = `${size}px ${FONT}`;
+  const gap = size * 0.6;
+  const widths = parts.map((p) => ctx.measureText(p.str).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (parts.length - 1);
+  ctx.restore();
+  let x = cx - total / 2;
+  parts.forEach((p, i) => {
+    drawText(ctx, p.str, x + widths[i] / 2, y, { size, color: p.color, glow: p.str === ':' ? 0 : 12 });
+    x += widths[i] + gap;
+  });
+}
+
+Object.assign(__exports, { drawText, dimScreen, blink, drawPanel, drawScore });
+};
+
+// ---- src/ui/dom.js ----
+__factories["src/ui/dom.js"] = function (__exports) {
+// Nakładka HTML nad canvasem: formularze (imiona, kod pokoju) i przyciski menu,
+// których nie da się wygodnie zrobić na samym canvasie.
+
+/**
+ * Tworzy element: h('button', { type: 'submit', onclick }, 'START').
+ * @param {string} tag
+ * @param {Record<string, any>} [props]
+ * @param {...(Node | string | null | undefined | (Node | string)[])} children
+ */
+function h(tag, props = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'style') Object.assign(el.style, value);
+    else if (key.startsWith('on')) el.addEventListener(key.slice(2), value);
+    else if (key in el) el[key] = value;
+    else el.setAttribute(key, value);
+  }
+  el.append(...children.flat().filter((c) => c != null));
+  return el;
+}
+
+class Overlay {
+  /** @param {HTMLElement} el */
+  constructor(el) {
+    this.el = el;
+    this.hide();
+  }
+
+  /**
+   * @param {HTMLElement} content
+   * @param {{ position?: 'center' | 'low' }} [opts]
+   */
+  show(content, { position = 'center' } = {}) {
+    this.el.className = `overlay ${position}`;
+    this.el.replaceChildren(content);
+    this.el.hidden = false;
+    /** @type {HTMLElement | null} */ (content.querySelector('[autofocus], input, button'))?.focus();
+  }
+
+  hide() {
+    this.el.hidden = true;
+    this.el.replaceChildren();
+  }
+}
+
+Object.assign(__exports, { h, Overlay });
+};
+
+// ---- src/scenes/setup.js ----
+__factories["src/scenes/setup.js"] = function (__exports) {
+// Gra na jednym komputerze: wpisanie imion dwóch graczy.
+
+const { DEFAULT_NAMES, KEYMAPS, NAME_MAX, OFFLINE_PLAYERS, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
+const { randomSeed } = __require("src/core/rng.js");
+const { createMatch } = __require("src/game/match.js");
+const { drawText } = __require("src/render/text.js");
+const { h } = __require("src/ui/dom.js");
+const { load, save } = __require("src/ui/storage.js");
+const { createOfflineController } = __require("src/modes/offline.js");
+
+/** Czyści imię: bez zbędnych spacji, przycięte, a puste zastąpione domyślnym. */
+function cleanName(raw, i) {
+  const name = String(raw ?? '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+  return name || DEFAULT_NAMES[i];
+}
+
+/** @param {any} app */
+function createSetupScene(app) {
+  return {
+    enter() {
+      const saved = load('names', DEFAULT_NAMES);
+      const inputs = Array.from({ length: OFFLINE_PLAYERS }, (_, i) =>
+        h('input', { value: saved[i] ?? DEFAULT_NAMES[i], maxLength: NAME_MAX, placeholder: DEFAULT_NAMES[i], 'aria-label': `Imię gracza ${i + 1}` }),
+      );
+
+      const start = (e) => {
+        e.preventDefault();
+        const names = inputs.map((input, i) => cleanName(input.value, i));
+        save('names', names);
+        app.controller = createOfflineController(app);
+        app.players = names.map((name, i) => ({ name, color: PLAYER_COLORS[i] }));
+        app.match = createMatch(randomSeed(), names.length);
+        app.scenes.go('countdown');
+      };
+
+      const form = h(
+        'form',
+        { className: 'panel', onsubmit: start, onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu') },
+        h('h2', {}, 'GRACZE'),
+        inputs.map((input, i) =>
+          h(
+            'div',
+            { className: 'row' },
+            h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
+            input,
+            h('small', {}, KEYMAPS[i].help),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'buttons' },
+          h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ'),
+          h('button', { type: 'submit' }, 'START'),
+        ),
+        h('p', { className: 'hint' }, 'Enter — start · Esc — menu'),
+      );
+      app.overlay.show(form);
+      inputs[0].select();
+    },
+
+    exit() {
+      app.overlay.hide();
+    },
+
+    render() {
+      app.renderer.begin();
+      drawText(app.renderer.ctx, 'GRA NA JEDNYM KOMPUTERZE', VIEW_W / 2, 80, { size: 20, color: PLAYER_COLORS[0], glow: 12 });
+    },
+  };
+}
+
+Object.assign(__exports, { cleanName, createSetupScene });
+};
+
+// ---- src/core/rng.js ----
+__factories["src/core/rng.js"] = function (__exports) {
+// Deterministyczny generator losowy (mulberry32). Stan to zwykły obiekt,
+// więc da się go skopiować, zapisać i odtworzyć tę samą rozgrywkę.
+
+/** @param {number} seed */
+function createRng(seed) {
+  return { state: seed >>> 0 };
+}
+
+/** Liczba z przedziału [0, 1). */
+function nextFloat(rng) {
+  rng.state = (rng.state + 0x6d2b79f5) >>> 0;
+  let t = rng.state;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** Liczba całkowita z przedziału [0, n). */
+function randInt(rng, n) {
+  return Math.floor(nextFloat(rng) * n);
+}
+
+/** Ziarno do nowego meczu. Jedyne miejsce, gdzie wchodzi prawdziwa losowość. */
+function randomSeed() {
+  return (Math.random() * 0x100000000) >>> 0;
+}
+
+Object.assign(__exports, { createRng, nextFloat, randInt, randomSeed });
+};
+
+// ---- src/game/match.js ----
+__factories["src/game/match.js"] = function (__exports) {
+// Mecz: seria rund do WINS_TO_MATCH wygranych. Remis nie daje punktu. Od 2 do 4 graczy.
+
+const { WINS_TO_MATCH } = __require("src/config.js");
+
+/** @typedef {import('./types.js').RoundResult} RoundResult */
+
+/**
+ * @typedef {object} MatchState
+ * @property {number} seed
+ * @property {number} round       liczba rozegranych rund
+ * @property {number[]} wins       wygrane rundy na gracza
+ * @property {RoundResult[]} history
+ * @property {number | null} winner
+ */
+
+/** @param {number} seed @param {number} [players] @returns {MatchState} */
+function createMatch(seed, players = 2) {
+  return { seed: seed >>> 0, round: 0, wins: Array(players).fill(0), history: [], winner: null };
+}
+
+/** Ziarno kolejnej rundy: każda runda ma inny labirynt, ale cały mecz jest powtarzalny. */
+function nextRoundSeed(match) {
+  return (match.seed + Math.imul(match.round + 1, 0x9e3779b9)) >>> 0;
+}
+
+/** @param {MatchState} match @param {RoundResult} result @returns {number | null} */
+function recordRound(match, result) {
+  match.round++;
+  match.history.push(result);
+  if (result.winner !== 'draw') {
+    match.wins[result.winner]++;
+    if (match.wins[result.winner] >= WINS_TO_MATCH) match.winner = result.winner;
+  }
+  return match.winner;
+}
+
+Object.assign(__exports, { createMatch, nextRoundSeed, recordRound });
+};
+
+// ---- src/ui/storage.js ----
+__factories["src/ui/storage.js"] = function (__exports) {
+// Zapamiętywanie drobiazgów (imiona) w przeglądarce. Brak dostępu do localStorage
+// (tryb prywatny, zablokowane dane) nie może psuć gry.
+
+const PREFIX = 'snakeBrawl.';
+
+function load(key, fallback) {
+  try {
+    const raw = localStorage.getItem(PREFIX + key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function save(key, value) {
+  try {
+    localStorage.setItem(PREFIX + key, JSON.stringify(value));
+  } catch {
+    // trudno, następnym razem trzeba będzie wpisać od nowa
+  }
+}
+
+Object.assign(__exports, { load, save });
+};
+
+// ---- src/modes/offline.js ----
+__factories["src/modes/offline.js"] = function (__exports) {
+// Gra na jednym komputerze: komendy prosto z klawiatury, zestaw klawiszy i = gracz i.
+
+const { randomSeed } = __require("src/core/rng.js");
+const { createMatch } = __require("src/game/match.js");
+
+/** @param {any} app */
+function createOfflineController(app) {
+  return {
+    canPause: true,
+    canSkip: true,
+    rematchHint: 'SPACJA — rewanż    ESC — menu',
+    commands: () => app.keyboard.consumeCommands(),
+    leave: () => app.scenes.go('menu'),
+    rematch() {
+      app.match = createMatch(randomSeed(), app.players.length);
+      app.scenes.go('countdown');
+    },
+  };
+}
+
+Object.assign(__exports, { createOfflineController });
+};
+
+// ---- src/scenes/online.js ----
+__factories["src/scenes/online.js"] = function (__exports) {
+// Gra przez internet: na razie zaślepka (krok 2 planu).
+
+const { PLAYER_COLORS, VIEW_W } = __require("src/config.js");
+const { drawText } = __require("src/render/text.js");
+const { h } = __require("src/ui/dom.js");
+
+/** @param {any} app */
+function createOnlineScene(app) {
+  return {
+    enter() {
+      const panel = h(
+        'div',
+        { className: 'panel', onkeydown: (e) => e.code === 'Escape' && app.scenes.go('menu') },
+        h('h2', {}, 'GRA PRZEZ INTERNET'),
+        h('p', { className: 'hint' }, 'Już wkrótce.'),
+        h('div', { className: 'buttons' }, h('button', { type: 'button', onclick: () => app.scenes.go('menu') }, 'WSTECZ')),
+      );
+      app.overlay.show(panel);
+    },
+    exit() {
+      app.overlay.hide();
+    },
+    render() {
+      app.renderer.begin();
+      drawText(app.renderer.ctx, 'GRA PRZEZ INTERNET', VIEW_W / 2, 80, { size: 20, color: PLAYER_COLORS[1], glow: 12 });
+    },
+  };
+}
+
+Object.assign(__exports, { createOnlineScene });
 };
 
 // ---- src/scenes/countdown.js ----
@@ -873,7 +1149,7 @@ function createCountdownScene(app) {
 
   return {
     enter() {
-      app.round = createRound(nextRoundSeed(app.match));
+      app.round = createRound(nextRoundSeed(app.match), { players: app.players.length });
       app.roundNumber = app.match.round + 1;
       app.effects.clear();
       ticks = COUNTDOWN_TICKS;
@@ -882,7 +1158,7 @@ function createCountdownScene(app) {
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
 
       ticks--;
@@ -934,14 +1210,16 @@ const { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } = __require
 
 /**
  * @param {number} seed
- * @param {{ walls?: Uint8Array, foodCount?: number, w?: number, h?: number }} [options]
+ * @param {{ players?: number, walls?: Uint8Array, foodCount?: number, w?: number, h?: number }} [options]
  * @returns {RoundState}
  */
 function createRound(seed, options = {}) {
   const grid = { w: options.w ?? GRID_W, h: options.h ?? GRID_H };
   const rng = createRng(seed);
+  // Labirynt zawsze chroni wszystkie cztery rogi, więc nie zależy od liczby graczy
   const spawns = spawnPoints(grid, START_LENGTH);
   const walls = options.walls ?? generateMaze(grid, rng, spawns, { density: MAZE_DENSITY });
+  const players = options.players ?? 2;
 
   /** @type {RoundState} */
   const state = {
@@ -949,7 +1227,7 @@ function createRound(seed, options = {}) {
     rng,
     grid,
     walls,
-    snakes: spawns.map((s, i) => createSnake(/** @type {0 | 1} */ (i), s.body, s.dir)),
+    snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
     foodCount: options.foodCount ?? FOOD_COUNT,
@@ -1079,10 +1357,10 @@ function moveSnakes(state, events) {
   }
 }
 
-/** Runda kończy się, gdy ktoś zginie. Obaj naraz → remis. */
+/** Runda kończy się, gdy zostanie najwyżej jeden żywy wąż. Nikt → remis. */
 function checkRoundEnd(state, events) {
   const alive = state.snakes.filter((s) => s.alive);
-  if (alive.length === state.snakes.length) return;
+  if (alive.length > 1) return;
   const result = { winner: alive.length === 1 ? alive[0].id : 'draw' };
   state.result = result;
   events.push({ type: 'roundOver', result });
@@ -1313,7 +1591,7 @@ const { OPPOSITE, dirBetween } = __require("src/game/grid.js");
 
 const MAX_QUEUED_TURNS = 2;
 
-/** @param {0 | 1} id @param {Pos[]} body @param {Dir} dir @returns {Snake} */
+/** @param {number} id @param {Pos[]} body @param {Dir} dir @returns {Snake} */
 function createSnake(id, body, dir) {
   return {
     id,
@@ -1447,32 +1725,54 @@ Object.assign(__exports, { refillFood, eatFood });
 
 // ---- src/game/maze.js ----
 __factories["src/game/maze.js"] = function (__exports) {
-// Symetryczny labirynt: ściany są stawiane parami (pole i jego obraz po obrocie o 180°),
-// więc obaj gracze mają identyczną sytuację. Okolice spawnów są zawsze wolne,
-// a wszystkie wolne pola są osiągalne.
+// Symetryczny labirynt: każda ściana ma lustrzane odbicia w obu osiach (a więc też obraz
+// po obrocie o 180°), więc gracze w każdym z czterech rogów mają identyczną sytuację.
+// Okolice spawnów są zawsze wolne, a wszystkie wolne pola są osiągalne.
 
 const { nextFloat, randInt } = __require("src/core/rng.js");
 const { WALL } = __require("src/config.js");
 const { DIR_VEC, cellIndex, inBounds, passThrough, rotate180, step } = __require("src/game/grid.js");
+
+const mirrorX = (grid, p) => ({ x: grid.w - 1 - p.x, y: p.y });
+const mirrorY = (grid, p) => ({ x: p.x, y: grid.h - 1 - p.y });
+
+/** Pole i jego trzy lustrzane odbicia. */
+function symmetric(grid, p) {
+  return [p, mirrorX(grid, p), mirrorY(grid, p), rotate180(grid, p)];
+}
 
 /** @typedef {import('./types.js').Grid} Grid */
 /** @typedef {import('./types.js').Pos} Pos */
 /** @typedef {import('./types.js').Dir} Dir */
 
 /**
- * Pozycje startowe: Leon w lewym górnym rogu w prawo, Hugo symetrycznie.
+ * Pozycje startowe w czterech rogach, kolejno: lewy górny, prawy dolny, prawy górny, lewy dolny.
+ * Przy dwóch graczach zajmują więc przeciwległe rogi.
  * @param {Grid} grid
  * @param {number} length
  * @returns {{ body: Pos[], dir: Dir }[]}
  */
 function spawnPoints(grid, length) {
   const headX = 2 + length;
-  const leon = Array.from({ length }, (_, i) => ({ x: headX - i, y: 2 }));
-  const hugo = leon.map((p) => rotate180(grid, p));
+  const tl = Array.from({ length }, (_, i) => ({ x: headX - i, y: 2 }));
   return [
-    { body: leon, dir: 'right' },
-    { body: hugo, dir: 'left' },
+    { body: tl, dir: 'right' },
+    { body: tl.map((p) => rotate180(grid, p)), dir: 'left' },
+    { body: tl.map((p) => mirrorX(grid, p)), dir: 'left' },
+    { body: tl.map((p) => mirrorY(grid, p)), dir: 'right' },
   ];
+}
+
+/**
+ * Stałe czarne osłony na środku górnego i dolnego brzegu: węże z sąsiednich rogów
+ * startują naprzeciw siebie w tym samym rzędzie, więc nie mogą mieć się od razu na muszce.
+ */
+function startCovers(grid) {
+  const cells = [];
+  for (const x of [Math.floor(grid.w / 2) - 1, Math.floor(grid.w / 2)]) {
+    for (const y of [1, 2, 3]) cells.push(...symmetric(grid, { x, y }));
+  }
+  return cells;
 }
 
 /** Pola, na których nie wolno stawiać ścian: otoczenie węży i korytarz przed głową. */
@@ -1530,6 +1830,7 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
 
   for (let attempt = 0; attempt < attempts; attempt++) {
     const walls = new Uint8Array(size);
+    for (const p of startCovers(grid)) walls[cellIndex(grid, p)] = WALL.BOUNCE;
     let count = 0;
 
     for (let tries = 0; count < target && tries < 2000; tries++) {
@@ -1549,7 +1850,7 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
       // Każdy odcinek ma jeden rodzaj: czarna, czerwona albo niebieska, po równo
       const kind = 1 + randInt(rng, 3);
       for (const p of cells) {
-        for (const q of [p, rotate180(grid, p)]) {
+        for (const q of symmetric(grid, p)) {
           const i = cellIndex(grid, q);
           if (!walls[i]) {
             walls[i] = kind;
@@ -1559,11 +1860,10 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
       }
     }
 
-    // Spawny muszą się „widzieć”, a zamknięte kieszenie zamieniamy w ściany.
-    // Obszar osiągalny z jednego spawnu zawiera drugi, więc jest symetryczny.
-    const start = spawns[0].body[0];
-    const seen = reachable(grid, walls, start);
-    if (!seen[cellIndex(grid, spawns[1].body[0])]) continue;
+    // Wszystkie spawny muszą być połączone, a zamknięte kieszenie zamieniamy w ściany.
+    // Obszar osiągalny z jednego spawnu zawiera pozostałe, więc jest symetryczny.
+    const seen = reachable(grid, walls, spawns[0].body[0]);
+    if (spawns.some((s) => !seen[cellIndex(grid, s.body[0])])) continue;
     let total = 0;
     for (let i = 0; i < size; i++) {
       if (!seen[i] && !walls[i]) walls[i] = WALL.BOUNCE;
@@ -1577,7 +1877,7 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
   return new Uint8Array(size);
 }
 
-Object.assign(__exports, { spawnPoints, reachable, generateMaze });
+Object.assign(__exports, { symmetric, spawnPoints, reachable, generateMaze });
 };
 
 // ---- src/render/view.js ----
@@ -1591,11 +1891,11 @@ const { drawHud } = __require("src/render/hud.js");
 /**
  * @param {{ renderer: import('./renderer.js').Renderer, effects: import('./effects.js').Effects,
  *           round: import('../game/types.js').RoundState, match: import('../game/match.js').MatchState,
- *           roundNumber: number }} app
+ *           roundNumber: number, players: { name: string, color: string }[] }} app
  * @param {number} time ms
  */
 function drawRoundView(app, time) {
-  const { renderer, effects, round, match } = app;
+  const { renderer, effects, round, match, players } = app;
   const { ctx } = renderer;
   renderer.begin();
 
@@ -1603,12 +1903,12 @@ function drawRoundView(app, time) {
   effects.applyShake(ctx);
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
-  for (const snake of round.snakes) drawSnake(ctx, snake);
-  drawBullets(ctx, round);
+  for (const snake of round.snakes) drawSnake(ctx, snake, players[snake.id].color);
+  drawBullets(ctx, round, players);
   effects.draw(ctx);
   ctx.restore();
 
-  drawHud(ctx, round, match, app.roundNumber);
+  drawHud(ctx, round, match, players, app.roundNumber);
 }
 
 Object.assign(__exports, { drawRoundView });
@@ -1694,7 +1994,7 @@ Object.assign(__exports, { drawBoard });
 __factories["src/render/entities.js"] = function (__exports) {
 // Węże, pociski i owoce. Każda grupa to jedna ścieżka = jedna operacja poświaty.
 
-const { BOARD_Y, CELL, COLORS, PLAYERS } = __require("src/config.js");
+const { BOARD_Y, CELL, COLORS } = __require("src/config.js");
 const { DIR_VEC } = __require("src/game/grid.js");
 
 /** @typedef {import('../game/types.js').Snake} Snake */
@@ -1706,9 +2006,9 @@ const py = (p) => BOARD_Y + p.y * CELL;
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {Snake} snake
+ * @param {string} color
  */
-function drawSnake(ctx, snake) {
-  const color = PLAYERS[snake.id].color;
+function drawSnake(ctx, snake, color) {
 
   ctx.save();
   ctx.globalAlpha = snake.alive ? 1 : 0.35;
@@ -1747,10 +2047,10 @@ function drawSnake(ctx, snake) {
   ctx.restore();
 }
 
-/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
-function drawBullets(ctx, round) {
+/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round @param {{ color: string }[]} players */
+function drawBullets(ctx, round, players) {
   for (const b of round.bullets) {
-    const color = PLAYERS[b.owner].color;
+    const color = players[b.owner].color;
     const v = DIR_VEC[b.dir];
     const x = px(b.pos);
     const y = py(b.pos);
@@ -1790,17 +2090,18 @@ Object.assign(__exports, { drawSnake, drawBullets, drawFood });
 
 // ---- src/render/hud.js ----
 __factories["src/render/hud.js"] = function (__exports) {
-// Pasek nad planszą: gracze, wygrane rundy, długość, amunicja, numer rundy.
+// Pasek nad planszą: 2–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// Gracze 0 i 2 po lewej, 1 i 3 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
 
-const { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
+const { COLORS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
 const { drawText } = __require("src/render/text.js");
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
 /** @typedef {import('../game/match.js').MatchState} MatchState */
 
 function drawPips(ctx, x, y, wins, color, alignRight) {
-  const size = 12;
-  const gap = 6;
+  const size = 10;
+  const gap = 5;
   for (let i = 0; i < WINS_TO_MATCH; i++) {
     const offset = i * (size + gap);
     const px = alignRight ? x - offset - size : x + offset;
@@ -1819,31 +2120,36 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
   }
 }
 
+const SLOT_X = [16, 216];
+
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {RoundState} round
  * @param {MatchState} match
+ * @param {{ name: string, color: string }[]} players
  * @param {number} roundNumber
  */
-function drawHud(ctx, round, match, roundNumber) {
-  const mid = HUD_H / 2;
-  const [leon, hugo] = round.snakes;
+function drawHud(ctx, round, match, players, roundNumber) {
+  round.snakes.forEach((snake, i) => {
+    const right = i % 2 === 1;
+    const offset = SLOT_X[Math.floor(i / 2)];
+    const x = right ? VIEW_W - offset : offset;
+    const align = right ? 'right' : 'left';
+    const { name, color } = players[i];
+    const alpha = snake.alive ? 1 : 0.4;
 
-  // Leon po lewej
-  drawText(ctx, PLAYERS[0].name.toUpperCase(), 20, mid - 10, { size: 16, color: PLAYERS[0].color, align: 'left', glow: 8 });
-  drawPips(ctx, 20, mid + 6, match.wins[0], PLAYERS[0].color, false);
-  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid - 9, { size: 12, color: COLORS.dim, align: 'left' });
-  drawText(ctx, `AMMO ${leon.ammo}`, 200, mid + 11, { size: 10, color: COLORS.dim, align: 'left' });
-
-  // Hugo po prawej
-  drawText(ctx, PLAYERS[1].name.toUpperCase(), VIEW_W - 20, mid - 10, { size: 16, color: PLAYERS[1].color, align: 'right', glow: 8 });
-  drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
-  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid - 9, { size: 12, color: COLORS.dim, align: 'right' });
-  drawText(ctx, `AMMO ${hugo.ammo}`, VIEW_W - 200, mid + 11, { size: 10, color: COLORS.dim, align: 'right' });
+    drawText(ctx, name.toUpperCase(), x, 16, { size: 14, color, align, glow: snake.alive ? 8 : 0, alpha });
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawPips(ctx, x, 27, match.wins[i], color, right);
+    ctx.restore();
+    const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : 'ODPADŁ';
+    drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
+  });
 
   // Numer rundy na środku (rundy nie mają limitu czasu)
-  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });
-  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, mid + 16, { size: 8, color: COLORS.dim });
+  drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, 22, { size: 14, color: COLORS.text });
+  drawText(ctx, `do ${WINS_TO_MATCH} wygranych`, VIEW_W / 2, 44, { size: 7, color: COLORS.dim });
 }
 
 Object.assign(__exports, { drawHud });
@@ -1872,9 +2178,9 @@ function createPlayScene(app) {
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
-      if (k.consumePressed(KEYS.pause) && !app.round.result) paused = !paused;
+      if (k.consumePressed(KEYS.pause) && app.controller.canPause && !app.round.result) paused = !paused;
 
       if (paused) {
         k.consumeCommands();
@@ -1886,14 +2192,19 @@ function createPlayScene(app) {
         return;
       }
 
-      const events = stepRound(app.round, k.consumeCommands());
-      app.effects.handle(events);
+      // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
+      // null = jeszcze nie ma ruchów wszystkich graczy na ten tick, więc czekamy.
+      const commands = app.controller.commands();
+      if (!commands) return;
+      const events = stepRound(app.round, commands);
+      app.effects.handle(events, app.players);
       app.audio.handle(events);
       if (app.round.result) endTimer = AFTER_ROUND_TICKS;
     },
 
     render() {
       drawRoundView(app, performance.now());
+      app.controller.drawStatus?.(app.renderer.ctx);
       if (paused) {
         const { ctx } = app.renderer;
         const cy = BOARD_Y + (GRID_H * CELL) / 2;
@@ -1911,31 +2222,36 @@ Object.assign(__exports, { createPlayScene });
 
 // ---- src/scenes/roundEnd.js ----
 __factories["src/scenes/roundEnd.js"] = function (__exports) {
-const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, PLAYERS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
+const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { recordRound } = __require("src/game/match.js");
 const { drawRoundView } = __require("src/render/view.js");
-const { blink, dimScreen, drawPanel, drawText } = __require("src/render/text.js");
+const { blink, dimScreen, drawPanel, drawScore, drawText } = __require("src/render/text.js");
 
 const MIN_TICKS = 1 * TICKS_PER_SECOND; // nie da się przeklikać od razu
 const AUTO_TICKS = 4 * TICKS_PER_SECOND;
 
 const DEATH = { shot: 'Strzał w głowę', wall: 'Rywal wjechał w czerwoną ścianę' };
 
-/** @param {import('../game/types.js').RoundState} round */
-function describe(round) {
+/**
+ * @param {import('../game/types.js').RoundState} round
+ * @param {{ name: string, color: string }[]} players
+ */
+function describe(round, players) {
   const { winner } = round.result;
+  const duel = round.snakes.length === 2;
   if (winner === 'draw') {
-    return { title: 'REMIS!', color: COLORS.text, detail: 'Obaj odpadli w tym samym momencie' };
+    return { title: 'REMIS!', subtitle: '', color: COLORS.text, detail: duel ? 'Obaj odpadli w tym samym momencie' : 'Wszyscy odpadli naraz' };
   }
-  const p = PLAYERS[winner];
+  const p = players[winner];
   const loser = round.snakes.find((s) => !s.alive);
-  return { title: `${p.name.toUpperCase()} WYGRYWA RUNDĘ!`, color: p.color, detail: DEATH[loser.death] };
+  const detail = duel ? DEATH[loser.death] : 'Ostatni na placu boju';
+  return { title: p.name.toUpperCase(), subtitle: 'WYGRYWA RUNDĘ!', color: p.color, detail };
 }
 
 /** @param {any} app */
 function createRoundEndScene(app) {
   let ticks = 0;
-  let info = { title: '', color: COLORS.text, detail: '' };
+  let info = { title: '', subtitle: '', color: COLORS.text, detail: '' };
 
   const next = () => app.scenes.go(app.match.winner !== null ? 'matchEnd' : 'countdown');
 
@@ -1943,17 +2259,19 @@ function createRoundEndScene(app) {
     enter() {
       const result = app.round.result;
       recordRound(app.match, result);
-      info = describe(app.round);
+      info = describe(app.round, app.players);
       ticks = 0;
       if (app.match.winner === null) app.audio.play('round');
     },
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
-      if (ticks >= AUTO_TICKS || (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm))) next();
+      // Online wszyscy przechodzą dalej po tym samym czasie, bez przeklikiwania
+      const skip = app.controller.canSkip && ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm);
+      if (ticks >= AUTO_TICKS || skip) next();
     },
 
     render() {
@@ -1964,15 +2282,12 @@ function createRoundEndScene(app) {
       dimScreen(ctx, 0.5);
       drawPanel(ctx, VIEW_W / 2, cy + 20, 640, 260, info.color === COLORS.text ? undefined : info.color);
 
-      drawText(ctx, info.title, VIEW_W / 2, cy - 50, { size: 28, color: info.color, glow: 16 });
-      drawText(ctx, info.detail, VIEW_W / 2, cy - 5, { size: 10, color: COLORS.dim });
+      drawText(ctx, info.title, VIEW_W / 2, cy - 70, { size: 28, color: info.color, glow: 16 });
+      if (info.subtitle) drawText(ctx, info.subtitle, VIEW_W / 2, cy - 30, { size: 16, color: COLORS.text });
+      drawText(ctx, info.detail, VIEW_W / 2, cy + 5, { size: 10, color: COLORS.dim });
+      drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 55);
 
-      const [a, b] = app.match.wins;
-      drawText(ctx, String(a), VIEW_W / 2 - 60, cy + 50, { size: 36, color: PLAYERS[0].color, glow: 12 });
-      drawText(ctx, ':', VIEW_W / 2, cy + 50, { size: 36, color: COLORS.text });
-      drawText(ctx, String(b), VIEW_W / 2 + 60, cy + 50, { size: 36, color: PLAYERS[1].color, glow: 12 });
-
-      if (ticks >= MIN_TICKS && blink(time)) {
+      if (app.controller.canSkip && ticks >= MIN_TICKS && blink(time)) {
         drawText(ctx, 'SPACJA — dalej', VIEW_W / 2, cy + 115, { size: 10, color: COLORS.text });
       }
     },
@@ -1984,11 +2299,9 @@ Object.assign(__exports, { createRoundEndScene });
 
 // ---- src/scenes/matchEnd.js ----
 __factories["src/scenes/matchEnd.js"] = function (__exports) {
-const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, PLAYERS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
-const { randomSeed } = __require("src/core/rng.js");
-const { createMatch } = __require("src/game/match.js");
+const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { drawRoundView } = __require("src/render/view.js");
-const { blink, dimScreen, drawPanel, drawText } = __require("src/render/text.js");
+const { blink, dimScreen, drawPanel, drawScore, drawText } = __require("src/render/text.js");
 
 const MIN_TICKS = 1.5 * TICKS_PER_SECOND;
 
@@ -2000,19 +2313,16 @@ function createMatchEndScene(app) {
     enter() {
       ticks = 0;
       app.audio.play('win');
-      app.effects.confetti(PLAYERS[app.match.winner].color);
+      app.effects.confetti(app.players[app.match.winner].color);
     },
 
     update() {
       const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.scenes.go('menu');
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
-      if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(PLAYERS[app.match.winner].color);
-      if (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm)) {
-        app.match = createMatch(randomSeed());
-        app.scenes.go('countdown');
-      }
+      if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(app.players[app.match.winner].color);
+      if (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm)) app.controller.rematch();
     },
 
     render() {
@@ -2021,20 +2331,17 @@ function createMatchEndScene(app) {
       const { ctx } = app.renderer;
       const cy = BOARD_Y + (GRID_H * CELL) / 2;
       dimScreen(ctx, 0.6);
-      drawPanel(ctx, VIEW_W / 2, cy + 5, 680, 300, PLAYERS[app.match.winner].color);
+      drawPanel(ctx, VIEW_W / 2, cy + 5, 680, 300, app.players[app.match.winner].color);
       app.effects.draw(ctx);
 
-      const winner = PLAYERS[app.match.winner];
+      const winner = app.players[app.match.winner];
       drawText(ctx, winner.name.toUpperCase(), VIEW_W / 2, cy - 90, { size: 48, color: winner.color, glow: 24 });
       drawText(ctx, 'WYGRYWA MECZ!', VIEW_W / 2, cy - 30, { size: 24, color: COLORS.text, glow: 10 });
 
-      const [a, b] = app.match.wins;
-      drawText(ctx, String(a), VIEW_W / 2 - 60, cy + 40, { size: 36, color: PLAYERS[0].color, glow: 12 });
-      drawText(ctx, ':', VIEW_W / 2, cy + 40, { size: 36, color: COLORS.text });
-      drawText(ctx, String(b), VIEW_W / 2 + 60, cy + 40, { size: 36, color: PLAYERS[1].color, glow: 12 });
+      drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 40);
 
       if (ticks >= MIN_TICKS && blink(time)) {
-        drawText(ctx, 'SPACJA — rewanż    ESC — menu', VIEW_W / 2, cy + 110, { size: 12, color: COLORS.text });
+        drawText(ctx, app.controller.rematchHint, VIEW_W / 2, cy + 110, { size: 12, color: COLORS.text });
       }
     },
   };
