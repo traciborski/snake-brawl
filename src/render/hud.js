@@ -1,4 +1,4 @@
-// Pasek nad planszą: gracze, wygrane rundy, długość, numer rundy.
+// Pasek nad planszą: gracze, wygrane rundy, długość, amunicja, numer rundy.
 
 import { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
@@ -40,12 +40,14 @@ export function drawHud(ctx, round, match, roundNumber) {
   // Leon po lewej
   drawText(ctx, PLAYERS[0].name.toUpperCase(), 20, mid - 10, { size: 16, color: PLAYERS[0].color, align: 'left', glow: 8 });
   drawPips(ctx, 20, mid + 6, match.wins[0], PLAYERS[0].color, false);
-  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid, { size: 12, color: COLORS.dim, align: 'left' });
+  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid - 9, { size: 12, color: COLORS.dim, align: 'left' });
+  drawText(ctx, `AMMO ${leon.ammo}`, 200, mid + 11, { size: 10, color: COLORS.dim, align: 'left' });
 
   // Hugo po prawej
   drawText(ctx, PLAYERS[1].name.toUpperCase(), VIEW_W - 20, mid - 10, { size: 16, color: PLAYERS[1].color, align: 'right', glow: 8 });
   drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
-  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid, { size: 12, color: COLORS.dim, align: 'right' });
+  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid - 9, { size: 12, color: COLORS.dim, align: 'right' });
+  drawText(ctx, `AMMO ${hugo.ammo}`, VIEW_W - 200, mid + 11, { size: 10, color: COLORS.dim, align: 'right' });
 
   // Numer rundy na środku (rundy nie mają limitu czasu)
   drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });

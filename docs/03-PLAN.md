@@ -28,7 +28,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** każdy rodzaj odbicia, wzrost po zjedzeniu.
 
 ## Krok 3: Strzelanie
-- [x] `game/bullets.js`: koszt segmentu, cooldown, lot 1 pole/tick
+- [x] `game/bullets.js`: 1 segment = 10 strzałów, cooldown, lot 3 pola na 2 ticki
 - [x] Trafienie w ciało odcina ogon, trafienie w głowę zabija, własne pociski niegroźne
 - [x] Pocisk 3× szybszy od węża, znika na ścianie i krawędzi; dwa pociski się znoszą
 - **Testy:** każda z reguł strzelania osobno.
@@ -57,7 +57,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony
-- [ ] Strzał skraca strzelającego, a z samą głową nie da się strzelić
+- [ ] Co 10. strzał skraca strzelającego o segment, AMMO w pasku się zgadza
 - [ ] Własny pocisk przelatuje przez strzelającego
 - [ ] Trafienie w ogon odcina go, a w głowę zabija
 - [ ] Czerwona ściana zabija, czarna odbija, niebieska i krawędź przenoszą na drugą stronę

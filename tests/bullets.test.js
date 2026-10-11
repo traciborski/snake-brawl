@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stepRound } from '../src/game/round.js';
 import { bulletStepsAt } from '../src/game/bullets.js';
-import { SHOT_COOLDOWN, WALL } from '../src/config.js';
+import { SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } from '../src/config.js';
 import { emptyRound, place, pos, run, wall } from './helpers.js';
 
 const FIRE = [{ shoot: true }];
@@ -26,7 +26,34 @@ test('pocisk leci 3 pola na 2 ticki (3× szybciej niż wąż)', () => {
   assert.equal(s.bullets[0].pos.x, 16);
 });
 
-test('z samą głową nie da się strzelić', () => {
+test(`jeden segment ogona daje ${SHOTS_PER_SEGMENT} strzałów`, () => {
+  const s = emptyRound();
+  const leon = place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
+  // pociski znikają na ścianie tuż za lufą, żeby nie przeszkadzały
+  wall(s, 12, 10);
+  const shots = () => {
+    stepRound(s, FIRE);
+    for (let i = 1; i < SHOT_COOLDOWN; i++) stepRound(s);
+  };
+  shots();
+  assert.equal(leon.body.length, 2);
+  assert.equal(leon.ammo, SHOTS_PER_SEGMENT - 1);
+  for (let i = 1; i < SHOTS_PER_SEGMENT; i++) shots();
+  assert.equal(leon.body.length, 2, 'cała dziesiątka z jednego segmentu');
+  assert.equal(leon.ammo, 0);
+  shots();
+  assert.equal(leon.body.length, 1, 'jedenasty strzał bierze kolejny segment');
+});
+
+test('z samą głową można strzelać, dopóki jest amunicja', () => {
+  const s = emptyRound();
+  const leon = place(s, 0, [[10, 10]], 'right');
+  leon.ammo = 1;
+  assert.ok(stepRound(s, FIRE).some((e) => e.type === 'shot'));
+  assert.equal(leon.ammo, 0);
+});
+
+test('z samą głową i bez amunicji nie da się strzelić', () => {
   const s = emptyRound();
   place(s, 0, [[10, 10]], 'right');
   const events = stepRound(s, FIRE);

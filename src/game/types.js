@@ -12,6 +12,7 @@
  * @property {Dir[]} nextDirs    kolejka skrętów (max 2)
  * @property {number} growPending
  * @property {number} cooldown   ticki do kolejnego strzału
+ * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive
  * @property {null | 'shot' | 'wall'} death   przyczyna śmierci
  */

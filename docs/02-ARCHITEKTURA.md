@@ -66,7 +66,7 @@ src/
     maze.js             generowanie symetrycznego labiryntu + test spójności
     round.js            createRound(seed), stepRound(stan, komendy) → zdarzenia, ruch węży
     snake.js            skręty, odbicie (zawrócenie węża), odcinanie ogona, śmierć
-    bullets.js          strzał (koszt segmentu), lot, kolizje pocisków
+    bullets.js          strzał (1 segment = 10 strzałów), lot, kolizje pocisków
     food.js             losowanie owoców na wolnych polach
     match.js            wynik rundy, licznik meczu, zwycięzca
   input/
@@ -113,7 +113,7 @@ Snake = {
   body: Pos[],                  // [0] = głowa
   dir: Dir, nextDirs: Dir[],    // kolejka max 2 skrętów
   growPending: 0,
-  cooldown: 0,
+  cooldown: 0, ammo: 0,         // ammo: strzały z „zjedzonego” segmentu
   alive: true, death: null,     // null | 'shot' | 'wall'
 }
 
@@ -130,8 +130,8 @@ Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocze
 
 1. **Komendy**: przyjmij skręt (bez zawracania) i żądanie strzału.
 2. **Timery**: zmniejsz cooldown.
-3. **Strzały**: jeśli długość > 1 i cooldown = 0, to zabierz
-   segment z ogona i stwórz pocisk na polu przed głową.
+3. **Strzały**: jeśli cooldown = 0 i jest amunicja albo segment do zabrania (bez amunicji
+   zabierz segment z ogona i daj 10 strzałów), stwórz pocisk na polu przed głową.
 4. **Pociski**: przesuń o 1 lub 2 pola (3 pola na 2 ticki), sprawdzając kolizje po każdym polu.
    Ściana lub krawędź → pocisk znika. Potem inny pocisk i węże poza strzelającym
    (głowa → śmierć, ciało → odcięcie ogona).

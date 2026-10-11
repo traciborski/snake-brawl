@@ -18,6 +18,7 @@ export function createSnake(id, body, dir) {
     nextDirs: [],
     growPending: 0,
     cooldown: 0,
+    ammo: 0,
     alive: true,
     death: null,
   };
@@ -42,7 +43,7 @@ export function tickTimers(snake) {
 
 /** @param {Snake} snake */
 export function canShoot(snake) {
-  return snake.alive && snake.cooldown === 0 && snake.body.length > 1;
+  return snake.alive && snake.cooldown === 0 && (snake.ammo > 0 || snake.body.length > 1);
 }
 
 /**

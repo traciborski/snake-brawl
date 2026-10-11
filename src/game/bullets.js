@@ -1,7 +1,7 @@
-// Pociski: strzał (koszt segmentu), lot i kolizje.
+// Pociski: strzał (1 segment ogona = 10 strzałów), lot i kolizje.
 // Pocisk znika na każdej ścianie i na krawędzi planszy. Własne pociski przelatują przez strzelającego.
 
-import { BULLET_CELLS, BULLET_PER_TICKS, SHOT_COOLDOWN } from '../config.js';
+import { BULLET_CELLS, BULLET_PER_TICKS, SHOTS_PER_SEGMENT, SHOT_COOLDOWN } from '../config.js';
 import { isBlocked, samePos, step } from './grid.js';
 import { applyHit, canShoot, segmentAt } from './snake.js';
 
@@ -17,13 +17,18 @@ export function bulletStepsAt(tick) {
 }
 
 /**
- * Strzał: zabiera segment z ogona i tworzy pocisk na polu przed głową.
+ * Strzał: tworzy pocisk na polu przed głową. Gdy skończy się amunicja, zabiera
+ * segment z ogona i zamienia go na SHOTS_PER_SEGMENT strzałów.
  * @param {RoundState} state @param {Snake} snake @param {GameEvent[]} events
  * @returns {boolean} czy strzał padł
  */
 export function fire(state, snake, events) {
   if (!canShoot(snake)) return false;
-  snake.body.pop();
+  if (snake.ammo === 0) {
+    snake.body.pop();
+    snake.ammo = SHOTS_PER_SEGMENT;
+  }
+  snake.ammo--;
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */

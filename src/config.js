@@ -18,6 +18,7 @@ export const VIEW_H = HUD_H + GRID_H * CELL; // 600
 export const SNAKE_MOVE_EVERY = 2; // 10 pól/s
 export const START_LENGTH = 3;
 export const SHOT_COOLDOWN = 6; // 0,3 s
+export const SHOTS_PER_SEGMENT = 10; // jeden segment ogona = 10 strzałów
 // Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
 export const BULLET_CELLS = 3;
 export const BULLET_PER_TICKS = 2;

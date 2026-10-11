@@ -93,6 +93,7 @@ const VIEW_H = HUD_H + GRID_H * CELL; // 600
 const SNAKE_MOVE_EVERY = 2; // 10 pól/s
 const START_LENGTH = 3;
 const SHOT_COOLDOWN = 6; // 0,3 s
+const SHOTS_PER_SEGMENT = 10; // jeden segment ogona = 10 strzałów
 // Pocisk: 3 pola na 2 ticki = 30 pól/s, czyli 3× szybciej niż wąż
 const BULLET_CELLS = 3;
 const BULLET_PER_TICKS = 2;
@@ -165,7 +166,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, PLAYERS, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL, PLAYERS, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -710,7 +711,7 @@ function createMenuScene(app) {
 
       drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 400, { size: 10, color: COLORS.text });
       drawText(ctx, 'Strzał w głowę wygrywa rundę. Trafiony ogon odpada.', VIEW_W / 2, 425, { size: 10, color: COLORS.dim });
-      drawText(ctx, 'Strzał kosztuje 1 segment. Własne pociski są niegroźne.', VIEW_W / 2, 447, { size: 10, color: COLORS.dim });
+      drawText(ctx, '1 segment ogona = 10 strzałów. Własne pociski są niegroźne.', VIEW_W / 2, 447, { size: 10, color: COLORS.dim });
 
       if (blink(time)) {
         drawText(ctx, 'SPACJA / ENTER  —  START', VIEW_W / 2, 500, { size: 16, color: COLORS.text, glow: 8 });
@@ -1092,10 +1093,10 @@ Object.assign(__exports, { createRound, stepRound });
 
 // ---- src/game/bullets.js ----
 __factories["src/game/bullets.js"] = function (__exports) {
-// Pociski: strzał (koszt segmentu), lot i kolizje.
+// Pociski: strzał (1 segment ogona = 10 strzałów), lot i kolizje.
 // Pocisk znika na każdej ścianie i na krawędzi planszy. Własne pociski przelatują przez strzelającego.
 
-const { BULLET_CELLS, BULLET_PER_TICKS, SHOT_COOLDOWN } = __require("src/config.js");
+const { BULLET_CELLS, BULLET_PER_TICKS, SHOTS_PER_SEGMENT, SHOT_COOLDOWN } = __require("src/config.js");
 const { isBlocked, samePos, step } = __require("src/game/grid.js");
 const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
 
@@ -1111,13 +1112,18 @@ function bulletStepsAt(tick) {
 }
 
 /**
- * Strzał: zabiera segment z ogona i tworzy pocisk na polu przed głową.
+ * Strzał: tworzy pocisk na polu przed głową. Gdy skończy się amunicja, zabiera
+ * segment z ogona i zamienia go na SHOTS_PER_SEGMENT strzałów.
  * @param {RoundState} state @param {Snake} snake @param {GameEvent[]} events
  * @returns {boolean} czy strzał padł
  */
 function fire(state, snake, events) {
   if (!canShoot(snake)) return false;
-  snake.body.pop();
+  if (snake.ammo === 0) {
+    snake.body.pop();
+    snake.ammo = SHOTS_PER_SEGMENT;
+  }
+  snake.ammo--;
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */
@@ -1313,6 +1319,7 @@ function createSnake(id, body, dir) {
     nextDirs: [],
     growPending: 0,
     cooldown: 0,
+    ammo: 0,
     alive: true,
     death: null,
   };
@@ -1337,7 +1344,7 @@ function tickTimers(snake) {
 
 /** @param {Snake} snake */
 function canShoot(snake) {
-  return snake.alive && snake.cooldown === 0 && snake.body.length > 1;
+  return snake.alive && snake.cooldown === 0 && (snake.ammo > 0 || snake.body.length > 1);
 }
 
 /**
@@ -1779,7 +1786,7 @@ Object.assign(__exports, { drawSnake, drawBullets, drawFood });
 
 // ---- src/render/hud.js ----
 __factories["src/render/hud.js"] = function (__exports) {
-// Pasek nad planszą: gracze, wygrane rundy, długość, numer rundy.
+// Pasek nad planszą: gracze, wygrane rundy, długość, amunicja, numer rundy.
 
 const { COLORS, HUD_H, PLAYERS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
 const { drawText } = __require("src/render/text.js");
@@ -1821,12 +1828,14 @@ function drawHud(ctx, round, match, roundNumber) {
   // Leon po lewej
   drawText(ctx, PLAYERS[0].name.toUpperCase(), 20, mid - 10, { size: 16, color: PLAYERS[0].color, align: 'left', glow: 8 });
   drawPips(ctx, 20, mid + 6, match.wins[0], PLAYERS[0].color, false);
-  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid, { size: 12, color: COLORS.dim, align: 'left' });
+  drawText(ctx, `DŁ ${leon.body.length}`, 200, mid - 9, { size: 12, color: COLORS.dim, align: 'left' });
+  drawText(ctx, `AMMO ${leon.ammo}`, 200, mid + 11, { size: 10, color: COLORS.dim, align: 'left' });
 
   // Hugo po prawej
   drawText(ctx, PLAYERS[1].name.toUpperCase(), VIEW_W - 20, mid - 10, { size: 16, color: PLAYERS[1].color, align: 'right', glow: 8 });
   drawPips(ctx, VIEW_W - 20, mid + 6, match.wins[1], PLAYERS[1].color, true);
-  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid, { size: 12, color: COLORS.dim, align: 'right' });
+  drawText(ctx, `DŁ ${hugo.body.length}`, VIEW_W - 200, mid - 9, { size: 12, color: COLORS.dim, align: 'right' });
+  drawText(ctx, `AMMO ${hugo.ammo}`, VIEW_W - 200, mid + 11, { size: 10, color: COLORS.dim, align: 'right' });
 
   // Numer rundy na środku (rundy nie mają limitu czasu)
   drawText(ctx, `RUNDA ${roundNumber}`, VIEW_W / 2, mid - 6, { size: 18, color: COLORS.text });

@@ -54,7 +54,9 @@ strzelasz kawałkami własnego ogona, a rundę wygrywa ten, kto pierwszy trafi r
 - Na planszy zawsze leżą 3 owoce. Zjedzenie daje +1 segment.
 
 **Strzelanie**
-- Strzał kosztuje 1 segment ogona. Z samą głową (długość 1) nie można strzelać.
+- **1 segment ogona = 10 strzałów.** Pierwszy strzał z dziesiątki zabiera segment z ogona,
+  kolejne 9 jest „za darmo”. Z samą głową można strzelać tylko do końca bieżącej dziesiątki.
+  Pasek u góry pokazuje pozostałą amunicję (AMMO).
 - Cooldown 0,3 s. Pocisk leci prosto, **3× szybciej niż wąż** (30 pól/s).
 - **Trafienie w ciało** odcina ogon od trafionego segmentu do końca.
 - **Trafienie w głowę** zabija rywala, więc strzelający wygrywa rundę. Wjazd głową w cudzy pocisk też.
