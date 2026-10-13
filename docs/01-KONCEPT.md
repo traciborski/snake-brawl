@@ -5,7 +5,7 @@
 
 ## 1. Jedno zdanie
 
-Arcade'owa walka węży, w 1–4 osoby na jednej klawiaturze albo w 2–4 osoby przez internet:
+Arcade'owa walka węży, w 1–4 osoby na jednej klawiaturze albo w 2–6 osób przez internet:
 rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni
 żywy wąż (strzał w głowę i czerwona ściana eliminują).
 
@@ -14,7 +14,7 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 | Obszar     | Decyzja                                                  |
 |------------|----------------------------------------------------------|
 | Baza       | Rozwijamy pomysł Snake Brawl, kod piszemy od nowa        |
-| Gracze     | Offline: 1–4 na jednej klawiaturze (1 = trening). Online: 2–4, każdy na swoim komputerze |
+| Gracze     | Offline: 1–4 na jednej klawiaturze (1 = trening). Online: 2–6, każdy na swoim komputerze |
 | Platforma  | Przeglądarka na PC, klawiatura                           |
 | Klimat     | Arcade dla wszystkich: szybko, rywalizacja, krótkie rundy |
 | Styl       | Pikselowa kratka z neonową poświatą na ciemnym tle       |
@@ -24,7 +24,8 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 
 - Na starcie każdy gracz wpisuje imię (do 12 znaków). Gra je zapamiętuje.
 - Kolory graczy według kolejności: żółty `#FFD700`, cyjan `#00E5FF`, zielony `#39FF14`,
-  pomarańczowy `#FF9100` (żaden nie myli się ze ścianami ani jedzeniem).
+  pomarańczowy `#FF9100`, a online jeszcze fioletowy `#B388FF` i biały `#FFFFFF`
+  (żaden nie myli się ze ścianami ani jedzeniem).
 
 | Gracz (offline) | Klawisze |
 |-----------------|----------|
@@ -45,7 +46,8 @@ do gry przez internet.
 ## 4. Mecz i runda
 
 1. **Menu**: wybór trybu (jeden komputer / internet), potem liczba graczy (offline 1–4) i imiona.
-2. **Odliczanie** 3-2-1, węże startują w rogach planszy (przy dwóch graczach w przeciwległych), długość 3.
+2. **Odliczanie** 3-2-1, węże startują w rogach planszy (przy dwóch graczach w przeciwległych),
+   piąty i szósty (online) na środku lewego i prawego boku; długość 3.
 3. **Runda** nie ma limitu czasu: trwa, aż zostanie najwyżej jeden żywy wąż.
 4. **Wynik rundy**:
    - wąż ginie od strzału w głowę albo czerwonej ściany i dalej tylko ogląda;
@@ -89,9 +91,11 @@ do gry przez internet.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 
 **Labirynt**
-- Generowany losowo, ale symetrycznie w obu osiach, żeby wszystkie cztery rogi były w identycznej sytuacji.
-- Na środku górnego i dolnego brzegu stoją stałe czarne osłony: węże z sąsiednich rogów
-  startują w tym samym rzędzie i nie mogą mieć się od razu na muszce.
+- Generowany losowo, ale symetrycznie w obu osiach, żeby wszystkie cztery rogi (i oba środki boków)
+  były w identycznej sytuacji.
+- Na środku górnego i dolnego brzegu oraz na środku planszy stoją stałe czarne osłony: węże
+  z sąsiednich miejsc startu jadą w tym samym rzędzie i nie mogą mieć się od razu na muszce.
+  Przed każdym wężem aż do osłony jest wolny korytarz, więc na starcie nie wpadnie w czerwoną ścianę.
 - Okolice spawnów są zawsze wolne, a każde wolne pole jest osiągalne (licząc przejścia przez portale).
 
 ## 6. Styl i oprawa
@@ -107,10 +111,14 @@ do gry przez internet.
 - **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`) oraz link zaproszenia
   (`adres-gry/?pokoj=KOT7`, przycisk *Kopiuj link*). Kto otworzy link, od razu widzi zaproszenie:
   wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
+- **Pokój publiczny `4B`** istnieje zawsze (na razie jeden). Widać go w menu głównym
+  (przycisk *Pokój publiczny 4B* ze stanem, np. „2/6 · czekają!”) i na górze listy pokoi.
+  Wchodzi się bez zakładania i bez kodu: wpisujesz imię i jesteś. Mecz zaczyna gospodarz,
+  czyli ten, kto jest w pokoju najdłużej.
 - **Lista pokoi** (`adres-gry/pokoje`, w grze przycisk *Lista pokoi*): wszystkie otwarte pokoje
   z kodem, graczami i stanem (poczekalnia albo trwający mecz z numerem rundy). Przycisk *Dołącz*
   otwiera zaproszenie do pokoju, pełne pokoje są oznaczone. Lista odświeża się sama co kilka sekund.
-- 2–4 graczy, ta sama mechanika co offline. Bez pauzy i bez przeklikiwania ekranów wyników
+- 2–6 graczy, ta sama mechanika co offline (przy 5–6 wężach na planszy leży 5 owoców). Bez pauzy i bez przeklikiwania ekranów wyników
   (wszyscy przechodzą dalej w tym samym momencie).
 - **Dołączanie w trakcie meczu:** kto wejdzie do pokoju, gdy trwa mecz (i jest wolne miejsce),
   czeka w poczekalni z napisem „Trwa mecz. Dołączysz od rundy N…” i wchodzi do gry od najbliższej

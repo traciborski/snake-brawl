@@ -3,7 +3,9 @@
 /** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const CODE_LENGTH = 4;
-export const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+/** Pokoje publiczne: zawsze istnieją, widać je w menu gry i na liście pokoi. */
+export const PUBLIC_ROOMS = ['4B'];
+export const ROOM_PATH_RE = new RegExp(`^/room/([A-Z2-9]{${CODE_LENGTH}}|${PUBLIC_ROOMS.join('|')})$`);
 /** Lista aktywnych pokoi (JSON) dla strony /pokoje. */
 export const ROOMS_API = '/api/pokoje';
 
@@ -14,7 +16,7 @@ export function randomCode(random = Math.random) {
   return code;
 }
 
-/** Kod wpisany przez gracza: wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
+/** Kod wpisany przez gracza (albo nazwa pokoju publicznego): wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
 export function normalizeCode(raw) {
   const code = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
   return ROOM_PATH_RE.test(`/room/${code}`) ? code : null;

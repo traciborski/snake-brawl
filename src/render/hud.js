@@ -1,6 +1,7 @@
-// Pasek nad planszą: 1–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// Pasek nad planszą: 1–6 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
 // W treningu (jeden wąż) zamiast rund: czas i zjedzone owoce.
-// Gracze 0 i 2 po lewej, 1 i 3 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
+// Gracze 0, 2, 4 po lewej, 1, 3, 5 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
+// Przy 5–6 graczach po trzy miejsca na stronę i mniejsze imiona.
 
 import { COLORS, TICK_MS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
@@ -30,6 +31,7 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
 }
 
 const SLOT_X = [16, 216];
+const SLOT_X_SIX = [16, 152, 288];
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -40,15 +42,16 @@ const SLOT_X = [16, 216];
  */
 export function drawHud(ctx, round, match, players, roundNumber) {
   const solo = round.snakes.length === 1;
+  const many = round.snakes.length > 4;
   round.snakes.forEach((snake, i) => {
     const right = i % 2 === 1;
-    const offset = SLOT_X[Math.floor(i / 2)];
+    const offset = (many ? SLOT_X_SIX : SLOT_X)[Math.floor(i / 2)];
     const x = right ? VIEW_W - offset : offset;
     const align = right ? 'right' : 'left';
     const { name, color } = players[i];
     const alpha = snake.alive ? 1 : 0.4;
 
-    drawText(ctx, name.toUpperCase(), x, 16, { size: 14, color, align, glow: snake.alive ? 8 : 0, alpha });
+    drawText(ctx, name.toUpperCase(), x, 16, { size: many ? 10 : 14, color, align, glow: snake.alive ? 8 : 0, alpha });
     ctx.save();
     ctx.globalAlpha = alpha;
     if (!solo) drawPips(ctx, x, 27, match.wins[i], color, right);

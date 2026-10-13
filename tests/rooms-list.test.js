@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LIST_TTL_MS, Room, sortRooms } from '../server/room.js';
+import { LIST_TTL_MS, Room, listRooms } from '../server/room.js';
 import worker, { RoomListObject, RoomObject } from '../server/worker.js';
 import { createGameServer } from '../scripts/serve.js';
 
@@ -39,7 +39,7 @@ test('opis pokoju: gracze, poczekalnia, mecz z numerem rundy, pełny', () => {
 
   const a = client(room, 'Ala', true);
   client(room, 'Bartek');
-  assert.deepEqual(room.summary(), { code: 'KOT7', players: ['Ala', 'Bartek'], playing: false, round: null, full: false });
+  assert.deepEqual(room.summary(), { code: 'KOT7', players: ['Ala', 'Bartek'], playing: false, round: null, full: false, public: false, max: 6 });
 
   a.send({ t: 'start' });
   assert.equal(room.summary().playing, true);
@@ -47,13 +47,12 @@ test('opis pokoju: gracze, poczekalnia, mecz z numerem rundy, pełny', () => {
   a.send({ t: 'result', r: 0, w: 1 });
   assert.equal(room.summary().round, 2);
 
-  client(room, 'Celina');
-  client(room, 'Darek');
+  for (const name of ['Celina', 'Darek', 'Ewa', 'Franek']) client(room, name);
   assert.equal(room.summary().full, true);
-  assert.equal(changes.length, 6, 'zmiana przy każdym dołączeniu, starcie i wyniku rundy');
+  assert.equal(changes.length, 8, 'zmiana przy każdym dołączeniu, starcie i wyniku rundy');
 
   a.conn.closed();
-  assert.deepEqual(changes.at(-1).players, ['Bartek', 'Celina', 'Darek']);
+  assert.deepEqual(changes.at(-1).players, ['Bartek', 'Celina', 'Darek', 'Ewa', 'Franek']);
 });
 
 test('pusty pokój znika z listy (ostatnia zmiana zgłasza null)', () => {
@@ -65,16 +64,20 @@ test('pusty pokój znika z listy (ostatnia zmiana zgłasza null)', () => {
   assert.equal(seen.at(-1), null);
 });
 
-test('kolejność listy: wolne poczekalnie, trwające mecze, pełne', () => {
+test('kolejność listy: pokój publiczny (zawsze, nawet pusty), wolne poczekalnie, trwające mecze, pełne', () => {
   const rooms = [
     { code: 'ZZZZ', players: ['a'], playing: false, round: null, full: true, at: 1 },
     { code: 'BBBB', players: ['a'], playing: true, round: 2, full: false, at: 1 },
     { code: 'CCCC', players: ['a'], playing: false, round: null, full: false, at: 1 },
     { code: 'AAAA', players: ['a'], playing: false, round: null, full: false, at: 1 },
   ];
-  const sorted = sortRooms(rooms);
-  assert.deepEqual(sorted.map((r) => r.code), ['AAAA', 'CCCC', 'BBBB', 'ZZZZ']);
-  assert.equal('at' in sorted[0], false);
+  const sorted = listRooms(rooms);
+  assert.deepEqual(sorted.map((r) => r.code), ['4B', 'AAAA', 'CCCC', 'BBBB', 'ZZZZ']);
+  assert.deepEqual(sorted[0], { code: '4B', players: [], playing: false, round: null, full: false, public: true, max: 6 });
+  assert.equal('at' in sorted[1], false);
+  // Gdy w 4B ktoś jest, na liście jest jego prawdziwy opis (bez dubla)
+  const busy = listRooms([{ code: '4B', players: ['Ala'], playing: true, round: 2, full: false }]);
+  assert.deepEqual(busy.map((r) => [r.code, r.players.length]), [['4B', 1]]);
 });
 
 test('Cloudflare: pokój zgłasza się do listy, lista zwraca go i usuwa stare wpisy', async () => {
@@ -92,11 +95,13 @@ test('Cloudflare: pokój zgłasza się do listy, lista zwraca go i usuwa stare w
   await roomObject.reporting;
 
   const get = async () => (await (await worker.fetch(new Request('https://gra/api/pokoje'), env)).json()).rooms;
-  assert.deepEqual(await get(), [{ code: 'KOT7', players: ['Ala'], playing: false, round: null, full: false }]);
+  const codes = async () => (await get()).map((r) => r.code);
+  assert.deepEqual(await codes(), ['4B', 'KOT7']);
+  assert.deepEqual((await get())[1], { code: 'KOT7', players: ['Ala'], playing: false, round: null, full: false, public: false, max: 6 });
 
   // Pokój bez wieści dłużej niż LIST_TTL_MS (np. po restarcie serwera) znika
   list.storage.map.get('KOT7').at -= LIST_TTL_MS + 1;
-  assert.deepEqual(await get(), []);
+  assert.deepEqual(await codes(), ['4B']);
   assert.equal(list.storage.map.size, 0);
 
   const post = await worker.fetch(new Request('https://gra/api/pokoje', { method: 'POST', body: '{}' }), env);
@@ -107,20 +112,21 @@ test('npm start: strona /pokoje i dane /api/pokoje', async () => {
   const server = createGameServer();
   await new Promise((ok) => server.listen(0, ok));
   const { port } = /** @type {any} */ (server.address());
+  let ws = null;
   try {
     const page = await fetch(`http://localhost:${port}/pokoje`);
     assert.equal(page.status, 200);
     assert.match(await page.text(), /AKTYWNE POKOJE/);
 
-    const ws = new WebSocket(`ws://localhost:${port}/room/KOT7`);
+    ws = new WebSocket(`ws://localhost:${port}/room/KOT7`);
     await new Promise((ok) => (ws.onopen = ok));
     const lobby = new Promise((ok) => (ws.onmessage = ok));
     ws.send(JSON.stringify({ t: 'hello', name: 'Ala', create: true }));
     await lobby;
     const data = await (await fetch(`http://localhost:${port}/api/pokoje`)).json();
-    assert.deepEqual(data.rooms.map((r) => r.code), ['KOT7']);
-    ws.close();
+    assert.deepEqual(data.rooms.map((r) => r.code), ['4B', 'KOT7']);
   } finally {
+    ws?.close();
     server.closeAllConnections?.();
     await new Promise((ok) => server.close(ok));
   }

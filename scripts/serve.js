@@ -8,7 +8,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bundle, OUT } from './build.js';
 import { acceptWebSocket } from './ws.js';
-import { Room, sortRooms } from '../server/room.js';
+import { Room, listRooms } from '../server/room.js';
 import { ROOM_PATH_RE, ROOMS_API } from '../src/net/protocol.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -33,7 +33,7 @@ export function createGameServer() {
     if (path === ROOMS_API) {
       const rooms = [...roomsByCode.values()].map((room) => room.summary()).filter(Boolean);
       res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ rooms: sortRooms(rooms) }));
+      res.end(JSON.stringify({ rooms: listRooms(rooms) }));
       return;
     }
     if (path.endsWith('/')) path += 'index.html';

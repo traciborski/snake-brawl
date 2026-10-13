@@ -6,7 +6,7 @@
 
 /**
  * @typedef {object} Snake
- * @property {number} id         numer gracza (0–3)
+ * @property {number} id         numer gracza (0–5)
  * @property {Pos[]} body        body[0] to głowa
  * @property {Dir} dir           aktualny kierunek
  * @property {Dir[]} nextDirs    kolejka skrętów (max 2)

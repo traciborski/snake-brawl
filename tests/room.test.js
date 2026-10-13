@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room } from '../server/room.js';
+import { MAX_PLAYERS } from '../src/config.js';
 import { createGameServer } from '../scripts/serve.js';
 import { decodeCommand, encodeCommand, normalizeCode, randomCode } from '../src/net/protocol.js';
 
@@ -46,10 +47,9 @@ test('błędy: pokój nie istnieje, kod zajęty, pokój pełny', () => {
 
   client(room, 'A', true);
   assert.equal(client(room, 'B', true).socket.last('error').code, 'exists');
-  client(room, 'B');
-  client(room, 'C');
-  client(room, 'D');
-  assert.equal(client(room, 'E').socket.last('error').code, 'full');
+  for (const name of ['B', 'C', 'D', 'E', 'F']) client(room, name);
+  assert.equal(room.members.length, MAX_PLAYERS);
+  assert.equal(client(room, 'G').socket.last('error').code, 'full');
 
 });
 
@@ -81,10 +81,10 @@ test('dołączenie w trakcie meczu: od rundy maxRound + 2, wszyscy się dowiaduj
 test('w trakcie meczu miejsca liczą się razem z graczami, którzy wyszli', () => {
   const room = new Room('KOT7');
   const a = client(room, 'A', true);
-  const others = ['B', 'C', 'D'].map((n) => client(room, n));
+  const others = ['B', 'C', 'D', 'E', 'F'].map((n) => client(room, n));
   a.send({ t: 'start' });
   others[0].conn.closed(); // B wychodzi, ale jego wąż i miejsce zostają do końca meczu
-  assert.equal(client(room, 'E').socket.last('error').code, 'full');
+  assert.equal(client(room, 'G').socket.last('error').code, 'full');
 });
 
 test('start: tylko założyciel, min. 2 graczy, wszyscy dostają to samo ziarno', () => {
@@ -191,4 +191,20 @@ test('lokalny serwer: dwóch graczy przez prawdziwe WebSockety', async () => {
     server.close();
     server.closeAllConnections?.();
   }
+});
+
+test('pokój publiczny 4B istnieje zawsze: wchodzi się bez zakładania, pierwszy jest gospodarzem', () => {
+  const room = new Room('4B');
+  const a = client(room, 'Ala');
+  assert.equal(a.socket.last('error'), undefined);
+  const lobby = a.socket.last('lobby');
+  assert.equal(lobby.public, true);
+  assert.equal(lobby.host, lobby.you);
+  const b = client(room, 'Bartek');
+  a.conn.closed();
+  // Gospodarz wyszedł: gospodarzem zostaje następny
+  const after = b.socket.last('lobby');
+  assert.equal(after.host, after.you);
+  assert.equal(normalizeCode('4b'), '4B');
+  assert.equal(normalizeCode('4C'), null);
 });

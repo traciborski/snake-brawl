@@ -100,6 +100,13 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Trening: runda trwa, dopóki wąż żyje, wynik = owoce i czas, rekord w przeglądarce
 - **Testy:** koniec rundy w treningu, własne pociski i ciało niegroźne, unikalne klawisze, kontroler.
 
+## Krok 15: Pokój publiczny 4B i 6 węży online
+- [x] Pokój publiczny `4B`: zawsze istnieje, przycisk ze stanem w menu, na górze listy pokoi
+- [x] Online do 6 graczy: miejsca startu na środkach boków, środkowa osłona, 2 nowe kolory, HUD na 6
+- [x] Korytarz przed każdym wężem aż do osłony (bez czerwonych ścian na starcie)
+- **Testy:** pokój publiczny, lista z pustym 4B, limit 6, 6 węży na planszy.
+  ✅ Sprawdzone w `wrangler dev`: 6 przeglądarek w 4B, start meczu, „6/6 · pełny” w menu.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

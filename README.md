@@ -1,6 +1,6 @@
 # Snake Brawl
 
-Arcade'owa walka węży: w 1–4 osoby na jednej klawiaturze (sam = trening) albo w 2–4 osoby przez internet.
+Arcade'owa walka węży: w 1–4 osoby na jednej klawiaturze (sam = trening) albo w 2–6 osób przez internet.
 Rośniesz, zjadając owoce, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni żywy wąż.
 Mecz gramy do 3 wygranych.
 
@@ -41,6 +41,7 @@ Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
 - **W internecie:** gra i serwer pokoi razem na Cloudflare Workers. Cloudflare sam buduje
   i wystawia grę po każdym pushu na `main` (instrukcja: [docs/04-WYSTAWIENIE.md](docs/04-WYSTAWIENIE.md)).
   Repo może zostać prywatne.
+- **Pokój publiczny 4B:** zawsze otwarty, wchodzi się z menu głównego jednym kliknięciem.
 - **Lista otwartych pokoi:** `adres-gry/pokoje` (w grze przycisk *Lista pokoi*).
 
 ## Dokumentacja

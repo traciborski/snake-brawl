@@ -60,7 +60,7 @@ export function drawPanel(ctx, cx, cy, w, h, color = COLORS.border) {
  * @param {number[]} wins
  * @param {{ color: string }[]} players
  */
-export function drawScore(ctx, wins, players, cx, y, size = 36) {
+export function drawScore(ctx, wins, players, cx, y, size = wins.length > 4 ? 26 : 36) {
   const parts = [];
   wins.forEach((w, i) => {
     if (i > 0) parts.push({ str: ':', color: COLORS.text });

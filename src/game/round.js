@@ -23,7 +23,7 @@ import { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } from './sn
 export function createRound(seed, options = {}) {
   const grid = { w: options.w ?? GRID_W, h: options.h ?? GRID_H };
   const rng = createRng(seed);
-  // Labirynt zawsze chroni wszystkie cztery rogi, więc nie zależy od liczby graczy
+  // Labirynt zawsze chroni wszystkie miejsca startu, więc nie zależy od liczby graczy
   const spawns = spawnPoints(grid, START_LENGTH);
   const walls = options.walls ?? generateMaze(grid, rng, spawns, { density: MAZE_DENSITY });
   const players = options.players ?? 2;
@@ -37,7 +37,8 @@ export function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
-    foodCount: options.foodCount ?? FOOD_COUNT,
+    // Przy 5–6 wężach trochę więcej owoców
+    foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);

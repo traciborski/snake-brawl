@@ -1,10 +1,25 @@
 import { COLORS, PLAYER_COLORS, VIEW_W } from '../config.js';
 import { blink, drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
-import { showRoomInAddressBar } from '../net/client.js';
+import { fetchRooms, serverUrl, showRoomInAddressBar } from '../net/client.js';
+import { PUBLIC_ROOMS } from '../net/protocol.js';
+
+/** Co ile odświeżamy w menu stan pokoju publicznego. */
+const PUBLIC_REFRESH_MS = 5000;
+
+/** Stan pokoju publicznego w jednej linijce, np. „2/6 · trwa mecz”. */
+export function publicRoomStatus(room) {
+  if (!room) return '';
+  const count = `${room.players.length}/${room.max}`;
+  if (room.full) return `${count} · pełny`;
+  if (room.playing) return `${count} · trwa mecz`;
+  return room.players.length ? `${count} · czekają!` : `${count} · pusty`;
+}
 
 /** @param {any} app */
 export function createMenuScene(app) {
+  let timer = 0;
+
   return {
     enter() {
       app.effects.clear();
@@ -13,11 +28,26 @@ export function createMenuScene(app) {
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
         h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
       ];
+      // Pokój publiczny widać od razu w menu (gdy jest serwer gry): wchodzi się jednym kliknięciem
+      const code = PUBLIC_ROOMS[0];
+      const status = h('small', { className: 'room-status' });
+      if (serverUrl()) {
+        buttons.push(
+          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `3  POKÓJ PUBLICZNY ${code}  `, status),
+        );
+        const refresh = async () => {
+          const rooms = await fetchRooms();
+          status.textContent = publicRoomStatus(rooms?.find((r) => r.code === code));
+        };
+        refresh();
+        timer = setInterval(refresh, PUBLIC_REFRESH_MS);
+      }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
       app.overlay.show(menu, { position: 'low' });
     },
 
     exit() {
+      clearInterval(timer);
       app.overlay.hide();
     },
 
@@ -51,13 +81,14 @@ export function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1/2 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, 1/2/3 wybierają od razu, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
     else if (['ArrowUp', 'KeyW'].includes(e.code)) buttons[(i - 1 + buttons.length) % buttons.length].focus();
     else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
     else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
+    else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
     else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();

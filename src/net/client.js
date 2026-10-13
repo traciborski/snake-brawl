@@ -1,7 +1,7 @@
 // Połączenie z serwerem pokoi (WebSocket), wybór adresu serwera i linki zaproszeń do pokoju.
 
 import { ONLINE_SERVER } from '../config.js';
-import { normalizeCode } from './protocol.js';
+import { ROOMS_API, normalizeCode } from './protocol.js';
 
 /**
  * Adres serwera pokoi:
@@ -17,6 +17,24 @@ export function serverUrl() {
     return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
   }
   return ONLINE_SERVER || null;
+}
+
+/**
+ * Lista aktywnych pokoi z serwera gry (z pokojami publicznymi, także pustymi) albo null,
+ * gdy serwera nie ma albo nie odpowiada.
+ * @returns {Promise<{ code: string, players: string[], playing: boolean, round: number | null,
+ *   full: boolean, public: boolean, max: number }[] | null>}
+ */
+export async function fetchRooms() {
+  const server = serverUrl();
+  if (!server) return null;
+  try {
+    const res = await fetch(server.replace(/^ws/, 'http') + ROOMS_API, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return (await res.json()).rooms;
+  } catch {
+    return null;
+  }
 }
 
 /**

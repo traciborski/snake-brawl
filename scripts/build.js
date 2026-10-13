@@ -18,7 +18,7 @@ export const SITE_FILES = ['index.html', 'pokoje.html', 'style.css', OUT];
 export const SITE_DIR = 'site';
 
 const IMPORT_RE = /^import\s+([\s\S]*?)\s+from\s+['"](.+?)['"];?[ \t]*$/gm;
-const EXPORT_DECL_RE = /^export\s+(function|class|const|let)\s+([A-Za-z_$][\w$]*)/gm;
+const EXPORT_DECL_RE = /^export\s+(async\s+function|function|class|const|let)\s+([A-Za-z_$][\w$]*)/gm;
 const EXPORT_EMPTY_RE = /^export\s*\{\s*\};?[ \t]*$/gm;
 
 function transform(id, source) {

@@ -43,6 +43,7 @@
         }
 
         .room.open { border-color: #39FF14; box-shadow: 0 0 10px rgba(57, 255, 20, 0.25); }
+        .room.public .code { color: #00E5FF; text-shadow: 0 0 8px #00E5FF; }
 
         .code {
             font-size: 20px;
@@ -97,7 +98,7 @@
         'use strict';
         // Lista pokoi z serwera gry (ten sam adres co gra albo ?server=wss://… jak w grze).
         // Odświeża się co kilka sekund. Kolory graczy jak w src/config.js (PLAYER_COLORS).
-        const COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
+        const COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100', '#B388FF', '#FFFFFF'];
         const REFRESH_MS = 3000;
 
         const server = new URLSearchParams(location.search).get('server');
@@ -129,15 +130,18 @@
                 const color = COLORS[i % COLORS.length];
                 players.append(el('span', { style: `color:${color};text-shadow:0 0 6px ${color}` }, name));
             });
-            const count = `${room.players.length} / 4`;
-            const status = room.playing ? `trwa mecz, runda ${room.round} · ${count}` : `poczekalnia · ${count}`;
+            const count = `${room.players.length} / ${room.max}`;
+            const state = room.playing
+                ? `trwa mecz, runda ${room.round}`
+                : room.players.length ? 'poczekalnia' : 'pusty, wejdź pierwszy';
+            const status = `${room.public ? 'POKÓJ PUBLICZNY · ' : ''}${state} · ${count}`;
             const action = room.full
                 ? el('span', { className: 'full' }, 'PEŁNY')
                 : el('a', { className: 'btn', href: gameLink(room.code) }, 'DOŁĄCZ');
             const open = !room.full && !room.playing;
             return el(
                 'div',
-                { className: open ? 'room open' : 'room' },
+                { className: ['room', open && 'open', room.public && 'public'].filter(Boolean).join(' ') },
                 el('div', { className: 'code' }, room.code),
                 el('div', { className: 'info' }, players, el('div', { className: 'status' }, status)),
                 action,
@@ -149,14 +153,13 @@
                 const res = await fetch(api, { cache: 'no-store' });
                 if (!res.ok) throw new Error(String(res.status));
                 const { rooms } = await res.json();
+                // Pokój publiczny jest na liście zawsze, nawet pusty
+                const quiet = rooms.every((r) => r.public && !r.players.length);
                 list.replaceChildren(
-                    ...(rooms.length
-                        ? rooms.map(roomRow)
-                        : [el('p', { className: 'empty' }, 'Nie ma teraz żadnego pokoju. Załóż swój i zaproś znajomych!')]),
+                    ...rooms.map(roomRow),
+                    ...(quiet ? [el('p', { className: 'empty' }, 'Nikt teraz nie gra. Wejdź do pokoju publicznego albo załóż własny i zaproś znajomych!')] : []),
                 );
-                sub.textContent = rooms.length
-                    ? 'Kliknij DOŁĄCZ, wpisz imię i grasz. Do trwającego meczu wejdziesz od kolejnej rundy.'
-                    : 'Lista odświeża się sama.';
+                sub.textContent = 'Kliknij DOŁĄCZ, wpisz imię i grasz. Do trwającego meczu wejdziesz od kolejnej rundy.';
             } catch {
                 sub.textContent = location.protocol === 'file:'
                     ? 'Lista pokoi działa na stronie gry w internecie albo przez npm start.'

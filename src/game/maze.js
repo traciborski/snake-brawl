@@ -1,5 +1,5 @@
 // Symetryczny labirynt: każda ściana ma lustrzane odbicia w obu osiach (a więc też obraz
-// po obrocie o 180°), więc gracze w każdym z czterech rogów mają identyczną sytuację.
+// po obrocie o 180°), więc gracze w każdym z czterech rogów (i obaj na środkach boków) mają identyczną sytuację.
 // Okolice spawnów są zawsze wolne, a wszystkie wolne pola są osiągalne.
 
 import { nextFloat, randInt } from '../core/rng.js';
@@ -19,8 +19,9 @@ export function symmetric(grid, p) {
 /** @typedef {import('./types.js').Dir} Dir */
 
 /**
- * Pozycje startowe w czterech rogach, kolejno: lewy górny, prawy dolny, prawy górny, lewy dolny.
- * Przy dwóch graczach zajmują więc przeciwległe rogi.
+ * Pozycje startowe: cztery rogi (lewy górny, prawy dolny, prawy górny, lewy dolny), potem
+ * środek lewego i prawego boku (piąty i szósty gracz online). Przy dwóch graczach
+ * zajmują więc przeciwległe rogi.
  * @param {Grid} grid
  * @param {number} length
  * @returns {{ body: Pos[], dir: Dir }[]}
@@ -28,27 +29,35 @@ export function symmetric(grid, p) {
 export function spawnPoints(grid, length) {
   const headX = 2 + length;
   const tl = Array.from({ length }, (_, i) => ({ x: headX - i, y: 2 }));
+  const ml = tl.map((p) => ({ x: p.x, y: Math.floor(grid.h / 2) }));
   return [
     { body: tl, dir: 'right' },
     { body: tl.map((p) => rotate180(grid, p)), dir: 'left' },
     { body: tl.map((p) => mirrorX(grid, p)), dir: 'left' },
     { body: tl.map((p) => mirrorY(grid, p)), dir: 'right' },
+    { body: ml, dir: 'right' },
+    { body: ml.map((p) => mirrorX(grid, p)), dir: 'left' },
   ];
 }
 
 /**
- * Stałe czarne osłony na środku górnego i dolnego brzegu: węże z sąsiednich rogów
- * startują naprzeciw siebie w tym samym rzędzie, więc nie mogą mieć się od razu na muszce.
+ * Stałe czarne osłony na środku górnego i dolnego brzegu oraz na środku planszy: węże
+ * z sąsiednich rogów (i ze środków boków) startują naprzeciw siebie w tym samym rzędzie,
+ * więc nie mogą mieć się od razu na muszce.
  */
 function startCovers(grid) {
   const cells = [];
+  const mid = Math.floor(grid.h / 2);
   for (const x of [Math.floor(grid.w / 2) - 1, Math.floor(grid.w / 2)]) {
-    for (const y of [1, 2, 3]) cells.push(...symmetric(grid, { x, y }));
+    for (const y of [1, 2, 3, mid - 1, mid]) cells.push(...symmetric(grid, { x, y }));
   }
   return cells;
 }
 
-/** Pola, na których nie wolno stawiać ścian: otoczenie węży i korytarz przed głową. */
+/**
+ * Pola, na których nie wolno stawiać ścian: otoczenie węży i korytarz przed głową aż do
+ * stałej osłony na środku (wąż jadący prosto odbija się od niej, a nie wpada w czerwoną ścianę).
+ */
 function protectedCells(grid, spawns) {
   const mask = new Uint8Array(grid.w * grid.h);
   const mark = (p) => {
@@ -63,7 +72,9 @@ function protectedCells(grid, spawns) {
     }
     const side = DIR_VEC[dir].x !== 0 ? { x: 0, y: 1 } : { x: 1, y: 0 };
     let p = body[0];
-    for (let i = 0; i < 14; i++) {
+    const coverX = DIR_VEC[dir].x > 0 ? Math.floor(grid.w / 2) - 1 : Math.floor(grid.w / 2);
+    const corridor = DIR_VEC[dir].x !== 0 ? Math.abs(coverX - p.x) - 1 : 14;
+    for (let i = 0; i < corridor; i++) {
       p = step(p, dir);
       for (let k = -1; k <= 1; k++) mark({ x: p.x + side.x * k, y: p.y + side.y * k });
     }

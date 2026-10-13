@@ -38,14 +38,14 @@ export const WALL = {
 };
 
 // Gracze
-export const MAX_PLAYERS = 4;
+export const MAX_PLAYERS = 6; // gra przez internet
 export const OFFLINE_MIN_PLAYERS = 1; // jeden gracz = trening
 export const OFFLINE_MAX_PLAYERS = 4;
 export const OFFLINE_DEFAULT_PLAYERS = 2;
 export const NAME_MAX = 12;
 // Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
-export const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
-export const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4'];
+export const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100', '#B388FF', '#FFFFFF'];
+export const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4', 'Gracz 5', 'Gracz 6'];
 
 // Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
 // Offline: zestaw i = gracz i (trening: wszystkie zestawy sterują jednym wężem).

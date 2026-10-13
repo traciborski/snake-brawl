@@ -2,7 +2,7 @@
 
 import { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } from '../config.js';
 import { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } from '../net/client.js';
-import { normalizeCode, randomCode } from '../net/protocol.js';
+import { PUBLIC_ROOMS, normalizeCode, randomCode } from '../net/protocol.js';
 import { attachSession, leaveOnline } from '../modes/online.js';
 import { drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
@@ -81,7 +81,7 @@ export function createOnlineScene(app) {
           }
         },
       },
-      h('h2', {}, inviteCode ? `ZAPROSZENIE DO POKOJU ${inviteCode}` : 'GRA PRZEZ INTERNET'),
+      h('h2', {}, inviteCode ? (PUBLIC_ROOMS.includes(inviteCode) ? `POKÓJ PUBLICZNY ${inviteCode}` : `ZAPROSZENIE DO POKOJU ${inviteCode}`) : 'GRA PRZEZ INTERNET'),
       inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
       h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
       h(
@@ -126,7 +126,9 @@ export function createOnlineScene(app) {
         ? canStart
           ? 'Kliknij START, gdy wszyscy są.'
           : 'Czekamy na co najmniej jednego gracza…'
-        : 'Czekamy, aż założyciel zacznie mecz…';
+        : lobby.public
+          ? 'Czekamy, aż gospodarz (pierwszy w pokoju) zacznie mecz…'
+          : 'Czekamy, aż założyciel zacznie mecz…';
 
     const rows = lobby.players.map((p, i) =>
       h(
@@ -134,14 +136,14 @@ export function createOnlineScene(app) {
         { className: 'row' },
         h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
         h('span', { style: { color: PLAYER_COLORS[i] } }, p.name),
-        h('small', {}, [p.id === lobby.host ? '★ założyciel' : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
+        h('small', {}, [p.id === lobby.host ? (lobby.public ? '★ gospodarz' : '★ założyciel') : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
       ),
     );
 
     const panel = h(
       'div',
       { className: 'panel', onkeydown: (e) => e.code === 'Escape' && leaveOnline(app) },
-      h('h2', {}, `POKÓJ  ${lobby.code}`),
+      h('h2', {}, lobby.public ? `POKÓJ PUBLICZNY  ${lobby.code}` : `POKÓJ  ${lobby.code}`),
       h('p', { className: 'hint' }, 'Wyślij znajomym link (albo sam kod), żeby dołączyli:'),
       linkRow(lobby.code),
       rows,
@@ -190,7 +192,7 @@ export function createOnlineScene(app) {
     render() {
       app.renderer.begin();
       drawText(app.renderer.ctx, 'GRA PRZEZ INTERNET', VIEW_W / 2, 70, { size: 20, color: PLAYER_COLORS[1], glow: 12 });
-      drawText(app.renderer.ctx, '2–4 graczy, każdy na swoim komputerze', VIEW_W / 2, 105, { size: 10, color: '#7a80a8' });
+      drawText(app.renderer.ctx, `2–${MAX_PLAYERS} graczy, każdy na swoim komputerze`, VIEW_W / 2, 105, { size: 10, color: '#7a80a8' });
     },
   };
 }

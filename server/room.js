@@ -4,6 +4,7 @@
 // Używają jej lokalny serwer (scripts/serve.js) i Cloudflare (server/worker.js).
 
 import { MAX_PLAYERS, NAME_MAX } from '../src/config.js';
+import { PUBLIC_ROOMS } from '../src/net/protocol.js';
 
 const DIRS_RE = /^[udlr]{0,3}$/;
 
@@ -15,7 +16,9 @@ export class Room {
   constructor(code, { random = Math.random } = {}) {
     this.code = code;
     this.random = random;
-    this.created = false;
+    /** Pokój publiczny (np. „4B”) istnieje zawsze: można do niego wejść bez zakładania */
+    this.isPublic = PUBLIC_ROOMS.includes(code);
+    this.created = this.isPublic;
     /** @type {Member[]} kolejność = kolejność dołączenia; pierwszy to założyciel */
     this.members = [];
     /** @type {'lobby' | 'game'} */
@@ -56,6 +59,8 @@ export class Room {
       playing,
       round: playing ? this.results.length + 1 : null,
       full: this.isFull,
+      public: this.isPublic,
+      max: MAX_PLAYERS,
     };
   }
 
@@ -201,7 +206,8 @@ export class Room {
     const players = this.members.map((m) => ({ id: m.id, name: m.name }));
     const host = this.members[0]?.id ?? null;
     const playing = this.phase === 'game';
-    for (const m of this.members) send(m.socket, { t: 'lobby', code: this.code, you: m.id, host, players, playing });
+    const isPublic = this.isPublic;
+    for (const m of this.members) send(m.socket, { t: 'lobby', code: this.code, you: m.id, host, players, playing, public: isPublic });
   }
 
   broadcast(msg) {
@@ -213,14 +219,30 @@ export class Room {
 /** Pokój bez wieści dłużej niż tyle znika z listy pokoi (np. po restarcie serwera). */
 export const LIST_TTL_MS = 3 * 60 * 1000;
 
+/** Opis pustego pokoju publicznego (pusty pokój nie zgłasza się na listę, a publiczny ma być widać zawsze). */
+function emptyPublicRoom(code) {
+  return { code, players: [], playing: false, round: null, full: false, public: true, max: MAX_PLAYERS };
+}
+
 /**
- * Lista pokoi do pokazania: najpierw poczekalnie z wolnym miejscem, potem trwające mecze,
- * na końcu pełne; w grupie alfabetycznie. Zostają tylko pola opisu (bez np. czasu zgłoszenia).
+ * Lista pokoi do pokazania: najpierw publiczne (zawsze, także puste), potem poczekalnie
+ * z wolnym miejscem, trwające mecze, na końcu pełne; w grupie alfabetycznie.
+ * Zostają tylko pola opisu (bez np. czasu zgłoszenia).
  */
-export function sortRooms(rooms) {
-  const order = (r) => (r.full ? 2 : r.playing ? 1 : 0);
-  return rooms
-    .map(({ code, players, playing, round, full }) => ({ code, players, playing, round, full }))
+export function listRooms(rooms) {
+  const all = [...rooms];
+  for (const code of PUBLIC_ROOMS) if (!all.some((r) => r.code === code)) all.push(emptyPublicRoom(code));
+  const order = (r) => (r.public ? -1 : r.full ? 2 : r.playing ? 1 : 0);
+  return all
+    .map(({ code, players, playing, round, full }) => ({
+      code,
+      players,
+      playing,
+      round,
+      full,
+      public: PUBLIC_ROOMS.includes(code),
+      max: MAX_PLAYERS,
+    }))
     .sort((a, b) => order(a) - order(b) || a.code.localeCompare(b.code));
 }
 

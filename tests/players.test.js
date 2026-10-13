@@ -8,8 +8,8 @@ import { place, run, wall } from './helpers.js';
 const empty = (players) =>
   createRound(1, { players, walls: new Uint8Array(GRID_W * GRID_H), foodCount: 0 });
 
-test('runda tworzy tyle węży, ilu jest graczy (2–4), każdy w innym rogu', () => {
-  for (const n of [2, 3, 4]) {
+test('runda tworzy tyle węży, ilu jest graczy (1–6), każdy w innym miejscu startu', () => {
+  for (const n of [1, 2, 3, 4, 5, 6]) {
     const s = createRound(7, { players: n });
     assert.equal(s.snakes.length, n);
     const heads = new Set(s.snakes.map((sn) => `${sn.body[0].x},${sn.body[0].y}`));
@@ -61,4 +61,28 @@ test('imiona: przycięte, bez nadmiarowych spacji, puste zastąpione domyślnym'
   assert.equal(cleanName('  Ala   ma  kota ', 0), 'Ala ma kota');
   assert.equal(cleanName('Bardzo długie imię gracza', 0), 'Bardzo długi');
   assert.equal(cleanName('   ', 1), 'Gracz 2');
+});
+
+test('5–6 węży: wolne miejsca startu, więcej owoców, nikt nie ma rywala od razu na muszce', () => {
+  for (const seed of [1, 7, 42, 999, 2024, 31337]) {
+    const s = createRound(seed, { players: 6 });
+    assert.equal(s.food.length, 5);
+    for (const snake of s.snakes) {
+      for (const p of snake.body) assert.equal(s.walls[p.y * s.grid.w + p.x], 0);
+    }
+    // Węże na środkach boków patrzą na siebie, ale między nimi zawsze stoi osłona
+    const [left, right] = [s.snakes[4], s.snakes[5]];
+    const y = left.body[0].y;
+    let blocked = false;
+    for (let x = left.body[0].x + 1; x < right.body[0].x; x++) if (s.walls[y * s.grid.w + x]) blocked = true;
+    assert.ok(blocked, `ziarno ${seed}: brak osłony między środkami boków`);
+    // Jadąc prosto, każdy wąż dojeżdża do osłony bez żadnej ściany po drodze
+    for (const snake of s.snakes) {
+      const dx = snake.dir === 'right' ? 1 : -1;
+      let x = snake.body[0].x + dx;
+      while (!s.walls[snake.body[0].y * s.grid.w + x]) x += dx;
+      assert.equal(s.walls[snake.body[0].y * s.grid.w + x], WALL.BOUNCE, `ziarno ${seed}, wąż ${snake.id}`);
+      assert.ok(Math.abs(x - s.grid.w / 2) <= 1, `ziarno ${seed}, wąż ${snake.id}: ściana przed osłoną (x=${x})`);
+    }
+  }
 });

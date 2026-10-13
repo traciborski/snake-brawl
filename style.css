@@ -149,6 +149,12 @@ canvas {
     min-width: 30em;
 }
 
+/* Stan pokoju publicznego na przycisku w menu (np. „2/6 · trwa mecz”) */
+.room-status {
+    color: #39ff14;
+    font-size: 0.7em;
+}
+
 .overlay button:hover,
 .overlay button:focus {
     outline: none;

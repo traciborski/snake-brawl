@@ -7,13 +7,18 @@ import { cellIndex } from '../src/game/grid.js';
 const grid = { w: 48, h: 27 };
 const spawns = spawnPoints(grid, 3);
 
-test('cztery spawny w rogach są swoimi lustrzanymi odbiciami', () => {
-  assert.equal(spawns.length, 4);
+test('sześć spawnów: cztery rogi i środki boków są swoimi lustrzanymi odbiciami', () => {
+  assert.equal(spawns.length, 6);
   spawns[0].body.forEach((p, i) => {
     const [, mx, my, rot] = symmetric(grid, p);
     assert.deepEqual(rot, spawns[1].body[i]);
     assert.deepEqual(mx, spawns[2].body[i]);
     assert.deepEqual(my, spawns[3].body[i]);
+  });
+  spawns[4].body.forEach((p, i) => {
+    const [, mx, my] = symmetric(grid, p);
+    assert.deepEqual(mx, spawns[5].body[i]);
+    assert.deepEqual(my, p, 'środek boku leży na osi symetrii');
   });
 });
 

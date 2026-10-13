@@ -151,14 +151,14 @@ const WALL = {
 };
 
 // Gracze
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 6; // gra przez internet
 const OFFLINE_MIN_PLAYERS = 1; // jeden gracz = trening
 const OFFLINE_MAX_PLAYERS = 4;
 const OFFLINE_DEFAULT_PLAYERS = 2;
 const NAME_MAX = 12;
 // Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
-const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100'];
-const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4'];
+const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100', '#B388FF', '#FFFFFF'];
+const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4', 'Gracz 5', 'Gracz 6'];
 
 // Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
 // Offline: zestaw i = gracz i (trening: wszystkie zestawy sterują jednym wężem).
@@ -905,10 +905,25 @@ __factories["src/scenes/menu.js"] = function (__exports) {
 const { COLORS, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { blink, drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
-const { showRoomInAddressBar } = __require("src/net/client.js");
+const { fetchRooms, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
+const { PUBLIC_ROOMS } = __require("src/net/protocol.js");
+
+/** Co ile odświeżamy w menu stan pokoju publicznego. */
+const PUBLIC_REFRESH_MS = 5000;
+
+/** Stan pokoju publicznego w jednej linijce, np. „2/6 · trwa mecz”. */
+function publicRoomStatus(room) {
+  if (!room) return '';
+  const count = `${room.players.length}/${room.max}`;
+  if (room.full) return `${count} · pełny`;
+  if (room.playing) return `${count} · trwa mecz`;
+  return room.players.length ? `${count} · czekają!` : `${count} · pusty`;
+}
 
 /** @param {any} app */
 function createMenuScene(app) {
+  let timer = 0;
+
   return {
     enter() {
       app.effects.clear();
@@ -917,11 +932,26 @@ function createMenuScene(app) {
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
         h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
       ];
+      // Pokój publiczny widać od razu w menu (gdy jest serwer gry): wchodzi się jednym kliknięciem
+      const code = PUBLIC_ROOMS[0];
+      const status = h('small', { className: 'room-status' });
+      if (serverUrl()) {
+        buttons.push(
+          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `3  POKÓJ PUBLICZNY ${code}  `, status),
+        );
+        const refresh = async () => {
+          const rooms = await fetchRooms();
+          status.textContent = publicRoomStatus(rooms?.find((r) => r.code === code));
+        };
+        refresh();
+        timer = setInterval(refresh, PUBLIC_REFRESH_MS);
+      }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
       app.overlay.show(menu, { position: 'low' });
     },
 
     exit() {
+      clearInterval(timer);
       app.overlay.hide();
     },
 
@@ -955,20 +985,21 @@ function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1/2 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, 1/2/3 wybierają od razu, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
     else if (['ArrowUp', 'KeyW'].includes(e.code)) buttons[(i - 1 + buttons.length) % buttons.length].focus();
     else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
     else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
+    else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
     else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();
   }
 }
 
-Object.assign(__exports, { createMenuScene });
+Object.assign(__exports, { publicRoomStatus, createMenuScene });
 };
 
 // ---- src/render/text.js ----
@@ -1035,7 +1066,7 @@ function drawPanel(ctx, cx, cy, w, h, color = COLORS.border) {
  * @param {number[]} wins
  * @param {{ color: string }[]} players
  */
-function drawScore(ctx, wins, players, cx, y, size = 36) {
+function drawScore(ctx, wins, players, cx, y, size = wins.length > 4 ? 26 : 36) {
   const parts = [];
   wins.forEach((w, i) => {
     if (i > 0) parts.push({ str: ':', color: COLORS.text });
@@ -1114,7 +1145,7 @@ __factories["src/net/client.js"] = function (__exports) {
 // Połączenie z serwerem pokoi (WebSocket), wybór adresu serwera i linki zaproszeń do pokoju.
 
 const { ONLINE_SERVER } = __require("src/config.js");
-const { normalizeCode } = __require("src/net/protocol.js");
+const { ROOMS_API, normalizeCode } = __require("src/net/protocol.js");
 
 /**
  * Adres serwera pokoi:
@@ -1130,6 +1161,24 @@ function serverUrl() {
     return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
   }
   return ONLINE_SERVER || null;
+}
+
+/**
+ * Lista aktywnych pokoi z serwera gry (z pokojami publicznymi, także pustymi) albo null,
+ * gdy serwera nie ma albo nie odpowiada.
+ * @returns {Promise<{ code: string, players: string[], playing: boolean, round: number | null,
+ *   full: boolean, public: boolean, max: number }[] | null>}
+ */
+async function fetchRooms() {
+  const server = serverUrl();
+  if (!server) return null;
+  try {
+    const res = await fetch(server.replace(/^ws/, 'http') + ROOMS_API, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return (await res.json()).rooms;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -1244,7 +1293,7 @@ function showRoomInAddressBar(code) {
   }
 }
 
-Object.assign(__exports, { serverUrl, joinRoom, roomFromLink, roomLink, roomsPage, showRoomInAddressBar });
+Object.assign(__exports, { serverUrl, fetchRooms, joinRoom, roomFromLink, roomLink, roomsPage, showRoomInAddressBar });
 };
 
 // ---- src/net/protocol.js ----
@@ -1254,7 +1303,9 @@ __factories["src/net/protocol.js"] = function (__exports) {
 /** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
-const ROOM_PATH_RE = /^\/room\/([A-Z2-9]{4})$/;
+/** Pokoje publiczne: zawsze istnieją, widać je w menu gry i na liście pokoi. */
+const PUBLIC_ROOMS = ['4B'];
+const ROOM_PATH_RE = new RegExp(`^/room/([A-Z2-9]{${CODE_LENGTH}}|${PUBLIC_ROOMS.join('|')})$`);
 /** Lista aktywnych pokoi (JSON) dla strony /pokoje. */
 const ROOMS_API = '/api/pokoje';
 
@@ -1265,7 +1316,7 @@ function randomCode(random = Math.random) {
   return code;
 }
 
-/** Kod wpisany przez gracza: wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
+/** Kod wpisany przez gracza (albo nazwa pokoju publicznego): wielkie litery, bez spacji. Zwraca null, jeśli niepoprawny. */
 function normalizeCode(raw) {
   const code = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
   return ROOM_PATH_RE.test(`/room/${code}`) ? code : null;
@@ -1288,7 +1339,7 @@ function decodeCommand({ d = '', s = 0 }) {
   return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
 }
 
-Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand });
+Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, PUBLIC_ROOMS, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand });
 };
 
 // ---- src/scenes/setup.js ----
@@ -1567,7 +1618,7 @@ __factories["src/scenes/online.js"] = function (__exports) {
 
 const { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
-const { normalizeCode, randomCode } = __require("src/net/protocol.js");
+const { PUBLIC_ROOMS, normalizeCode, randomCode } = __require("src/net/protocol.js");
 const { attachSession, leaveOnline } = __require("src/modes/online.js");
 const { drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
@@ -1646,7 +1697,7 @@ function createOnlineScene(app) {
           }
         },
       },
-      h('h2', {}, inviteCode ? `ZAPROSZENIE DO POKOJU ${inviteCode}` : 'GRA PRZEZ INTERNET'),
+      h('h2', {}, inviteCode ? (PUBLIC_ROOMS.includes(inviteCode) ? `POKÓJ PUBLICZNY ${inviteCode}` : `ZAPROSZENIE DO POKOJU ${inviteCode}`) : 'GRA PRZEZ INTERNET'),
       inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
       h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
       h(
@@ -1691,7 +1742,9 @@ function createOnlineScene(app) {
         ? canStart
           ? 'Kliknij START, gdy wszyscy są.'
           : 'Czekamy na co najmniej jednego gracza…'
-        : 'Czekamy, aż założyciel zacznie mecz…';
+        : lobby.public
+          ? 'Czekamy, aż gospodarz (pierwszy w pokoju) zacznie mecz…'
+          : 'Czekamy, aż założyciel zacznie mecz…';
 
     const rows = lobby.players.map((p, i) =>
       h(
@@ -1699,14 +1752,14 @@ function createOnlineScene(app) {
         { className: 'row' },
         h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
         h('span', { style: { color: PLAYER_COLORS[i] } }, p.name),
-        h('small', {}, [p.id === lobby.host ? '★ założyciel' : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
+        h('small', {}, [p.id === lobby.host ? (lobby.public ? '★ gospodarz' : '★ założyciel') : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
       ),
     );
 
     const panel = h(
       'div',
       { className: 'panel', onkeydown: (e) => e.code === 'Escape' && leaveOnline(app) },
-      h('h2', {}, `POKÓJ  ${lobby.code}`),
+      h('h2', {}, lobby.public ? `POKÓJ PUBLICZNY  ${lobby.code}` : `POKÓJ  ${lobby.code}`),
       h('p', { className: 'hint' }, 'Wyślij znajomym link (albo sam kod), żeby dołączyli:'),
       linkRow(lobby.code),
       rows,
@@ -1755,7 +1808,7 @@ function createOnlineScene(app) {
     render() {
       app.renderer.begin();
       drawText(app.renderer.ctx, 'GRA PRZEZ INTERNET', VIEW_W / 2, 70, { size: 20, color: PLAYER_COLORS[1], glow: 12 });
-      drawText(app.renderer.ctx, '2–4 graczy, każdy na swoim komputerze', VIEW_W / 2, 105, { size: 10, color: '#7a80a8' });
+      drawText(app.renderer.ctx, `2–${MAX_PLAYERS} graczy, każdy na swoim komputerze`, VIEW_W / 2, 105, { size: 10, color: '#7a80a8' });
     },
   };
 }
@@ -2166,7 +2219,7 @@ const { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } = __require
 function createRound(seed, options = {}) {
   const grid = { w: options.w ?? GRID_W, h: options.h ?? GRID_H };
   const rng = createRng(seed);
-  // Labirynt zawsze chroni wszystkie cztery rogi, więc nie zależy od liczby graczy
+  // Labirynt zawsze chroni wszystkie miejsca startu, więc nie zależy od liczby graczy
   const spawns = spawnPoints(grid, START_LENGTH);
   const walls = options.walls ?? generateMaze(grid, rng, spawns, { density: MAZE_DENSITY });
   const players = options.players ?? 2;
@@ -2180,7 +2233,8 @@ function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
-    foodCount: options.foodCount ?? FOOD_COUNT,
+    // Przy 5–6 wężach trochę więcej owoców
+    foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);
@@ -2688,7 +2742,7 @@ Object.assign(__exports, { refillFood, eatFood });
 // ---- src/game/maze.js ----
 __factories["src/game/maze.js"] = function (__exports) {
 // Symetryczny labirynt: każda ściana ma lustrzane odbicia w obu osiach (a więc też obraz
-// po obrocie o 180°), więc gracze w każdym z czterech rogów mają identyczną sytuację.
+// po obrocie o 180°), więc gracze w każdym z czterech rogów (i obaj na środkach boków) mają identyczną sytuację.
 // Okolice spawnów są zawsze wolne, a wszystkie wolne pola są osiągalne.
 
 const { nextFloat, randInt } = __require("src/core/rng.js");
@@ -2708,8 +2762,9 @@ function symmetric(grid, p) {
 /** @typedef {import('./types.js').Dir} Dir */
 
 /**
- * Pozycje startowe w czterech rogach, kolejno: lewy górny, prawy dolny, prawy górny, lewy dolny.
- * Przy dwóch graczach zajmują więc przeciwległe rogi.
+ * Pozycje startowe: cztery rogi (lewy górny, prawy dolny, prawy górny, lewy dolny), potem
+ * środek lewego i prawego boku (piąty i szósty gracz online). Przy dwóch graczach
+ * zajmują więc przeciwległe rogi.
  * @param {Grid} grid
  * @param {number} length
  * @returns {{ body: Pos[], dir: Dir }[]}
@@ -2717,27 +2772,35 @@ function symmetric(grid, p) {
 function spawnPoints(grid, length) {
   const headX = 2 + length;
   const tl = Array.from({ length }, (_, i) => ({ x: headX - i, y: 2 }));
+  const ml = tl.map((p) => ({ x: p.x, y: Math.floor(grid.h / 2) }));
   return [
     { body: tl, dir: 'right' },
     { body: tl.map((p) => rotate180(grid, p)), dir: 'left' },
     { body: tl.map((p) => mirrorX(grid, p)), dir: 'left' },
     { body: tl.map((p) => mirrorY(grid, p)), dir: 'right' },
+    { body: ml, dir: 'right' },
+    { body: ml.map((p) => mirrorX(grid, p)), dir: 'left' },
   ];
 }
 
 /**
- * Stałe czarne osłony na środku górnego i dolnego brzegu: węże z sąsiednich rogów
- * startują naprzeciw siebie w tym samym rzędzie, więc nie mogą mieć się od razu na muszce.
+ * Stałe czarne osłony na środku górnego i dolnego brzegu oraz na środku planszy: węże
+ * z sąsiednich rogów (i ze środków boków) startują naprzeciw siebie w tym samym rzędzie,
+ * więc nie mogą mieć się od razu na muszce.
  */
 function startCovers(grid) {
   const cells = [];
+  const mid = Math.floor(grid.h / 2);
   for (const x of [Math.floor(grid.w / 2) - 1, Math.floor(grid.w / 2)]) {
-    for (const y of [1, 2, 3]) cells.push(...symmetric(grid, { x, y }));
+    for (const y of [1, 2, 3, mid - 1, mid]) cells.push(...symmetric(grid, { x, y }));
   }
   return cells;
 }
 
-/** Pola, na których nie wolno stawiać ścian: otoczenie węży i korytarz przed głową. */
+/**
+ * Pola, na których nie wolno stawiać ścian: otoczenie węży i korytarz przed głową aż do
+ * stałej osłony na środku (wąż jadący prosto odbija się od niej, a nie wpada w czerwoną ścianę).
+ */
 function protectedCells(grid, spawns) {
   const mask = new Uint8Array(grid.w * grid.h);
   const mark = (p) => {
@@ -2752,7 +2815,9 @@ function protectedCells(grid, spawns) {
     }
     const side = DIR_VEC[dir].x !== 0 ? { x: 0, y: 1 } : { x: 1, y: 0 };
     let p = body[0];
-    for (let i = 0; i < 14; i++) {
+    const coverX = DIR_VEC[dir].x > 0 ? Math.floor(grid.w / 2) - 1 : Math.floor(grid.w / 2);
+    const corridor = DIR_VEC[dir].x !== 0 ? Math.abs(coverX - p.x) - 1 : 14;
+    for (let i = 0; i < corridor; i++) {
       p = step(p, dir);
       for (let k = -1; k <= 1; k++) mark({ x: p.x + side.x * k, y: p.y + side.y * k });
     }
@@ -3053,9 +3118,10 @@ Object.assign(__exports, { drawSnake, drawBullets, drawFood });
 
 // ---- src/render/hud.js ----
 __factories["src/render/hud.js"] = function (__exports) {
-// Pasek nad planszą: 1–4 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
+// Pasek nad planszą: 1–6 graczy (imię, wygrane rundy, długość, amunicja) i numer rundy.
 // W treningu (jeden wąż) zamiast rund: czas i zjedzone owoce.
-// Gracze 0 i 2 po lewej, 1 i 3 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
+// Gracze 0, 2, 4 po lewej, 1, 3, 5 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
+// Przy 5–6 graczach po trzy miejsca na stronę i mniejsze imiona.
 
 const { COLORS, TICK_MS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
 const { drawText } = __require("src/render/text.js");
@@ -3085,6 +3151,7 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
 }
 
 const SLOT_X = [16, 216];
+const SLOT_X_SIX = [16, 152, 288];
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -3095,15 +3162,16 @@ const SLOT_X = [16, 216];
  */
 function drawHud(ctx, round, match, players, roundNumber) {
   const solo = round.snakes.length === 1;
+  const many = round.snakes.length > 4;
   round.snakes.forEach((snake, i) => {
     const right = i % 2 === 1;
-    const offset = SLOT_X[Math.floor(i / 2)];
+    const offset = (many ? SLOT_X_SIX : SLOT_X)[Math.floor(i / 2)];
     const x = right ? VIEW_W - offset : offset;
     const align = right ? 'right' : 'left';
     const { name, color } = players[i];
     const alpha = snake.alive ? 1 : 0.4;
 
-    drawText(ctx, name.toUpperCase(), x, 16, { size: 14, color, align, glow: snake.alive ? 8 : 0, alpha });
+    drawText(ctx, name.toUpperCase(), x, 16, { size: many ? 10 : 14, color, align, glow: snake.alive ? 8 : 0, alpha });
     ctx.save();
     ctx.globalAlpha = alpha;
     if (!solo) drawPips(ctx, x, 27, match.wins[i], color, right);

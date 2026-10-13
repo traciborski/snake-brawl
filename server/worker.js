@@ -6,7 +6,7 @@
 //   npm run deploy:server      (konfiguracja w wrangler.toml)
 
 // Uwaga: worker może eksportować tylko klasy i obsługę żądań, stałe trzymamy w room.js
-import { LIST_TTL_MS, Room, sortRooms } from './room.js';
+import { LIST_TTL_MS, Room, listRooms } from './room.js';
 import { ROOM_PATH_RE, ROOMS_API } from '../src/net/protocol.js';
 
 /** Co tyle niepusty pokój potwierdza liście, że wciąż istnieje. */
@@ -113,7 +113,7 @@ export class RoomListObject {
 }
 
 function listResponse(rooms) {
-  return new Response(JSON.stringify({ rooms: sortRooms(rooms) }), {
+  return new Response(JSON.stringify({ rooms: listRooms(rooms) }), {
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
 }

@@ -238,6 +238,10 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
   Czysta, bez sieci, testowana w Node.
 - `server/worker.js`: Cloudflare Worker + Durable Object (jeden obiekt na pokój) opakowuje `room.js`.
   Pliki gry z folderu `site/` (składanego przez `node scripts/build.js --site`) Cloudflare serwuje sam.
+- **Pokoje publiczne** (`PUBLIC_ROOMS` w `src/net/protocol.js`, na razie `4B`): adres `/room/4B`
+  pasuje obok zwykłych 4-znakowych kodów. Taki `Room` jest od razu „założony”, więc wchodzi się
+  bez `create`. Pusty pokój publiczny nie zgłasza się na listę, a `listRooms` dokłada go zawsze
+  (na górze). Menu gry pobiera listę co 5 s i pokazuje jego stan na przycisku.
 - **Lista pokoi** (`/pokoje`, dane z `GET /api/pokoje`): na Cloudflare każdy pokój zgłasza swój
   opis (`Room.summary()`: kod, imiona, poczekalnia/mecz, runda, pełny) do jednego Durable Object
   z listą przy każdej zmianie i co minutę (alarm). Wpis bez wieści od 3 minut znika, więc po
@@ -269,7 +273,7 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 | Kierunek | Wiadomość | Znaczenie |
 |----------|-----------|-----------|
 | klient → serwer | `hello { name, create }` | dołączenie do pokoju z adresu `/room/KOD` (albo założenie go) |
-| serwer → klient | `lobby { you, host, players, playing }` | stan poczekalni (`playing`: trwa mecz) |
+| serwer → klient | `lobby { you, host, players, playing, public }` | stan poczekalni (`playing`: trwa mecz, `public`: pokój publiczny) |
 | klient → serwer | `start` | założyciel zaczyna mecz |
 | serwer → wszyscy | `start { seed, players }` | początek meczu; kolejność graczy = kolory i rogi |
 | klient → serwer | `input { r, f, d, s }` | ruch: runda, klatka, skręty (`d`), strzał (`s`) |
