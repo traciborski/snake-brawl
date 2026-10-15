@@ -126,6 +126,12 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Serwer przydziela pierwszy wolny, gdy wybrany jest zajęty (`pickColor`), kolory idą w `lobby`, `start`, `late`, `joined`
 - **Testy:** przydział i zmiana kolorów w pokoju, `nextColor`/`pickColor`, zapamiętane kolory offline.
 
+## Krok 19: Gra online bez zacinania (rollback)
+- [x] `cloneRound`, `Lockstep.commandsAt`, `net/rollback.js`: stan potwierdzony + przewidywany na ekranie
+- [x] Opóźnienie własnych komend 1 klatka (55 ms), przewidywanie do 8 klatek
+- [x] Efekty i dźwięki z potwierdzonego stanu, własny strzał i miecz od razu
+- **Testy:** klonowanie stanu, 3 komputery z Wi-Fi i słabszym łączem (ten sam stan, obraz nie staje), własny skręt bez sieci.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

@@ -35,20 +35,20 @@ export function createPlayScene(app) {
         return;
       }
 
-      // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
-      // null = jeszcze nie ma ruchów wszystkich graczy na tę klatkę, więc czekamy.
-      app.controller.beforeTick?.();
-      for (let i = 0; i < (app.controller.maxSteps ?? 1); i++) {
-        const commands = app.controller.commands();
-        if (!commands) return;
-        const events = stepRound(app.round, commands);
+      // Online: kontroler sam liczy rundę (z przewidywaniem) i podmienia app.round
+      if (app.controller.advance) {
+        const events = app.controller.advance();
         app.effects.handle(events, app.players);
         app.audio.handle(events);
-        if (app.round.result) {
-          endTimer = AFTER_ROUND_TICKS;
-          return;
-        }
+        if (app.round.result) endTimer = AFTER_ROUND_TICKS;
+        return;
       }
+
+      // Offline: komendy z klawiatury, jeden krok na tick
+      const events = stepRound(app.round, app.controller.commands());
+      app.effects.handle(events, app.players);
+      app.audio.handle(events);
+      if (app.round.result) endTimer = AFTER_ROUND_TICKS;
     },
 
     render() {

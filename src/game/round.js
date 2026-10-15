@@ -47,6 +47,22 @@ export function createRound(seed, options = {}) {
 }
 
 /**
+ * Kopia stanu rundy do przewidywania (gra online): wszystko, co zmienia stepRound, jest nowe.
+ * Labirynt i wymiary planszy w trakcie rundy się nie zmieniają, więc są wspólne.
+ * @param {RoundState} s @returns {RoundState}
+ */
+export function cloneRound(s) {
+  return {
+    ...s,
+    rng: { ...s.rng },
+    snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
+    bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
+    food: s.food.map((p) => ({ ...p })),
+    result: s.result ? { ...s.result } : null,
+  };
+}
+
+/**
  * Jeden tick symulacji. Modyfikuje stan i zwraca zdarzenia z tego ticka.
  * @param {RoundState} state
  * @param {Command[]} [commands]  komenda na gracza

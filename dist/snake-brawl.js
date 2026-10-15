@@ -1976,17 +1976,21 @@ Object.assign(__exports, { createOnlineScene });
 
 // ---- src/modes/online.js ----
 __factories["src/modes/online.js"] = function (__exports) {
-// Gra przez internet: komendy wszystkich graczy przez serwer (lockstep).
+// Gra przez internet: komendy wszystkich graczy przez serwer (lockstep) z przewidywaniem (rollback):
+// ekran nie czeka na cudze ruchy, a rundę rozstrzyga stan policzony z prawdziwych komend.
 
 const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { createMatch, replayMatch } = __require("src/game/match.js");
 const { Lockstep } = __require("src/net/lockstep.js");
+const { Rollback } = __require("src/net/rollback.js");
 const { mergeCommands } = __require("src/input/touch.js");
 const { showRoomInAddressBar } = __require("src/net/client.js");
 const { drawPanel, drawText } = __require("src/render/text.js");
 
 /** Ile ticków przestoju, zanim pokażemy „czekam na…” (żeby nie migało przy zwykłym pingu). */
 const STALL_NOTICE = 10;
+/** Najdalej tyle klatek przewidujemy (ok. 0,45 s); dalej gra czeka na brakujące ruchy. */
+const MAX_PREDICT = 8;
 
 /**
  * Podłącza sesję do aplikacji: obsługuje start meczu, ruchy i rozłączenia.
@@ -2061,14 +2065,13 @@ function tryLateStart(app, session) {
  * @param {number[]} [joinRounds] od której rundy gra każdy gracz
  */
 function createOnlineController(app, session, me, joinRounds) {
-  const lock = new Lockstep(app.players.length, me, joinRounds);
+  const lock = new Lockstep(app.players.length, me, joinRounds, { maxAhead: MAX_PREDICT });
+  const rollback = new Rollback(lock);
   let stalled = 0;
-  let steps = 0;
 
   return {
     canPause: false,
     canSkip: false,
-    maxSteps: 2, // kto został w tyle, nadrabia najwyżej jedną klatkę na tick
     matchEndTicks: 8 * TICKS_PER_SECOND,
     rematchHint: 'Za chwilę powrót do poczekalni   ESC — wyjście',
     me,
@@ -2093,12 +2096,17 @@ function createOnlineController(app, session, me, joinRounds) {
     },
 
     startRound(r) {
-      lock.startRound(r);
+      rollback.startRound(r, app.round);
+      app.round = rollback.display;
       stalled = 0;
     },
 
-    /** Raz na tick: upływ czasu i wysłanie własnej komendy (z klawiatury tylko pierwszej). */
-    beforeTick() {
+    /**
+     * Raz na tick: upływ czasu, wysłanie własnej komendy (z klawiatury tylko pierwszej),
+     * potwierdzenie tego, co już wiadomo, i przewidywany stan na ekran (app.round).
+     * @returns {import('../game/types.js').GameEvent[]} zdarzenia do efektów i dźwięków
+     */
+    advance() {
       lock.tick();
       let first = true;
       while (lock.canSend()) {
@@ -2106,16 +2114,10 @@ function createOnlineController(app, session, me, joinRounds) {
         session.send(lock.makeInput(cmd));
         first = false;
       }
-      steps = 0;
-    },
-
-    commands() {
-      // Drugi krok w tym samym ticku tylko wtedy, gdy symulacja jest za zegarem
-      if (!lock.due() || (steps > 0 && lock.behind() === 0)) return null;
-      const commands = lock.take();
-      stalled = commands ? 0 : stalled + 1;
-      if (commands) steps++;
-      return commands;
+      const { events, advanced } = rollback.update();
+      app.round = rollback.display;
+      stalled = advanced ? 0 : stalled + 1;
+      return events;
     },
 
     /** Mniej niż dwóch graczy w pokoju: mecz nie ma sensu, wracamy do poczekalni. */
@@ -2158,7 +2160,7 @@ __factories["src/net/lockstep.js"] = function (__exports) {
 
 const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
 
-const INPUT_DELAY = 2; // 110 ms
+const INPUT_DELAY = 1; // 55 ms (z przewidywaniem, patrz rollback.js)
 const MAX_AHEAD = 1;
 
 class Lockstep {
@@ -2166,8 +2168,10 @@ class Lockstep {
    * @param {number} players liczba graczy
    * @param {number} me mój numer gracza
    * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
+   * @param {{ maxAhead?: number }} [opts] o ile klatek zegar może wyprzedzić potwierdzoną symulację
    */
-  constructor(players, me, joinRounds = Array(players).fill(0)) {
+  constructor(players, me, joinRounds = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
+    this.maxAhead = maxAhead;
     this.players = players;
     this.me = me;
     this.joinRounds = [...joinRounds];
@@ -2194,7 +2198,7 @@ class Lockstep {
 
   /** Upływ jednego ticka czasu rzeczywistego. */
   tick() {
-    if (this.round >= 0 && this.clock - this.frame <= MAX_AHEAD) this.clock++;
+    if (this.round >= 0 && this.clock - this.frame <= this.maxAhead) this.clock++;
   }
 
   /**
@@ -2270,6 +2274,19 @@ class Lockstep {
   }
 
   /**
+   * Komendy na klatkę f do przewidywania: znane, a brakujące jako „nic nie robi” (jedzie prosto).
+   * @returns {import('../game/types.js').Command[]}
+   */
+  commandsAt(f) {
+    const commands = [];
+    for (let p = 0; p < this.playersInRound(this.round); p++) {
+      if (this.isLeft(p, this.round, f)) commands.push({ quit: true });
+      else commands.push(this.buffer.get(`${this.round}:${f}:${p}`) ?? {});
+    }
+    return commands;
+  }
+
+  /**
    * Komendy wszystkich graczy na bieżącą klatkę (i przejście do następnej)
    * albo null, jeśli czegoś jeszcze brakuje.
    * @returns {import('../game/types.js').Command[] | null}
@@ -2292,62 +2309,88 @@ class Lockstep {
 Object.assign(__exports, { INPUT_DELAY, MAX_AHEAD, Lockstep });
 };
 
-// ---- src/scenes/countdown.js ----
-__factories["src/scenes/countdown.js"] = function (__exports) {
-const { BOARD_Y, COLORS, COUNTDOWN_TICKS, GRID_H, CELL, KEYS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
-const { createRound } = __require("src/game/round.js");
-const { nextRoundSeed } = __require("src/game/match.js");
-const { drawRoundView } = __require("src/render/view.js");
-const { dimScreen, drawPanel, drawText } = __require("src/render/text.js");
+// ---- src/net/rollback.js ----
+__factories["src/net/rollback.js"] = function (__exports) {
+// Przewidywanie w grze online (rollback): ekran nie czeka na ruchy innych graczy.
+//
+// - Stan potwierdzony liczymy tylko z prawdziwych komend wszystkich graczy (jak w lockstepie),
+//   więc jest identyczny na każdym komputerze i to on rozstrzyga rundę.
+// - Na ekranie jest stan przewidywany: kopia potwierdzonego, policzona dalej aż do bieżącego
+//   ticka. Nasze komendy znamy, a brakujące cudze zastępujemy „nic nie robi” (jedzie prosto).
+// - Gdy przyjdą prawdziwe komendy, potwierdzony stan idzie do przodu, a przewidywany liczymy
+//   od nowa. Cudzy wąż, który skręcił wcześniej, niż przewidzieliśmy, przeskakuje wtedy na
+//   właściwe miejsce, ale gra się nie zatrzymuje.
+// - Przewidujemy najwyżej lock.maxAhead klatek do przodu. Dalej zegar staje (czekamy).
+// Czysta logika: bez sieci i bez rysowania.
 
-/** @param {any} app */
-function createCountdownScene(app) {
-  let ticks = 0;
+const { cloneRound, stepRound } = __require("src/game/round.js");
 
-  return {
-    enter() {
-      const players = app.controller.playersInRound?.(app.match.round) ?? app.players.length;
-      app.round = createRound(nextRoundSeed(app.match), { players });
-      app.roundNumber = app.match.round + 1;
-      app.effects.clear();
-      ticks = COUNTDOWN_TICKS;
-      app.audio.play('beep');
-    },
+/** Zdarzenia, które od razu pokazujemy z przewidywania (własny strzał i miecz bez czekania na sieć). */
+const INSTANT = new Set(['shot', 'swordSwing']);
 
-    update() {
-      const k = app.keyboard;
-      if (k.consumePressed(KEYS.back)) return app.controller.leave();
-      if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
+class Rollback {
+  /** @param {import('./lockstep.js').Lockstep} lock */
+  constructor(lock) {
+    this.lock = lock;
+    /** @type {import('../game/types.js').RoundState | null} */
+    this.confirmed = null;
+    /** @type {import('../game/types.js').RoundState | null} stan na ekranie */
+    this.display = null;
+    this.shownFrame = 0;
+    /** @type {((state: import('../game/types.js').RoundState) => void) | null} po każdej potwierdzonej klatce (testy) */
+    this.onConfirm = null;
+  }
 
-      ticks--;
-      if (ticks <= 0) {
-        app.audio.play('go');
-        app.scenes.go('play');
-      } else if (ticks % TICKS_PER_SECOND === 0) {
-        app.audio.play('beep');
+  /** @param {number} r @param {import('../game/types.js').RoundState} round */
+  startRound(r, round) {
+    this.lock.startRound(r);
+    this.confirmed = round;
+    this.display = cloneRound(round);
+    this.shownFrame = 0;
+  }
+
+  /**
+   * Po ticku zegara (lock.tick() i wysłanie własnej komendy robi kontroler).
+   * @returns {{ events: import('../game/types.js').GameEvent[], advanced: boolean }}
+   *   zdarzenia do efektów i dźwięków; advanced = czy obraz poszedł do przodu
+   */
+  update() {
+    const { lock } = this;
+    const me = lock.me;
+    const events = [];
+    let commands;
+    while (!this.confirmed.result && (commands = lock.take())) {
+      for (const e of stepRound(this.confirmed, commands)) {
+        // Własny strzał i miecz pokazaliśmy już z przewidywania
+        if (!(INSTANT.has(e.type) && e.snake === me)) events.push(e);
       }
-    },
+      this.onConfirm?.(this.confirmed);
+    }
 
-    render() {
-      const time = performance.now();
-      drawRoundView(app, time);
-      const { ctx } = app.renderer;
-      dimScreen(ctx, 0.35);
+    const target = lock.clock;
+    const advanced = target > this.shownFrame;
+    if (this.confirmed.result) {
+      this.display = this.confirmed;
+      this.shownFrame = target;
+      return { events, advanced };
+    }
 
-      const n = Math.ceil(ticks / TICKS_PER_SECOND);
-      const frac = (ticks % TICKS_PER_SECOND) / TICKS_PER_SECOND;
-      const cy = BOARD_Y + (GRID_H * CELL) / 2;
-      drawPanel(ctx, VIEW_W / 2, cy - 25, 280, 180);
-      drawText(ctx, app.round.snakes.length === 1 ? 'TRENING' : `RUNDA ${app.roundNumber}`, VIEW_W / 2, cy - 70, { size: 18, color: COLORS.text, glow: 8 });
-      drawText(ctx, String(n), VIEW_W / 2, cy + 10, { size: 48 + Math.round(frac * 24), color: COLORS.text, glow: 20 });
-      if (app.touch.active) {
-        drawText(ctx, 'przesuń palcem, żeby skręcić', VIEW_W / 2, cy + 120, { size: 10, color: COLORS.text });
+    const display = cloneRound(this.confirmed);
+    for (let f = lock.frame; f < target; f++) {
+      const step = stepRound(display, lock.commandsAt(f));
+      if (f >= this.shownFrame) {
+        for (const e of step) if (INSTANT.has(e.type) && e.snake === me) events.push(e);
       }
-    },
-  };
+    }
+    // Koniec rundy rozstrzyga tylko stan potwierdzony
+    display.result = null;
+    this.display = display;
+    this.shownFrame = Math.max(this.shownFrame, target);
+    return { events, advanced };
+  }
 }
 
-Object.assign(__exports, { createCountdownScene });
+Object.assign(__exports, { Rollback });
 };
 
 // ---- src/game/round.js ----
@@ -2398,6 +2441,22 @@ function createRound(seed, options = {}) {
   };
   refillFood(state);
   return state;
+}
+
+/**
+ * Kopia stanu rundy do przewidywania (gra online): wszystko, co zmienia stepRound, jest nowe.
+ * Labirynt i wymiary planszy w trakcie rundy się nie zmieniają, więc są wspólne.
+ * @param {RoundState} s @returns {RoundState}
+ */
+function cloneRound(s) {
+  return {
+    ...s,
+    rng: { ...s.rng },
+    snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
+    bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
+    food: s.food.map((p) => ({ ...p })),
+    result: s.result ? { ...s.result } : null,
+  };
 }
 
 /**
@@ -2543,7 +2602,7 @@ function checkRoundEnd(state, events) {
   events.push({ type: 'roundOver', result });
 }
 
-Object.assign(__exports, { createRound, stepRound });
+Object.assign(__exports, { createRound, cloneRound, stepRound });
 };
 
 // ---- src/game/bullets.js ----
@@ -3198,6 +3257,64 @@ function applySwords(state, events) {
 Object.assign(__exports, { canSwing, swing, inSwordRange, applySwords });
 };
 
+// ---- src/scenes/countdown.js ----
+__factories["src/scenes/countdown.js"] = function (__exports) {
+const { BOARD_Y, COLORS, COUNTDOWN_TICKS, GRID_H, CELL, KEYS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
+const { createRound } = __require("src/game/round.js");
+const { nextRoundSeed } = __require("src/game/match.js");
+const { drawRoundView } = __require("src/render/view.js");
+const { dimScreen, drawPanel, drawText } = __require("src/render/text.js");
+
+/** @param {any} app */
+function createCountdownScene(app) {
+  let ticks = 0;
+
+  return {
+    enter() {
+      const players = app.controller.playersInRound?.(app.match.round) ?? app.players.length;
+      app.round = createRound(nextRoundSeed(app.match), { players });
+      app.roundNumber = app.match.round + 1;
+      app.effects.clear();
+      ticks = COUNTDOWN_TICKS;
+      app.audio.play('beep');
+    },
+
+    update() {
+      const k = app.keyboard;
+      if (k.consumePressed(KEYS.back)) return app.controller.leave();
+      if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
+
+      ticks--;
+      if (ticks <= 0) {
+        app.audio.play('go');
+        app.scenes.go('play');
+      } else if (ticks % TICKS_PER_SECOND === 0) {
+        app.audio.play('beep');
+      }
+    },
+
+    render() {
+      const time = performance.now();
+      drawRoundView(app, time);
+      const { ctx } = app.renderer;
+      dimScreen(ctx, 0.35);
+
+      const n = Math.ceil(ticks / TICKS_PER_SECOND);
+      const frac = (ticks % TICKS_PER_SECOND) / TICKS_PER_SECOND;
+      const cy = BOARD_Y + (GRID_H * CELL) / 2;
+      drawPanel(ctx, VIEW_W / 2, cy - 25, 280, 180);
+      drawText(ctx, app.round.snakes.length === 1 ? 'TRENING' : `RUNDA ${app.roundNumber}`, VIEW_W / 2, cy - 70, { size: 18, color: COLORS.text, glow: 8 });
+      drawText(ctx, String(n), VIEW_W / 2, cy + 10, { size: 48 + Math.round(frac * 24), color: COLORS.text, glow: 20 });
+      if (app.touch.active) {
+        drawText(ctx, 'przesuń palcem, żeby skręcić', VIEW_W / 2, cy + 120, { size: 10, color: COLORS.text });
+      }
+    },
+  };
+}
+
+Object.assign(__exports, { createCountdownScene });
+};
+
 // ---- src/render/view.js ----
 __factories["src/render/view.js"] = function (__exports) {
 // Widok rundy: plansza + obiekty + efekty + HUD. Wspólny dla odliczania, gry i wyników.
@@ -3602,20 +3719,20 @@ function createPlayScene(app) {
         return;
       }
 
-      // Komendy z klawiatury (offline) albo od wszystkich graczy z sieci (online).
-      // null = jeszcze nie ma ruchów wszystkich graczy na tę klatkę, więc czekamy.
-      app.controller.beforeTick?.();
-      for (let i = 0; i < (app.controller.maxSteps ?? 1); i++) {
-        const commands = app.controller.commands();
-        if (!commands) return;
-        const events = stepRound(app.round, commands);
+      // Online: kontroler sam liczy rundę (z przewidywaniem) i podmienia app.round
+      if (app.controller.advance) {
+        const events = app.controller.advance();
         app.effects.handle(events, app.players);
         app.audio.handle(events);
-        if (app.round.result) {
-          endTimer = AFTER_ROUND_TICKS;
-          return;
-        }
+        if (app.round.result) endTimer = AFTER_ROUND_TICKS;
+        return;
       }
+
+      // Offline: komendy z klawiatury, jeden krok na tick
+      const events = stepRound(app.round, app.controller.commands());
+      app.effects.handle(events, app.players);
+      app.audio.handle(events);
+      if (app.round.result) endTimer = AFTER_ROUND_TICKS;
     },
 
     render() {

@@ -131,6 +131,9 @@ do gry przez internet.
 
 - **Gra i mały serwer pośredniczący** stoją razem na Cloudflare Workers, pod jednym adresem:
   wchodzisz na link i grasz, bez instalowania. Serwer przekazuje ruchy między graczami.
+- **Bez zacinania:** twój wąż reaguje od razu (po 55 ms), a ruchy innych gra przewiduje.
+  Gdy czyjś skręt dotrze z opóźnieniem, jego wąż przeskakuje na właściwe pole, ale gra się
+  nie zatrzymuje. Czeka dopiero, gdy czyjeś łącze spóźnia się o ponad pół sekundy.
 - **Pokój:** ktoś klika *Utwórz pokój* i dostaje kod (np. `KOT7`) oraz link zaproszenia
   (`adres-gry/?pokoj=KOT7`, przycisk *Kopiuj link*). Kto otworzy link, od razu widzi zaproszenie:
   wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
@@ -154,4 +157,4 @@ do gry przez internet.
 - Power-upy: przyspieszenie, tarcza, potrójny strzał, duch.
 - Bot (AI) jako tryb treningowy.
 - Muzyka, kilka gotowych map, ustawienia meczu.
-- Wersja mobilna, tabele wyników, rollback w grze online.
+- Tabele wyników.

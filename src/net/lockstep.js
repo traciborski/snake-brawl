@@ -13,7 +13,7 @@
 
 import { decodeCommand, encodeCommand } from './protocol.js';
 
-export const INPUT_DELAY = 2; // 110 ms
+export const INPUT_DELAY = 1; // 55 ms (z przewidywaniem, patrz rollback.js)
 export const MAX_AHEAD = 1;
 
 export class Lockstep {
@@ -21,8 +21,10 @@ export class Lockstep {
    * @param {number} players liczba graczy
    * @param {number} me mój numer gracza
    * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
+   * @param {{ maxAhead?: number }} [opts] o ile klatek zegar może wyprzedzić potwierdzoną symulację
    */
-  constructor(players, me, joinRounds = Array(players).fill(0)) {
+  constructor(players, me, joinRounds = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
+    this.maxAhead = maxAhead;
     this.players = players;
     this.me = me;
     this.joinRounds = [...joinRounds];
@@ -49,7 +51,7 @@ export class Lockstep {
 
   /** Upływ jednego ticka czasu rzeczywistego. */
   tick() {
-    if (this.round >= 0 && this.clock - this.frame <= MAX_AHEAD) this.clock++;
+    if (this.round >= 0 && this.clock - this.frame <= this.maxAhead) this.clock++;
   }
 
   /**
@@ -122,6 +124,19 @@ export class Lockstep {
       if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
     }
     return missing;
+  }
+
+  /**
+   * Komendy na klatkę f do przewidywania: znane, a brakujące jako „nic nie robi” (jedzie prosto).
+   * @returns {import('../game/types.js').Command[]}
+   */
+  commandsAt(f) {
+    const commands = [];
+    for (let p = 0; p < this.playersInRound(this.round); p++) {
+      if (this.isLeft(p, this.round, f)) commands.push({ quit: true });
+      else commands.push(this.buffer.get(`${this.round}:${f}:${p}`) ?? {});
+    }
+    return commands;
   }
 
   /**

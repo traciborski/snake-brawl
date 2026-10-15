@@ -250,22 +250,27 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
   restarcie serwera lista sama się czyści. Lokalnie `npm start` czyta pokoje prosto z pamięci.
 - `scripts/serve.js`: lokalnie `npm start` ma ten sam serwer pokoi (minimalny WebSocket bez
   zależności, `scripts/ws.js`), więc grę online da się testować na dwóch kartach przeglądarki.
-- `src/net/`: klient po stronie gry (połączenie, lockstep). `src/modes/online.js`: kontroler trybu.
+- `src/net/`: klient po stronie gry (połączenie, lockstep, przewidywanie). `src/modes/online.js`: kontroler trybu.
 
-**Lockstep**
+**Lockstep z przewidywaniem (rollback)**
 - Każdy komputer liczy tę samą symulację z tych samych komend. Serwer tylko przekazuje komendy
   i ustala ziarno meczu. Stan gry nigdy nie idzie przez sieć.
-- Komendy są numerowane `(runda, klatka)`. Komenda wysłana w klatce `f` działa w klatce `f + 2`
-  (opóźnienie 110 ms ukrywa ping). Pierwsze 2 klatki rundy są puste u wszystkich.
-- **Tempo wyznacza lokalny zegar** (tick co 55 ms): każdy wysyła dokładnie jedną komendę na tick,
-  a symulacja nigdy nie wyprzedza zegara. Gra online biegnie więc tak samo szybko jak offline.
-  Własny skręt działa dokładnie 2 ticki (110 ms) po wciśnięciu, jeśli ruchy innych są na czas.
-- **Zegar nie ucieka symulacji** dalej niż o 1 klatkę (`MAX_AHEAD`). Kto zaczął rundę chwilę
-  wcześniej i czeka na innych, ma zatrzymany zegar, zamiast wysyłać komendy coraz dalej
-  w przyszłość (to wydłużało opóźnienie jego skrętów nawet do 220 ms).
-- Symulacja robi krok tylko, gdy ma komendy wszystkich graczy na daną klatkę. Gdy kogoś brakuje,
-  gra czeka (krótki przestój zamiast rozjazdu). Kto został w tyle, nadrabia najwyżej jedną
-  dodatkową klatkę na tick.
+- Komendy są numerowane `(runda, klatka)`. Własna komenda działa 1 klatkę (55 ms) po wciśnięciu
+  (`INPUT_DELAY`). Pierwsza klatka rundy jest pusta u wszystkich.
+- **Tempo wyznacza lokalny zegar** (tick co 55 ms): każdy wysyła dokładnie jedną komendę na tick.
+  Gra online biegnie więc tak samo szybko jak offline.
+- **Stan potwierdzony** (`net/rollback.js`) robi krok tylko, gdy ma prawdziwe komendy wszystkich
+  graczy na daną klatkę, więc jest identyczny u wszystkich. Tylko on rozstrzyga rundę
+  (śmierć, wynik) i daje zdarzenia do efektów i dźwięków.
+- **Na ekranie jest stan przewidywany**: kopia potwierdzonego (`cloneRound`) policzona dalej aż do
+  bieżącego ticka. Własne komendy znamy, brakujące cudze to „nic nie robi” (`commandsAt`). Co tick
+  liczymy go od nowa, więc gdy dotrze cudzy skręt, jego wąż przeskakuje na właściwe miejsce,
+  ale gra się nie zatrzymuje. Własny strzał i miecz (dźwięk, iskry) pokazujemy od razu z przewidywania.
+- Przewidujemy najwyżej 8 klatek (ok. 0,45 s, `maxAhead`). Gdy czyjeś ruchy spóźniają się
+  bardziej, zegar staje i gra czeka (napis „Czekam na…”).
+- Wcześniej (sam lockstep) każde spóźnienie pakietu zatrzymywało grę u wszystkich: przy
+  wahaniach jak na Wi-Fi gra stała przez co szósty tick. Z przewidywaniem obraz nie staje
+  (test `tests/rollback.test.js`, trzy komputery z rozrzutem i skokami opóźnienia).
 - W karcie w tle przeglądarka wstrzymuje animację, więc online logika biegnie wtedy na zegarze
   z Web Workera (`core/loop.js`), żeby inni nie czekali na nasze ruchy.
 - Ekrany między rundami trwają tyle samo u wszystkich i nie da się ich przeklikać.

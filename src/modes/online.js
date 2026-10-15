@@ -1,14 +1,18 @@
-// Gra przez internet: komendy wszystkich graczy przez serwer (lockstep).
+// Gra przez internet: komendy wszystkich graczy przez serwer (lockstep) z przewidywaniem (rollback):
+// ekran nie czeka na cudze ruchy, a rundę rozstrzyga stan policzony z prawdziwych komend.
 
 import { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
 import { createMatch, replayMatch } from '../game/match.js';
 import { Lockstep } from '../net/lockstep.js';
+import { Rollback } from '../net/rollback.js';
 import { mergeCommands } from '../input/touch.js';
 import { showRoomInAddressBar } from '../net/client.js';
 import { drawPanel, drawText } from '../render/text.js';
 
 /** Ile ticków przestoju, zanim pokażemy „czekam na…” (żeby nie migało przy zwykłym pingu). */
 const STALL_NOTICE = 10;
+/** Najdalej tyle klatek przewidujemy (ok. 0,45 s); dalej gra czeka na brakujące ruchy. */
+const MAX_PREDICT = 8;
 
 /**
  * Podłącza sesję do aplikacji: obsługuje start meczu, ruchy i rozłączenia.
@@ -83,14 +87,13 @@ function tryLateStart(app, session) {
  * @param {number[]} [joinRounds] od której rundy gra każdy gracz
  */
 export function createOnlineController(app, session, me, joinRounds) {
-  const lock = new Lockstep(app.players.length, me, joinRounds);
+  const lock = new Lockstep(app.players.length, me, joinRounds, { maxAhead: MAX_PREDICT });
+  const rollback = new Rollback(lock);
   let stalled = 0;
-  let steps = 0;
 
   return {
     canPause: false,
     canSkip: false,
-    maxSteps: 2, // kto został w tyle, nadrabia najwyżej jedną klatkę na tick
     matchEndTicks: 8 * TICKS_PER_SECOND,
     rematchHint: 'Za chwilę powrót do poczekalni   ESC — wyjście',
     me,
@@ -115,12 +118,17 @@ export function createOnlineController(app, session, me, joinRounds) {
     },
 
     startRound(r) {
-      lock.startRound(r);
+      rollback.startRound(r, app.round);
+      app.round = rollback.display;
       stalled = 0;
     },
 
-    /** Raz na tick: upływ czasu i wysłanie własnej komendy (z klawiatury tylko pierwszej). */
-    beforeTick() {
+    /**
+     * Raz na tick: upływ czasu, wysłanie własnej komendy (z klawiatury tylko pierwszej),
+     * potwierdzenie tego, co już wiadomo, i przewidywany stan na ekran (app.round).
+     * @returns {import('../game/types.js').GameEvent[]} zdarzenia do efektów i dźwięków
+     */
+    advance() {
       lock.tick();
       let first = true;
       while (lock.canSend()) {
@@ -128,16 +136,10 @@ export function createOnlineController(app, session, me, joinRounds) {
         session.send(lock.makeInput(cmd));
         first = false;
       }
-      steps = 0;
-    },
-
-    commands() {
-      // Drugi krok w tym samym ticku tylko wtedy, gdy symulacja jest za zegarem
-      if (!lock.due() || (steps > 0 && lock.behind() === 0)) return null;
-      const commands = lock.take();
-      stalled = commands ? 0 : stalled + 1;
-      if (commands) steps++;
-      return commands;
+      const { events, advanced } = rollback.update();
+      app.round = rollback.display;
+      stalled = advanced ? 0 : stalled + 1;
+      return events;
     },
 
     /** Mniej niż dwóch graczy w pokoju: mecz nie ma sensu, wracamy do poczekalni. */
