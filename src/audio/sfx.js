@@ -125,6 +125,8 @@ export class Sfx {
       teleported: 'warp',
       bulletWall: 'wall',
       bulletClash: 'clash',
+      bulletBounce: 'bounce',
+      bulletWarp: 'warp',
       died: 'die',
     };
     // Ten sam dźwięk najwyżej raz na tick

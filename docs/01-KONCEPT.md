@@ -86,7 +86,10 @@ do gry przez internet.
 - **Trafienie w ciało** odcina ogon od trafionego segmentu do końca.
 - **Trafienie w głowę** zabija rywala, więc strzelający wygrywa rundę. Wjazd głową w cudzy pocisk też.
 - **Własne pociski są niegroźne**: przelatują przez strzelającego bez śladu.
-- Pocisk **znika** na każdej ścianie (dowolnego koloru) i na krawędzi planszy.
+- **Ściany działają na pocisk tak samo jak na węża:** czarna go odbija (zawraca), czerwona niszczy,
+  a niebieska i krawędź planszy przenoszą na drugą stronę. Odbity pocisk może wrócić i trafić
+  rywala (strzelającego przelatuje bez szkody).
+- Pocisk ma **zasięg jednej szerokości planszy** (48 pól) i znika po **3 odbiciach**, żeby nie latał w kółko.
 - Ściany są niezniszczalne.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 

@@ -22,6 +22,9 @@ export const SHOTS_PER_SEGMENT = 10; // jeden segment ogona = 10 strzałów
 // Pocisk: 3 pola na 2 ticki = ok. 27 pól/s, czyli 3× szybciej niż wąż
 export const BULLET_CELLS = 3;
 export const BULLET_PER_TICKS = 2;
+// Ściany działają na pocisk jak na węża, więc pocisk ma zasięg i limit odbić (żeby nie latał w kółko)
+export const BULLET_RANGE = 48; // pól, czyli jedna szerokość planszy
+export const BULLET_MAX_BOUNCES = 3;
 export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 export const FOOD_COUNT = 3;
 export const WINS_TO_MATCH = 3;

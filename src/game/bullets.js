@@ -1,8 +1,10 @@
 // Pociski: strzał (1 segment ogona = 10 strzałów), lot i kolizje.
-// Pocisk znika na każdej ścianie i na krawędzi planszy. Własne pociski przelatują przez strzelającego.
+// Ściany działają na pocisk jak na węża: czarna odbija, czerwona niszczy, niebieska i krawędź
+// przenoszą na drugą stronę. Pocisk ma zasięg (BULLET_RANGE pól) i najwyżej BULLET_MAX_BOUNCES
+// odbić, żeby nie latał w kółko. Własne pociski przelatują przez strzelającego.
 
-import { BULLET_CELLS, BULLET_PER_TICKS, SHOTS_PER_SEGMENT, SHOT_COOLDOWN } from '../config.js';
-import { isBlocked, samePos, step } from './grid.js';
+import { BULLET_CELLS, BULLET_MAX_BOUNCES, BULLET_PER_TICKS, BULLET_RANGE, SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } from '../config.js';
+import { OPPOSITE, cellIndex, passThrough, samePos } from './grid.js';
 import { applyHit, canShoot, segmentAt } from './snake.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
@@ -32,13 +34,16 @@ export function fire(state, snake, events) {
   snake.cooldown = SHOT_COOLDOWN;
 
   /** @type {Bullet} */
-  const bullet = { owner: snake.id, pos: step(snake.body[0], snake.dir), dir: snake.dir };
+  const bullet = { owner: snake.id, pos: { ...snake.body[0] }, dir: snake.dir, travel: 0, bounces: 0 };
   events.push({ type: 'shot', snake: snake.id, pos: { ...snake.body[0] } });
 
-  if (isBlocked(state.grid, state.walls, bullet.pos)) {
-    events.push({ type: 'bulletWall', pos: bullet.pos });
+  // Pierwsze pole lotu: przed głową (albo za ścianą, od której pocisk się odbił)
+  const first = nextCell(state, bullet);
+  if (first.gone) {
+    events.push({ type: 'bulletWall', pos: first.wallPos });
     return true;
   }
+  applyMove(bullet, first, events);
   const other = state.bullets.findIndex((b) => samePos(b.pos, bullet.pos));
   if (other >= 0) {
     state.bullets.splice(other, 1);
@@ -71,18 +76,55 @@ export function moveBullets(state, events) {
 }
 
 /**
- * Jeden krok wszystkich pocisków o 1 pole. Ściana albo krawędź → pocisk znika.
+ * Dokąd pocisk przeleci o jedno pole, tak jak wąż: przez krawędź i niebieskie ściany na drugą
+ * stronę, od czarnej się odbija (zawraca i zostaje na swoim polu), na czerwonej znika.
+ * Znika też po przeleceniu BULLET_RANGE pól i po zbyt wielu odbiciach.
+ * @param {RoundState} state @param {Bullet} bullet
+ * @returns {{ gone: boolean, pos: import('./types.js').Pos, dir: import('./types.js').Dir,
+ *   bounced: boolean, teleported: boolean, wallPos: import('./types.js').Pos }}
+ */
+export function nextCell(state, bullet) {
+  const { grid, walls } = state;
+  const { pos, teleported } = passThrough(grid, walls, bullet.pos, bullet.dir);
+  const wall = walls[cellIndex(grid, pos)];
+  const travel = (bullet.travel ?? 0) + 1;
+  const result = { gone: false, pos, dir: bullet.dir, bounced: false, teleported, wallPos: pos };
+  if (wall === WALL.DEADLY || travel > BULLET_RANGE) return { ...result, gone: true };
+  if (wall === WALL.BOUNCE) {
+    if ((bullet.bounces ?? 0) >= BULLET_MAX_BOUNCES) return { ...result, gone: true };
+    return { ...result, pos: bullet.pos, dir: OPPOSITE[bullet.dir], bounced: true, teleported: false };
+  }
+  return result;
+}
+
+/** Przesuwa pocisk zgodnie z nextCell (bez kolizji z innymi pociskami i wężami). */
+function applyMove(bullet, move, events) {
+  bullet.pos = move.pos;
+  bullet.dir = move.dir;
+  bullet.travel = (bullet.travel ?? 0) + 1;
+  if (move.bounced) {
+    bullet.bounces = (bullet.bounces ?? 0) + 1;
+    events.push({ type: 'bulletBounce', pos: move.wallPos });
+  }
+  if (move.teleported) events.push({ type: 'bulletWarp', pos: move.pos });
+}
+
+/**
+ * Jeden krok wszystkich pocisków o 1 pole (ściany jak dla węża, patrz nextCell).
  * Pociski, które wejdą na to samo pole albo się miną, znoszą się nawzajem.
  * @param {RoundState} state @param {GameEvent[]} events
  */
 function stepBullets(state, events) {
   const gone = new Set();
-  const moves = state.bullets.map((b) => ({ b, from: b.pos, to: step(b.pos, b.dir) }));
+  const moves = state.bullets.map((b) => {
+    const move = nextCell(state, b);
+    return { b, move, from: b.pos, to: move.pos };
+  });
 
   for (const m of moves) {
-    if (isBlocked(state.grid, state.walls, m.to)) {
+    if (m.move.gone) {
       gone.add(m.b);
-      events.push({ type: 'bulletWall', pos: m.to });
+      events.push({ type: 'bulletWall', pos: m.move.wallPos });
     }
   }
 
@@ -101,7 +143,7 @@ function stepBullets(state, events) {
     }
   }
 
-  for (const m of moves) m.b.pos = m.to;
+  for (const m of moves) if (!gone.has(m.b)) applyMove(m.b, m.move, events);
   for (const m of moves) {
     if (!gone.has(m.b) && bulletHitsSnake(state, m.b, events)) gone.add(m.b);
   }

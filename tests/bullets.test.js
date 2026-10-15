@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stepRound } from '../src/game/round.js';
 import { bulletStepsAt } from '../src/game/bullets.js';
-import { SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } from '../src/config.js';
+import { BULLET_MAX_BOUNCES, BULLET_RANGE, GRID_W, SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } from '../src/config.js';
 import { emptyRound, place, pos, run, wall } from './helpers.js';
 
 const FIRE = [{ shoot: true }];
@@ -129,29 +129,84 @@ test('obaj trafieni w głowę w tym samym ticku: remis', () => {
   assert.deepEqual(s.result, { winner: 'draw' });
 });
 
-for (const [name, kind] of [['czarnej', WALL.BOUNCE], ['czerwonej', WALL.DEADLY], ['niebieskiej', WALL.PORTAL]]) {
-  test(`pocisk znika na ${name} ścianie`, () => {
-    const s = emptyRound();
-    wall(s, 22, 15, kind);
-    s.bullets.push(bullet(0, 20, 15, 'right'));
-    const events = run(s, 2);
-    assert.ok(events.some((e) => e.type === 'bulletWall'));
-    assert.equal(s.bullets.length, 0);
-  });
-}
 
-test('pocisk znika na krawędzi planszy', () => {
+test('pocisk przelatuje przez krawędź planszy na drugą stronę (jak wąż)', () => {
   const s = emptyRound();
   s.bullets.push(bullet(0, 0, 10, 'left'));
+  const events = run(s, 1);
+  assert.ok(events.some((e) => e.type === 'bulletWarp'));
+  assert.deepEqual(s.bullets.map((b) => [b.pos.x, b.pos.y, b.dir]), [[GRID_W - 1, 10, 'left']]);
+});
+
+test('czerwona ściana niszczy pocisk', () => {
+  const s = emptyRound();
+  wall(s, 21, 15, WALL.DEADLY);
+  s.bullets.push(bullet(0, 20, 15, 'right'));
   const events = run(s, 1);
   assert.ok(events.some((e) => e.type === 'bulletWall'));
   assert.equal(s.bullets.length, 0);
 });
 
-test('strzał prosto w przyległą ścianę od razu gaśnie', () => {
+test('czarna ściana odbija pocisk z powrotem', () => {
+  const s = emptyRound();
+  wall(s, 22, 15, WALL.BOUNCE);
+  s.bullets.push(bullet(0, 20, 15, 'right'));
+  const events = run(s, 2); // 1 + 2 pola: do 21, odbicie, z powrotem do 20
+  assert.ok(events.some((e) => e.type === 'bulletBounce'));
+  assert.deepEqual(s.bullets.map((b) => [b.pos.x, b.dir]), [[20, 'left']]);
+});
+
+test('odbity pocisk wraca, przelatuje przez strzelającego i trafia rywala za nim', () => {
+  const s = emptyRound();
+  place(s, 0, [[10, 10], [9, 10], [8, 10]], 'up');
+  place(s, 1, [[4, 10], [5, 10], [6, 10], [7, 10]], 'left');
+  wall(s, 14, 10, WALL.BOUNCE);
+  s.bullets.push(bullet(0, 11, 10, 'right'));
+  const events = run(s, 10);
+  assert.ok(events.some((e) => e.type === 'bulletBounce'));
+  const hit = events.find((e) => e.type === 'bodyHit');
+  assert.ok(hit, 'rywal trafiony odbitym pociskiem');
+  assert.equal(hit.snake, 1);
+  assert.equal(hit.by, 0);
+});
+
+test('niebieska ściana przenosi pocisk za bliźniaczą ścianę po drugiej stronie', () => {
+  const s = emptyRound();
+  // Portal (21,15) ma bliźniaczkę po obrocie o 180°: (26,11)
+  wall(s, 21, 15, WALL.PORTAL);
+  wall(s, s.grid.w - 1 - 21, s.grid.h - 1 - 15, WALL.PORTAL);
+  s.bullets.push(bullet(0, 20, 15, 'right'));
+  const events = run(s, 1);
+  assert.ok(events.some((e) => e.type === 'bulletWarp'));
+  assert.deepEqual(s.bullets.map((b) => [b.pos.x, b.pos.y]), [[s.grid.w - 1 - 21 + 1, s.grid.h - 1 - 15]]);
+});
+
+test(`pocisk znika po ${BULLET_MAX_BOUNCES} odbiciach`, () => {
+  const s = emptyRound();
+  wall(s, 18, 15, WALL.BOUNCE);
+  wall(s, 22, 15, WALL.BOUNCE);
+  s.bullets.push(bullet(0, 20, 15, 'right'));
+  const events = run(s, 20);
+  assert.equal(events.filter((e) => e.type === 'bulletBounce').length, BULLET_MAX_BOUNCES);
+  assert.equal(s.bullets.length, 0);
+});
+
+test(`pocisk ma zasięg ${BULLET_RANGE} pól (nie krąży w kółko przez krawędź)`, () => {
+  const s = emptyRound();
+  s.bullets.push(bullet(0, 20, 15, 'right'));
+  let ticks = 0;
+  while (s.bullets.length && ticks < 200) {
+    stepRound(s, []);
+    ticks++;
+  }
+  assert.equal(s.bullets.length, 0);
+  assert.ok(ticks >= Math.floor((BULLET_RANGE * 2) / 3) && ticks <= Math.ceil((BULLET_RANGE * 2) / 3) + 1, `ticki: ${ticks}`);
+});
+
+test('strzał prosto w przyległą czerwoną ścianę od razu gaśnie', () => {
   const s = emptyRound();
   const leon = place(s, 0, [[10, 10], [9, 10], [8, 10]], 'right');
-  wall(s, 11, 10);
+  wall(s, 11, 10, WALL.DEADLY);
   const events = stepRound(s, FIRE);
   assert.ok(events.some((e) => e.type === 'bulletWall'));
   assert.equal(s.bullets.length, 0);

@@ -149,7 +149,8 @@ Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocze
 3. **Strzały**: jeśli cooldown = 0 i jest amunicja albo segment do zabrania (bez amunicji
    zabierz segment z ogona i daj 10 strzałów), stwórz pocisk na polu przed głową.
 4. **Pociski**: przesuń o 1 lub 2 pola (3 pola na 2 ticki), sprawdzając kolizje po każdym polu.
-   Ściana lub krawędź → pocisk znika. Potem inny pocisk i węże poza strzelającym
+   Ściany jak dla węża (`nextCell`): czarna odbija, czerwona niszczy, niebieska i krawędź przenoszą;
+   po 48 polach lotu albo przy 4. odbiciu pocisk znika. Potem inny pocisk i węże poza strzelającym
    (głowa → śmierć, ciało → odcięcie ogona).
 5. **Węże** (co 2. tick): policz obie nowe głowy naraz (`passThrough`: krawędź
    przenosi na przeciwną krawędź, niebieska ściana za jej bliźniaczkę

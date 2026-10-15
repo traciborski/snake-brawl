@@ -102,8 +102,9 @@ test('gracz dołączający w trakcie meczu liczy tę samą grę co pozostali', (
   let joinedRound = -1;
   for (net.now = 1; net.now < 40000; net.now++) {
     deliver();
-    // Celina dołącza, gdy trwa druga runda meczu
-    if (joinedRound < 0 && a.match?.round >= 1 && a.round) {
+    // Celina dołącza w trakcie pierwszej rundy: wejdzie od rundy 2, a po dwóch rundach
+    // nikt nie może mieć jeszcze 3 wygranych, więc mecz na pewno na nią poczeka
+    if (joinedRound < 0 && a.match && a.round?.tick > 20) {
       connect(c, false);
       joinedRound = room.joinRounds[2];
     }

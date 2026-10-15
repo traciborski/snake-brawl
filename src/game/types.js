@@ -19,7 +19,7 @@
  *   (crash = zderzenie głowami, body = wjazd w rywala, left = rozłączenie online)
  */
 
-/** @typedef {{ owner: number, pos: Pos, dir: Dir }} Bullet */
+/** @typedef {{ owner: number, pos: Pos, dir: Dir, travel?: number, bounces?: number }} Bullet  travel: przelecone pola */
 
 /** @typedef {{ winner: number | 'draw' }} RoundResult */
 
@@ -44,6 +44,8 @@
  *   { type: 'shot', snake: number, pos: Pos } |
  *   { type: 'bulletWall', pos: Pos } |
  *   { type: 'bulletClash', pos: Pos } |
+ *   { type: 'bulletBounce', pos: Pos } |
+ *   { type: 'bulletWarp', pos: Pos } |
  *   { type: 'bodyHit', snake: number, by: number, cells: Pos[] } |
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |

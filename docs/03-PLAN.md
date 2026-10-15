@@ -107,6 +107,11 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** pokój publiczny, lista z pustym 4B, limit 6, 6 węży na planszy.
   ✅ Sprawdzone w `wrangler dev`: 6 przeglądarek w 4B, start meczu, „6/6 · pełny” w menu.
 
+## Krok 16: Pociski a ściany jak wąż
+- [x] Czarna odbija pocisk, czerwona niszczy, niebieska i krawędź przenoszą (`nextCell` w `bullets.js`)
+- [x] Zasięg 48 pól i najwyżej 3 odbicia; efekty i dźwięki odbicia i przeniesienia pocisku
+- **Testy:** każdy rodzaj ściany, krawędź, limit odbić, zasięg, odbity pocisk trafia rywala.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony
@@ -115,7 +120,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [ ] Trafienie w ogon odcina go, a w głowę zabija
 - [ ] Czerwona ściana zabija, czarna odbija, krawędź przenosi na przeciwną krawędź
 - [ ] Niebieska ściana w środku przenosi za bliźniaczą ścianę po drugiej stronie planszy
-- [ ] Pocisk znika na każdej ścianie i krawędzi
+- [ ] Pocisk: czarna ściana odbija, czerwona niszczy, niebieska i krawędź przenoszą; zasięg i 3 odbicia
 - [ ] Strzał w głowę obu naraz daje remis
 - [ ] Mecz kończy się po 3 wygranych i rewanż działa
 - [ ] Gra skaluje się do okna i jest ostra na ekranach HiDPI
