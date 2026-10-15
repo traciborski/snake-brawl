@@ -289,17 +289,21 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 | serwer → wszyscy | `left { p, r, f }` | gracz `p` się rozłączył: od klatki `(r, f)` jego wąż ginie |
 | klient → serwer | `result { r, w }` | wynik rundy `r` (`w`: numer zwycięzcy albo `null`) |
 | serwer → wszyscy | `result { r, w }` | pierwszy zgłoszony wynik rundy, dla dołączających w trakcie |
-| serwer → wszyscy | `joined { p, id, name, color, r }` | nowy gracz `p` dołączył w trakcie meczu, gra od rundy `r` |
-| serwer → klient | `late { seed, r, players, results }` | dla dołączającego: ziarno, jego runda, gracze z rundami startu, dotychczasowe wyniki |
+| serwer → wszyscy | `joined { p, id, name, color, r, f }` | nowy gracz `p` dołączył w trakcie meczu, jego wąż pojawia się w klatce `f` rundy `r` |
+| serwer → klient | `late { seed, r, f, players, results, left, log }` | dla dołączającego: ziarno, runda i klatka wejścia, gracze (od kiedy grają), wyniki rund, kto wyszedł, ruchy z bieżącej rundy |
 | klient → serwer | `lobby` | koniec meczu, powrót do poczekalni |
 | serwer → klient | `error { msg }` | np. pokój nie istnieje albo jest pełny |
 
 Rozłączenie działa deterministycznie: serwer podaje pierwszą klatkę, której gracz już nie wysłał,
 a wszyscy stosują je w tym samym miejscu, bo i tak nie mogli jej jeszcze policzyć.
 
-**Dołączenie w trakcie meczu** też jest deterministyczne. Serwer zna najwyższą rundę, z której
-dostał ruch (`maxRound`), i wpuszcza nowego gracza od rundy `maxRound + 2`: nikt nie mógł jej
-jeszcze zacząć, bo wiadomość `joined` dotrze do każdego przed jego ruchami z tej rundy.
-Od tej rundy wszyscy liczą węża więcej (`playersInRound`). Dołączający czeka w poczekalni,
-aż pozna wyniki wszystkich wcześniejszych rund, odtwarza z nich stan meczu (`replayMatch`)
-i startuje razem z innymi.
+**Dołączenie w trakcie meczu** jest od razu, w trwającej rundzie, i też deterministyczne:
+- Runda wejścia `r` to najwyższa, z której serwer dostał ruch. Klatka `f` to najmniejsza
+  „ostatnia przekazana klatka + 1” wśród obecnych graczy: nikt nie mógł jej jeszcze policzyć,
+  bo potwierdzenie klatki wymaga ruchów wszystkich. `joined` dociera do każdego przed dalszymi
+  ruchami, więc wszyscy dodają węża (`addSnake`) w tej samej klatce `f` (`Lockstep.joiningAt`).
+- Serwer trzyma ruchy z ostatnich rund (`log`) i wysyła je dołączającemu. Ten zna wyniki
+  wcześniejszych rund (`replayMatch`), odtwarza bieżącą rundę od początku (ułamek sekundy)
+  i ustawia zegar tam, gdzie są inni. Ekran odliczania pomija.
+- Przez pierwsze `JOIN_GRACE` klatek (ok. 1,1 s) komendy nowego gracza są z góry puste
+  (jedzie prosto), żeby inni nie czekali, aż się załaduje.

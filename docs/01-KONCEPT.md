@@ -34,7 +34,7 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 
 | Gracz (offline) | Ruch | Strzał | Miecz |
 |-----------------|------|--------|-------|
-| 1 | `W A S D` | `Spacja` | lewy `Shift` (albo `E`) |
+| 1 | `W A S D` | lewy `Ctrl` (albo `Spacja`) | lewy `Shift` (albo `E`) |
 | 2 | strzałki | `Enter` | prawy `Shift` (albo prawy `Ctrl`) |
 | 3 | `I J K L` | `U` | `O` |
 | 4 | klawiatura numeryczna `8 4 5 6` (albo `2` w dół) | `0` | `,` (numpad) |
@@ -139,16 +139,19 @@ do gry przez internet.
   wpisuje imię i dołącza Enterem. Można też wejść do gry i wpisać sam kod. W poczekalni widać graczy z imionami i kolorami, założyciel klika *Start*.
 - **Pokój publiczny `4B`** istnieje zawsze (na razie jeden). Widać go w menu głównym
   (przycisk *Pokój publiczny 4B* ze stanem, np. „2/6 · czekają!”) i na górze listy pokoi.
-  Wchodzi się bez zakładania i bez kodu: wpisujesz imię i jesteś. Mecz zaczyna gospodarz,
+  Wchodzi się bez zakładania i bez kodu: wpisujesz imię i jesteś. W menu jest też przycisk
+  *Wszystkie pokoje* (lista pokoi). Mecz zaczyna gospodarz,
   czyli ten, kto jest w pokoju najdłużej.
 - **Lista pokoi** (`adres-gry/pokoje`, w grze przycisk *Lista pokoi*): wszystkie otwarte pokoje
   z kodem, graczami i stanem (poczekalnia albo trwający mecz z numerem rundy). Przycisk *Dołącz*
   otwiera zaproszenie do pokoju, pełne pokoje są oznaczone. Lista odświeża się sama co kilka sekund.
 - 2–6 graczy, ta sama mechanika co offline (przy 5–6 wężach na planszy leży 5 owoców). Bez pauzy i bez przeklikiwania ekranów wyników
   (wszyscy przechodzą dalej w tym samym momencie).
-- **Dołączanie w trakcie meczu:** kto wejdzie do pokoju, gdy trwa mecz (i jest wolne miejsce),
-  czeka w poczekalni z napisem „Trwa mecz. Dołączysz od rundy N…” i wchodzi do gry od najbliższej
-  wolnej rundy (zwykle następnej albo jeszcze kolejnej), z zerem wygranych.
+- **Dołączanie w każdej chwili:** kto wejdzie do pokoju, gdy trwa mecz (i jest wolne miejsce),
+  wchodzi od razu do trwającej rundy, z zerem wygranych. Jego wąż pojawia się na swoim miejscu
+  startu (a jeśli jest zajęte, na pierwszym wolnym) i przez pierwszą sekundę jedzie prosto,
+  zanim gra się u niego załaduje. Czeka tylko wtedy, gdy poprzednia runda właśnie się kończy
+  (ułamek sekundy, aż pozna jej wynik).
 - Rozłączenie: wąż gracza ginie, reszta gra dalej.
 - Po meczu wszyscy wracają do poczekalni, skąd założyciel może zacząć rewanż.
 

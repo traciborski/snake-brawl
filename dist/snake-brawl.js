@@ -90,6 +90,16 @@ function enterFullscreen() {
     .catch(() => {});
 }
 
+// Ctrl to strzał, a Ctrl+W zamyka kartę i przeglądarka nie pozwala tego zablokować.
+// W trakcie gry (i online w ogóle) prosimy więc o potwierdzenie wyjścia ze strony.
+window.addEventListener('beforeunload', (e) => {
+  const playing = app.scenes.name === 'countdown' || app.scenes.name === 'play' || app.scenes.name === 'roundEnd';
+  if (playing || app.session) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 
@@ -191,10 +201,10 @@ const KEYMAPS = [
       down: ['KeyS'],
       left: ['KeyA'],
       right: ['KeyD'],
-      shoot: ['Space'],
+      shoot: ['ControlLeft', 'Space'],
       sword: ['ShiftLeft', 'KeyE'],
     },
-    help: 'W A S D  +  SPACJA  +  L. SHIFT',
+    help: 'W A S D  +  CTRL / SPACJA  +  SHIFT',
   },
   {
     keys: {
@@ -231,7 +241,7 @@ const KEYMAPS = [
   },
 ];
 /** Podpowiedź klawiszy w treningu (steruje się dowolnym zestawem). */
-const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA  +  SHIFT';
+const SOLO_HELP = 'W A S D / STRZAŁKI  +  CTRL  +  SHIFT';
 
 // Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
 // np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`
@@ -967,7 +977,7 @@ __factories["src/scenes/menu.js"] = function (__exports) {
 const { COLORS, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { blink, drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
-const { fetchRooms, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
+const { fetchRooms, roomsPage, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
 const { PUBLIC_ROOMS } = __require("src/net/protocol.js");
 
 /** Co ile odświeżamy w menu stan pokoju publicznego. */
@@ -1007,6 +1017,10 @@ function createMenuScene(app) {
         };
         refresh();
         timer = setInterval(refresh, PUBLIC_REFRESH_MS);
+        // Lista wszystkich pokoi to strona serwera gry (gra otwarta z dysku jej nie ma)
+        if (location.protocol !== 'file:') {
+          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '4  WSZYSTKIE POKOJE'));
+        }
       }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
       app.overlay.show(menu, { position: 'low' });
@@ -1047,7 +1061,7 @@ function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1/2/3 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, 1–4 wybierają od razu, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
@@ -1055,6 +1069,7 @@ function createMenuScene(app) {
     else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
     else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
     else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
+    else if ((e.code === 'Digit4' || e.code === 'Numpad4') && buttons[3]) buttons[3].click();
     else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();
@@ -1884,10 +1899,10 @@ function createOnlineScene(app) {
     const playing = !!lobby.playing;
     const isHost = lobby.host === lobby.you && !playing;
     const canStart = lobby.players.length >= 2;
-    // Dołączyliśmy w trakcie meczu: wchodzimy od rundy lateJoin.r (numerujemy od 1 dla ludzi)
+    // Dołączyliśmy w trakcie meczu: wchodzimy do trwającej rundy, gdy znamy wyniki wcześniejszych
     const status = playing
       ? app.lateJoin
-        ? `Trwa mecz. Dołączysz od rundy ${app.lateJoin.r + 1}…`
+        ? 'Trwa mecz. Zaraz dołączysz…'
         : 'Mecz właśnie się kończy, za chwilę wszyscy wrócą tutaj…'
       : isHost
         ? canStart
@@ -1979,9 +1994,10 @@ __factories["src/modes/online.js"] = function (__exports) {
 // Gra przez internet: komendy wszystkich graczy przez serwer (lockstep) z przewidywaniem (rollback):
 // ekran nie czeka na cudze ruchy, a rundę rozstrzyga stan policzony z prawdziwych komend.
 
-const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
-const { createMatch, replayMatch } = __require("src/game/match.js");
-const { Lockstep } = __require("src/net/lockstep.js");
+const { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, TICK_MS, VIEW_W } = __require("src/config.js");
+const { createMatch, nextRoundSeed, replayMatch } = __require("src/game/match.js");
+const { createRound } = __require("src/game/round.js");
+const { INPUT_DELAY, JOIN_GRACE, Lockstep } = __require("src/net/lockstep.js");
 const { Rollback } = __require("src/net/rollback.js");
 const { mergeCommands } = __require("src/input/touch.js");
 const { showRoomInAddressBar } = __require("src/net/client.js");
@@ -2008,6 +2024,9 @@ function attachSession(app, session) {
     } else if (msg.t === 'result' && app.lateJoin) {
       app.lateJoin.results[msg.r] = msg.w;
       tryLateStart(app, session);
+    } else if (app.lateJoin && ['input', 'left', 'joined'].includes(msg.t)) {
+      // Jeszcze wchodzimy do gry: ruchy przekażemy kontrolerowi, gdy powstanie
+      app.lateJoin.pending.push(msg);
     } else app.controller.receive?.(msg);
   };
   session.onClose = () => {
@@ -2035,11 +2054,12 @@ function startMatch(app, session, { seed, players }) {
 }
 
 /**
- * Dołączenie w trakcie meczu: czekamy w poczekalni na wyniki rund sprzed naszej rundy
- * (żeby znać stan meczu) i wchodzimy do gry od rundy r.
+ * Dołączenie w trakcie meczu, od razu: serwer podaje rundę r i klatkę f, w której pojawi się nasz wąż,
+ * oraz dotychczasowe ruchy tej rundy. Gdy znamy wyniki wcześniejszych rund (zwykle od razu),
+ * odtwarzamy u siebie bieżącą rundę i wchodzimy do gry bez odliczania.
  */
-function waitToJoin(app, session, { seed, r, players, results }) {
-  app.lateJoin = { seed, r, players, results: [...results] };
+function waitToJoin(app, session, { seed, r, f, players, results, left = [], log = [] }) {
+  app.lateJoin = { seed, r, f, players, results: [...results], left, log, pending: [], at: performance.now() };
   app.onLobby?.(session.lobby);
   tryLateStart(app, session);
 }
@@ -2056,16 +2076,28 @@ function tryLateStart(app, session) {
   const me = late.players.findIndex((p) => p.id === session.lobby?.you);
   app.players = late.players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = match;
-  app.controller = createOnlineController(app, session, me, late.players.map((p) => p.r));
-  app.scenes.go('countdown');
+  const controller = createOnlineController(app, session, me, late.players.map((p) => ({ r: p.r, f: p.f ?? 0 })));
+  app.controller = controller;
+  for (const l of late.left) controller.receive({ t: 'left', ...l });
+  for (const [p, f, d, s, m] of late.log) controller.receive({ t: 'input', p, r: late.r, f, d, s, m });
+  for (const msg of late.pending) controller.receive(msg);
+
+  // Bez odliczania, prosto do trwającej rundy (wąż pojawi się w klatce late.f)
+  app.round = createRound(nextRoundSeed(match), { players: controller.playersInRound(late.r) });
+  app.roundNumber = late.r + 1;
+  app.effects.clear();
+  // Nasz zegar: tam, gdzie są teraz inni (klatka z serwera + czas, który minął od wiadomości)
+  const elapsed = Math.floor((performance.now() - late.at) / TICK_MS);
+  controller.lateStart = { clock: Math.max(0, late.f - INPUT_DELAY + elapsed), firstOwn: late.f + JOIN_GRACE };
+  app.scenes.go('play');
 }
 
 /**
  * @param {any} app @param {import('../net/client.js').Session} session @param {number} me
- * @param {number[]} [joinRounds] od której rundy gra każdy gracz
+ * @param {({ r: number, f: number } | number)[]} [joins] od kiedy gra każdy gracz
  */
-function createOnlineController(app, session, me, joinRounds) {
-  const lock = new Lockstep(app.players.length, me, joinRounds, { maxAhead: MAX_PREDICT });
+function createOnlineController(app, session, me, joins) {
+  const lock = new Lockstep(app.players.length, me, joins, { maxAhead: MAX_PREDICT });
   const rollback = new Rollback(lock);
   let stalled = 0;
 
@@ -2081,7 +2113,7 @@ function createOnlineController(app, session, me, joinRounds) {
       else if (msg.t === 'left') lock.markLeft(msg.p, msg.r, msg.f);
       else if (msg.t === 'joined') {
         // Nowy gracz w trakcie meczu: gra od rundy msg.r, do tego czasu nie ma węża
-        lock.addPlayer(msg.r);
+        lock.addPlayer(msg.r, msg.f ?? 0);
         app.players.push({ name: msg.name, color: msg.color ?? PLAYER_COLORS[msg.p] });
         app.match.wins.push(0);
       }
@@ -2095,8 +2127,16 @@ function createOnlineController(app, session, me, joinRounds) {
       session.send({ t: 'result', r, w: result.winner });
     },
 
+    /** Ustawiane przy dołączeniu w trakcie rundy: skąd zaczyna zegar i od której klatki wysyłamy ruchy. */
+    lateStart: null,
+
     startRound(r) {
       rollback.startRound(r, app.round);
+      if (this.lateStart) {
+        lock.clock = this.lateStart.clock;
+        lock.sent = Math.max(lock.sent, this.lateStart.firstOwn);
+        this.lateStart = null;
+      }
       app.round = rollback.display;
       stalled = 0;
     },
@@ -2143,256 +2183,6 @@ function createOnlineController(app, session, me, joinRounds) {
 Object.assign(__exports, { attachSession, leaveOnline, createOnlineController });
 };
 
-// ---- src/net/lockstep.js ----
-__factories["src/net/lockstep.js"] = function (__exports) {
-// Lockstep: każdy komputer liczy tę samą symulację z tych samych komend.
-// Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
-// żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
-//
-// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 55 ms):
-// - wysyłamy dokładnie jedną komendę na tick: na klatkę, która wykona się INPUT_DELAY ticków później,
-// - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
-//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick,
-// - zegar nie ucieka symulacji dalej niż o MAX_AHEAD klatek. Gdy czekamy na ruchy innych
-//   (np. zaczęliśmy rundę chwilę przed nimi), zegar staje, zamiast wysyłać nasze komendy
-//   coraz dalej w przyszłość, co wydłużałoby opóźnienie naszych własnych skrętów.
-// Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
-
-const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
-
-const INPUT_DELAY = 1; // 55 ms (z przewidywaniem, patrz rollback.js)
-const MAX_AHEAD = 1;
-
-class Lockstep {
-  /**
-   * @param {number} players liczba graczy
-   * @param {number} me mój numer gracza
-   * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
-   * @param {{ maxAhead?: number }} [opts] o ile klatek zegar może wyprzedzić potwierdzoną symulację
-   */
-  constructor(players, me, joinRounds = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
-    this.maxAhead = maxAhead;
-    this.players = players;
-    this.me = me;
-    this.joinRounds = [...joinRounds];
-    /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
-    this.buffer = new Map();
-    /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
-    this.left = new Map();
-    this.round = -1;
-    this.frame = 0;
-    this.sent = 0;
-    this.clock = 0;
-  }
-
-  /** Początek rundy: pierwsze INPUT_DELAY klatek są puste u wszystkich. */
-  startRound(r) {
-    this.round = r;
-    this.frame = 0;
-    this.sent = INPUT_DELAY;
-    this.clock = 0;
-    for (const key of this.buffer.keys()) {
-      if (Number(key.split(':')[0]) < r) this.buffer.delete(key);
-    }
-  }
-
-  /** Upływ jednego ticka czasu rzeczywistego. */
-  tick() {
-    if (this.round >= 0 && this.clock - this.frame <= this.maxAhead) this.clock++;
-  }
-
-  /**
-   * Czy wysłać kolejną własną komendę: jedna na tick. W ticku `clock` wykonuje się klatka
-   * clock - 1, więc komenda na klatkę clock - 1 + INPUT_DELAY działa dokładnie INPUT_DELAY ticków później.
-   */
-  canSend() {
-    return this.round >= 0 && this.sent < this.clock + INPUT_DELAY;
-  }
-
-  /** Czy symulacji wolno zrobić kolejny krok (nie wyprzedzamy zegara). */
-  due() {
-    return this.round >= 0 && this.frame < this.clock;
-  }
-
-  /** O ile klatek symulacja jest za zegarem (0 = na czas). */
-  behind() {
-    return Math.max(0, this.clock - this.frame - 1);
-  }
-
-  /** Zapisuje własną komendę na kolejną klatkę i zwraca wiadomość do wysłania. */
-  makeInput(cmd) {
-    const f = this.sent++;
-    const enc = encodeCommand(cmd);
-    this.buffer.set(`${this.round}:${f}:${this.me}`, decodeCommand(enc));
-    return { t: 'input', r: this.round, f, ...enc };
-  }
-
-  /** Komenda innego gracza z serwera (własne echo pomijamy, bo już ją mamy). */
-  receive({ p, r, f, d, s, m }) {
-    if (p === this.me) return;
-    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s, m }));
-  }
-
-  /** Gracz się rozłączył: od klatki (r, f) jego wąż ginie. */
-  markLeft(p, r, f) {
-    this.left.set(p, { r, f });
-  }
-
-  isLeft(p, r = this.round, f = this.frame) {
-    const at = this.left.get(p);
-    return !!at && (r > at.r || (r === at.r && f >= at.f));
-  }
-
-  /** Nowy gracz dołącza w trakcie meczu, od rundy r. */
-  addPlayer(r) {
-    this.joinRounds.push(r);
-    this.players++;
-  }
-
-  /** Ilu graczy (węży) jest w rundzie r: dołączający dopiero od swojej rundy. */
-  playersInRound(r) {
-    let n = 0;
-    while (n < this.players && this.joinRounds[n] <= r) n++;
-    return n;
-  }
-
-  /** Ilu graczy jeszcze gra (nie rozłączyło się). */
-  activePlayers() {
-    let n = 0;
-    for (let p = 0; p < this.players; p++) if (!this.isLeft(p, Infinity, 0)) n++;
-    return n;
-  }
-
-  /** Gracze, na których komendy czekamy w bieżącej klatce. */
-  waitingFor() {
-    const missing = [];
-    for (let p = 0; p < this.playersInRound(this.round); p++) {
-      if (this.frame < INPUT_DELAY || this.isLeft(p)) continue;
-      if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
-    }
-    return missing;
-  }
-
-  /**
-   * Komendy na klatkę f do przewidywania: znane, a brakujące jako „nic nie robi” (jedzie prosto).
-   * @returns {import('../game/types.js').Command[]}
-   */
-  commandsAt(f) {
-    const commands = [];
-    for (let p = 0; p < this.playersInRound(this.round); p++) {
-      if (this.isLeft(p, this.round, f)) commands.push({ quit: true });
-      else commands.push(this.buffer.get(`${this.round}:${f}:${p}`) ?? {});
-    }
-    return commands;
-  }
-
-  /**
-   * Komendy wszystkich graczy na bieżącą klatkę (i przejście do następnej)
-   * albo null, jeśli czegoś jeszcze brakuje.
-   * @returns {import('../game/types.js').Command[] | null}
-   */
-  take() {
-    if (!this.due() || this.waitingFor().length) return null;
-    const { round, frame } = this;
-    const commands = [];
-    for (let p = 0; p < this.playersInRound(round); p++) {
-      const key = `${round}:${frame}:${p}`;
-      if (this.isLeft(p)) commands.push({ quit: true });
-      else commands.push(this.buffer.get(key) ?? {});
-      this.buffer.delete(key);
-    }
-    this.frame++;
-    return commands;
-  }
-}
-
-Object.assign(__exports, { INPUT_DELAY, MAX_AHEAD, Lockstep });
-};
-
-// ---- src/net/rollback.js ----
-__factories["src/net/rollback.js"] = function (__exports) {
-// Przewidywanie w grze online (rollback): ekran nie czeka na ruchy innych graczy.
-//
-// - Stan potwierdzony liczymy tylko z prawdziwych komend wszystkich graczy (jak w lockstepie),
-//   więc jest identyczny na każdym komputerze i to on rozstrzyga rundę.
-// - Na ekranie jest stan przewidywany: kopia potwierdzonego, policzona dalej aż do bieżącego
-//   ticka. Nasze komendy znamy, a brakujące cudze zastępujemy „nic nie robi” (jedzie prosto).
-// - Gdy przyjdą prawdziwe komendy, potwierdzony stan idzie do przodu, a przewidywany liczymy
-//   od nowa. Cudzy wąż, który skręcił wcześniej, niż przewidzieliśmy, przeskakuje wtedy na
-//   właściwe miejsce, ale gra się nie zatrzymuje.
-// - Przewidujemy najwyżej lock.maxAhead klatek do przodu. Dalej zegar staje (czekamy).
-// Czysta logika: bez sieci i bez rysowania.
-
-const { cloneRound, stepRound } = __require("src/game/round.js");
-
-/** Zdarzenia, które od razu pokazujemy z przewidywania (własny strzał i miecz bez czekania na sieć). */
-const INSTANT = new Set(['shot', 'swordSwing']);
-
-class Rollback {
-  /** @param {import('./lockstep.js').Lockstep} lock */
-  constructor(lock) {
-    this.lock = lock;
-    /** @type {import('../game/types.js').RoundState | null} */
-    this.confirmed = null;
-    /** @type {import('../game/types.js').RoundState | null} stan na ekranie */
-    this.display = null;
-    this.shownFrame = 0;
-    /** @type {((state: import('../game/types.js').RoundState) => void) | null} po każdej potwierdzonej klatce (testy) */
-    this.onConfirm = null;
-  }
-
-  /** @param {number} r @param {import('../game/types.js').RoundState} round */
-  startRound(r, round) {
-    this.lock.startRound(r);
-    this.confirmed = round;
-    this.display = cloneRound(round);
-    this.shownFrame = 0;
-  }
-
-  /**
-   * Po ticku zegara (lock.tick() i wysłanie własnej komendy robi kontroler).
-   * @returns {{ events: import('../game/types.js').GameEvent[], advanced: boolean }}
-   *   zdarzenia do efektów i dźwięków; advanced = czy obraz poszedł do przodu
-   */
-  update() {
-    const { lock } = this;
-    const me = lock.me;
-    const events = [];
-    let commands;
-    while (!this.confirmed.result && (commands = lock.take())) {
-      for (const e of stepRound(this.confirmed, commands)) {
-        // Własny strzał i miecz pokazaliśmy już z przewidywania
-        if (!(INSTANT.has(e.type) && e.snake === me)) events.push(e);
-      }
-      this.onConfirm?.(this.confirmed);
-    }
-
-    const target = lock.clock;
-    const advanced = target > this.shownFrame;
-    if (this.confirmed.result) {
-      this.display = this.confirmed;
-      this.shownFrame = target;
-      return { events, advanced };
-    }
-
-    const display = cloneRound(this.confirmed);
-    for (let f = lock.frame; f < target; f++) {
-      const step = stepRound(display, lock.commandsAt(f));
-      if (f >= this.shownFrame) {
-        for (const e of step) if (INSTANT.has(e.type) && e.snake === me) events.push(e);
-      }
-    }
-    // Koniec rundy rozstrzyga tylko stan potwierdzony
-    display.result = null;
-    this.display = display;
-    this.shownFrame = Math.max(this.shownFrame, target);
-    return { events, advanced };
-  }
-}
-
-Object.assign(__exports, { Rollback });
-};
-
 // ---- src/game/round.js ----
 __factories["src/game/round.js"] = function (__exports) {
 // Runda: stan początkowy i jeden krok symulacji.
@@ -2402,7 +2192,7 @@ const { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH
 const { createRng } = __require("src/core/rng.js");
 const { fire, moveBullets } = __require("src/game/bullets.js");
 const { eatFood, refillFood } = __require("src/game/food.js");
-const { cellIndex, passThrough, samePos } = __require("src/game/grid.js");
+const { cellIndex, passThrough, samePos, step, wrap } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
 const { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } = __require("src/game/snake.js");
 const { applySwords, swing } = __require("src/game/sword.js");
@@ -2441,6 +2231,26 @@ function createRound(seed, options = {}) {
   };
   refillFood(state);
   return state;
+}
+
+/**
+ * Nowy wąż w trwającej rundzie (gracz dołączył w trakcie gry online). Staje na swoim miejscu
+ * startu, a jeśli jest zajęte przez innego węża, na pierwszym wolnym. Deterministyczne.
+ * @param {RoundState} state @param {number} id numer gracza (= indeks węża)
+ */
+function addSnake(state, id) {
+  const spawns = spawnPoints(state.grid, START_LENGTH);
+  const taken = new Set();
+  for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
+  const free = (spawn) => {
+    let p = spawn.body[0];
+    const cells = [...spawn.body];
+    for (let i = 0; i < 4; i++) cells.push((p = wrap(state.grid, step(p, spawn.dir))));
+    return cells.every((c) => !taken.has(cellIndex(state.grid, c)));
+  };
+  const order = [id % spawns.length, ...spawns.keys()];
+  const spawn = spawns[order.find((i) => free(spawns[i])) ?? order[0]];
+  state.snakes[id] = createSnake(id, spawn.body, spawn.dir);
 }
 
 /**
@@ -2602,7 +2412,7 @@ function checkRoundEnd(state, events) {
   events.push({ type: 'roundOver', result });
 }
 
-Object.assign(__exports, { createRound, cloneRound, stepRound });
+Object.assign(__exports, { createRound, addSnake, cloneRound, stepRound });
 };
 
 // ---- src/game/bullets.js ----
@@ -3255,6 +3065,293 @@ function applySwords(state, events) {
 }
 
 Object.assign(__exports, { canSwing, swing, inSwordRange, applySwords });
+};
+
+// ---- src/net/lockstep.js ----
+__factories["src/net/lockstep.js"] = function (__exports) {
+// Lockstep: każdy komputer liczy tę samą symulację z tych samych komend.
+// Komendy są numerowane (runda, klatka). Własna komenda działa INPUT_DELAY klatek później,
+// żeby zdążyła dolecieć do innych. Krok symulacji robimy tylko, gdy mamy komendy wszystkich.
+//
+// Tempo wyznacza lokalny zegar (clock: ticki od początku rundy, co 55 ms):
+// - wysyłamy dokładnie jedną komendę na tick: na klatkę, która wykona się INPUT_DELAY ticków później,
+// - symulacja nie wyprzedza zegara (klatka < clock), więc gra nigdy nie biegnie szybciej
+//   niż w trybie offline; kto został w tyle, nadrabia najwyżej o jedną klatkę na tick,
+// - zegar nie ucieka symulacji dalej niż o MAX_AHEAD klatek. Gdy czekamy na ruchy innych
+//   (np. zaczęliśmy rundę chwilę przed nimi), zegar staje, zamiast wysyłać nasze komendy
+//   coraz dalej w przyszłość, co wydłużałoby opóźnienie naszych własnych skrętów.
+// Czysta logika, bez sieci (wysyłaniem zajmuje się kontroler trybu online).
+
+const { decodeCommand, encodeCommand } = __require("src/net/protocol.js");
+
+const INPUT_DELAY = 1; // 55 ms (z przewidywaniem, patrz rollback.js)
+const MAX_AHEAD = 1;
+/**
+ * Gracz dołączający w trakcie rundy przez pierwsze JOIN_GRACE klatek „nic nie robi” (nie czekamy
+ * na jego komendy): w tym czasie odtwarza u siebie rundę i dogania zegar innych (ok. 1,1 s).
+ */
+const JOIN_GRACE = 20;
+
+/** @typedef {{ r: number, f: number }} JoinAt  od której rundy i klatki gracz ma węża */
+
+class Lockstep {
+  /**
+   * @param {number} players liczba graczy
+   * @param {number} me mój numer gracza
+   * @param {(JoinAt | number)[]} [joins] od kiedy gra każdy gracz (liczba = od początku tej rundy)
+   * @param {{ maxAhead?: number }} [opts] o ile klatek zegar może wyprzedzić potwierdzoną symulację
+   */
+  constructor(players, me, joins = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
+    this.maxAhead = maxAhead;
+    this.players = players;
+    this.me = me;
+    /** @type {JoinAt[]} */
+    this.joins = joins.map((j) => (typeof j === 'number' ? { r: j, f: 0 } : { ...j }));
+    /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
+    this.buffer = new Map();
+    /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
+    this.left = new Map();
+    this.round = -1;
+    this.frame = 0;
+    this.sent = 0;
+    this.clock = 0;
+  }
+
+  /** Początek rundy: pierwsze INPUT_DELAY klatek są puste u wszystkich. */
+  startRound(r) {
+    this.round = r;
+    this.frame = 0;
+    this.sent = INPUT_DELAY;
+    this.clock = 0;
+    for (const key of this.buffer.keys()) {
+      if (Number(key.split(':')[0]) < r) this.buffer.delete(key);
+    }
+  }
+
+  /** Upływ jednego ticka czasu rzeczywistego. */
+  tick() {
+    if (this.round >= 0 && this.clock - this.frame <= this.maxAhead) this.clock++;
+  }
+
+  /**
+   * Czy wysłać kolejną własną komendę: jedna na tick. W ticku `clock` wykonuje się klatka
+   * clock - 1, więc komenda na klatkę clock - 1 + INPUT_DELAY działa dokładnie INPUT_DELAY ticków później.
+   */
+  canSend() {
+    return this.round >= 0 && this.sent < this.clock + INPUT_DELAY;
+  }
+
+  /** Czy symulacji wolno zrobić kolejny krok (nie wyprzedzamy zegara). */
+  due() {
+    return this.round >= 0 && this.frame < this.clock;
+  }
+
+  /** O ile klatek symulacja jest za zegarem (0 = na czas). */
+  behind() {
+    return Math.max(0, this.clock - this.frame - 1);
+  }
+
+  /** Zapisuje własną komendę na kolejną klatkę i zwraca wiadomość do wysłania. */
+  makeInput(cmd) {
+    const f = this.sent++;
+    const enc = encodeCommand(cmd);
+    this.buffer.set(`${this.round}:${f}:${this.me}`, decodeCommand(enc));
+    return { t: 'input', r: this.round, f, ...enc };
+  }
+
+  /** Komenda innego gracza z serwera (własne echo pomijamy, bo już ją mamy). */
+  receive({ p, r, f, d, s, m }) {
+    if (p === this.me) return;
+    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s, m }));
+  }
+
+  /** Gracz się rozłączył: od klatki (r, f) jego wąż ginie. */
+  markLeft(p, r, f) {
+    this.left.set(p, { r, f });
+  }
+
+  isLeft(p, r = this.round, f = this.frame) {
+    const at = this.left.get(p);
+    return !!at && (r > at.r || (r === at.r && f >= at.f));
+  }
+
+  /** Nowy gracz dołącza w trakcie meczu: od rundy r, klatki f (f = 0: od początku rundy). */
+  addPlayer(r, f = 0) {
+    this.joins.push({ r, f });
+    this.players++;
+  }
+
+  /** Ilu graczy ma węża w klatce f rundy r (dołączający pojawiają się w swojej klatce). */
+  playersAt(r, f) {
+    let n = 0;
+    while (n < this.players && (this.joins[n].r < r || (this.joins[n].r === r && this.joins[n].f <= f))) n++;
+    return n;
+  }
+
+  /** Ilu węży jest na starcie rundy r. */
+  playersInRound(r) {
+    return this.playersAt(r, 0);
+  }
+
+  /** Gracze, których wąż pojawia się w klatce f bieżącej rundy (dołączyli w trakcie rundy). */
+  joiningAt(f) {
+    const list = [];
+    if (f === 0) return list;
+    this.joins.forEach((j, p) => {
+      if (j.r === this.round && j.f === f) list.push(p);
+    });
+    return list;
+  }
+
+  /** Czy komenda gracza p w klatce f jest z góry pusta (dopiero dołączył i jeszcze się ładuje). */
+  graceAt(p, f) {
+    const j = this.joins[p];
+    return j.r === this.round && j.f > 0 && f < j.f + JOIN_GRACE;
+  }
+
+  /** Ilu graczy jeszcze gra (nie rozłączyło się). */
+  activePlayers() {
+    let n = 0;
+    for (let p = 0; p < this.players; p++) if (!this.isLeft(p, Infinity, 0)) n++;
+    return n;
+  }
+
+  /** Gracze, na których komendy czekamy w bieżącej klatce. */
+  waitingFor() {
+    const missing = [];
+    for (let p = 0; p < this.playersAt(this.round, this.frame); p++) {
+      if (this.frame < INPUT_DELAY || this.isLeft(p) || this.graceAt(p, this.frame)) continue;
+      if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
+    }
+    return missing;
+  }
+
+  /**
+   * Komendy na klatkę f do przewidywania: znane, a brakujące jako „nic nie robi” (jedzie prosto).
+   * @returns {import('../game/types.js').Command[]}
+   */
+  commandsAt(f) {
+    const commands = [];
+    for (let p = 0; p < this.playersAt(this.round, f); p++) {
+      if (this.isLeft(p, this.round, f)) commands.push({ quit: true });
+      else commands.push(this.buffer.get(`${this.round}:${f}:${p}`) ?? {});
+    }
+    return commands;
+  }
+
+  /**
+   * Komendy wszystkich graczy na bieżącą klatkę (i przejście do następnej)
+   * albo null, jeśli czegoś jeszcze brakuje.
+   * @returns {import('../game/types.js').Command[] | null}
+   */
+  take() {
+    if (!this.due() || this.waitingFor().length) return null;
+    const { round, frame } = this;
+    const commands = [];
+    for (let p = 0; p < this.playersAt(round, frame); p++) {
+      const key = `${round}:${frame}:${p}`;
+      if (this.isLeft(p)) commands.push({ quit: true });
+      else commands.push(this.buffer.get(key) ?? {});
+      this.buffer.delete(key);
+    }
+    this.frame++;
+    return commands;
+  }
+}
+
+Object.assign(__exports, { INPUT_DELAY, MAX_AHEAD, JOIN_GRACE, Lockstep });
+};
+
+// ---- src/net/rollback.js ----
+__factories["src/net/rollback.js"] = function (__exports) {
+// Przewidywanie w grze online (rollback): ekran nie czeka na ruchy innych graczy.
+//
+// - Stan potwierdzony liczymy tylko z prawdziwych komend wszystkich graczy (jak w lockstepie),
+//   więc jest identyczny na każdym komputerze i to on rozstrzyga rundę.
+// - Na ekranie jest stan przewidywany: kopia potwierdzonego, policzona dalej aż do bieżącego
+//   ticka. Nasze komendy znamy, a brakujące cudze zastępujemy „nic nie robi” (jedzie prosto).
+// - Gdy przyjdą prawdziwe komendy, potwierdzony stan idzie do przodu, a przewidywany liczymy
+//   od nowa. Cudzy wąż, który skręcił wcześniej, niż przewidzieliśmy, przeskakuje wtedy na
+//   właściwe miejsce, ale gra się nie zatrzymuje.
+// - Przewidujemy najwyżej lock.maxAhead klatek do przodu. Dalej zegar staje (czekamy).
+// Czysta logika: bez sieci i bez rysowania.
+
+const { addSnake, cloneRound, stepRound } = __require("src/game/round.js");
+
+/** Zdarzenia, które od razu pokazujemy z przewidywania (własny strzał i miecz bez czekania na sieć). */
+const INSTANT = new Set(['shot', 'swordSwing']);
+
+class Rollback {
+  /** @param {import('./lockstep.js').Lockstep} lock */
+  constructor(lock) {
+    this.lock = lock;
+    /** @type {import('../game/types.js').RoundState | null} */
+    this.confirmed = null;
+    /** @type {import('../game/types.js').RoundState | null} stan na ekranie */
+    this.display = null;
+    this.shownFrame = 0;
+    /** @type {((state: import('../game/types.js').RoundState) => void) | null} po każdej potwierdzonej klatce (testy) */
+    this.onConfirm = null;
+  }
+
+  /** @param {number} r @param {import('../game/types.js').RoundState} round */
+  startRound(r, round) {
+    this.lock.startRound(r);
+    this.confirmed = round;
+    this.display = cloneRound(round);
+    this.shownFrame = 0;
+  }
+
+  /** Krok klatki f: najpierw węże graczy, którzy dołączają w tej klatce. */
+  step(state, f, commands) {
+    for (const p of this.lock.joiningAt(f)) if (state.snakes.length === p) addSnake(state, p);
+    return stepRound(state, commands);
+  }
+
+  /**
+   * Po ticku zegara (lock.tick() i wysłanie własnej komendy robi kontroler).
+   * @returns {{ events: import('../game/types.js').GameEvent[], advanced: boolean }}
+   *   zdarzenia do efektów i dźwięków; advanced = czy obraz poszedł do przodu
+   */
+  update() {
+    const { lock } = this;
+    const me = lock.me;
+    const events = [];
+    let commands;
+    while (!this.confirmed.result) {
+      const f = lock.frame;
+      if (!(commands = lock.take())) break;
+      for (const e of this.step(this.confirmed, f, commands)) {
+        // Własny strzał i miecz pokazaliśmy już z przewidywania
+        if (!(INSTANT.has(e.type) && e.snake === me)) events.push(e);
+      }
+      this.onConfirm?.(this.confirmed);
+    }
+
+    const target = lock.clock;
+    const advanced = target > this.shownFrame;
+    if (this.confirmed.result) {
+      this.display = this.confirmed;
+      this.shownFrame = target;
+      return { events, advanced };
+    }
+
+    const display = cloneRound(this.confirmed);
+    for (let f = lock.frame; f < target; f++) {
+      const step = this.step(display, f, lock.commandsAt(f));
+      if (f >= this.shownFrame) {
+        for (const e of step) if (INSTANT.has(e.type) && e.snake === me) events.push(e);
+      }
+    }
+    // Koniec rundy rozstrzyga tylko stan potwierdzony
+    display.result = null;
+    this.display = display;
+    this.shownFrame = Math.max(this.shownFrame, target);
+    return { events, advanced };
+  }
+}
+
+Object.assign(__exports, { Rollback });
 };
 
 // ---- src/scenes/countdown.js ----

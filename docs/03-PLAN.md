@@ -132,6 +132,14 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Efekty i dźwięki z potwierdzonego stanu, własny strzał i miecz od razu
 - **Testy:** klonowanie stanu, 3 komputery z Wi-Fi i słabszym łączem (ten sam stan, obraz nie staje), własny skręt bez sieci.
 
+## Krok 20: Dołączanie od razu, link do pokoi, Ctrl
+- [x] Dołączanie w trwającej rundzie: klatka wejścia z serwera, zapis ruchów rundy, `addSnake`, `JOIN_GRACE`
+- [x] Przycisk *Wszystkie pokoje* w menu głównym
+- [x] Gracz 1: lewy Ctrl strzela (Spacja też), lewy Shift tnie; pytanie przed zamknięciem karty w trakcie gry (Ctrl+W)
+- **Testy:** klatka wejścia (najmniejsza ostatnia + 1, bez wychodzących), zapis ruchów, symulacja
+  3 komputerów z wejściem w środku rundy (ten sam stan u wszystkich).
+  ✅ Sprawdzone w 3 przeglądarkach: trzecia osoba w grze 0,15 s po Enterze, w trakcie rundy.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

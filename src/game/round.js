@@ -5,7 +5,7 @@ import { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGT
 import { createRng } from '../core/rng.js';
 import { fire, moveBullets } from './bullets.js';
 import { eatFood, refillFood } from './food.js';
-import { cellIndex, passThrough, samePos } from './grid.js';
+import { cellIndex, passThrough, samePos, step, wrap } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
 import { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } from './snake.js';
 import { applySwords, swing } from './sword.js';
@@ -44,6 +44,26 @@ export function createRound(seed, options = {}) {
   };
   refillFood(state);
   return state;
+}
+
+/**
+ * Nowy wąż w trwającej rundzie (gracz dołączył w trakcie gry online). Staje na swoim miejscu
+ * startu, a jeśli jest zajęte przez innego węża, na pierwszym wolnym. Deterministyczne.
+ * @param {RoundState} state @param {number} id numer gracza (= indeks węża)
+ */
+export function addSnake(state, id) {
+  const spawns = spawnPoints(state.grid, START_LENGTH);
+  const taken = new Set();
+  for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
+  const free = (spawn) => {
+    let p = spawn.body[0];
+    const cells = [...spawn.body];
+    for (let i = 0; i < 4; i++) cells.push((p = wrap(state.grid, step(p, spawn.dir))));
+    return cells.every((c) => !taken.has(cellIndex(state.grid, c)));
+  };
+  const order = [id % spawns.length, ...spawns.keys()];
+  const spawn = spawns[order.find((i) => free(spawns[i])) ?? order[0]];
+  state.snakes[id] = createSnake(id, spawn.body, spawn.dir);
 }
 
 /**

@@ -53,29 +53,48 @@ test('błędy: pokój nie istnieje, kod zajęty, pokój pełny', () => {
 
 });
 
-test('dołączenie w trakcie meczu: od rundy maxRound + 2, wszyscy się dowiadują', () => {
+test('dołączenie w trakcie meczu: od razu, w bieżącej rundzie, od klatki, której nikt nie policzył', () => {
   const room = new Room('KOT7', { random: () => 0.25 });
   const a = client(room, 'A', true);
   const b = client(room, 'B');
   a.send({ t: 'start' });
-  a.send({ t: 'input', r: 1, f: 10, d: '', s: 0 });
   a.send({ t: 'result', r: 0, w: 1 });
   a.send({ t: 'result', r: 0, w: 0 }); // drugi raz ten sam wynik: ignorowany
+  for (let f = 1; f <= 10; f++) a.send({ t: 'input', r: 1, f, d: f === 4 ? 'u' : '', s: 0 });
+  for (let f = 1; f <= 7; f++) b.send({ t: 'input', r: 1, f, d: '', s: 0 });
   const c = client(room, 'Celina');
   assert.equal(c.socket.last('error'), undefined);
   assert.equal(c.socket.last('lobby').playing, true);
   const late = c.socket.last('late');
-  assert.equal(late.r, 3);
+  // B wysłał najwyżej klatkę 7, więc klatki 8 nikt jeszcze nie mógł policzyć
+  assert.equal(late.r, 1);
+  assert.equal(late.f, 8);
   assert.equal(late.seed, room.seed);
   assert.deepEqual(late.results, [1]);
-  assert.deepEqual(late.players.map((p) => [p.name, p.r]), [['A', 0], ['B', 0], ['Celina', 3]]);
-  assert.deepEqual(b.socket.last('joined'), { t: 'joined', p: 2, id: late.players[2].id, name: 'Celina', color: '#39FF14', r: 3 });
+  assert.equal(late.log.length, 17, 'wszystkie ruchy z bieżącej rundy');
+  assert.deepEqual(late.log[3], [0, 4, 'u', 0, 0]);
+  assert.deepEqual(late.players.map((p) => [p.name, p.r, p.f]), [['A', 0, 0], ['B', 0, 0], ['Celina', 1, 8]]);
+  assert.deepEqual(b.socket.last('joined'), { t: 'joined', p: 2, id: late.players[2].id, name: 'Celina', color: '#39FF14', r: 1, f: 8 });
   // dołączający gra normalnie: jego ruchy idą do wszystkich
-  c.send({ t: 'input', r: 3, f: 2, d: 'u', s: 0 });
+  c.send({ t: 'input', r: 1, f: 30, d: 'u', s: 0 });
   assert.equal(a.socket.last('input').p, 2);
   // kolejne wyniki dostaje też on
   b.send({ t: 'result', r: 1, w: 'draw' });
   assert.deepEqual(c.socket.last('result'), { t: 'result', r: 1, w: 'draw' });
+});
+
+test('dołączenie: kto wyszedł, nie blokuje (nie czekamy na jego klatki), a dołączający wie, że wyszedł', () => {
+  const room = new Room('KOT7');
+  const a = client(room, 'A', true);
+  const b = client(room, 'B');
+  a.send({ t: 'start' });
+  for (let f = 1; f <= 20; f++) a.send({ t: 'input', r: 0, f, d: '', s: 0 });
+  for (let f = 1; f <= 3; f++) b.send({ t: 'input', r: 0, f, d: '', s: 0 });
+  b.conn.closed();
+  const c = client(room, 'Celina');
+  const late = c.socket.last('late');
+  assert.equal(late.f, 21);
+  assert.deepEqual(late.left, [{ p: 1, r: 0, f: 4 }]);
 });
 
 test('w trakcie meczu miejsca liczą się razem z graczami, którzy wyszli', () => {

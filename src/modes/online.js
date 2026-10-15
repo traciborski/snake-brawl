@@ -1,9 +1,10 @@
 // Gra przez internet: komendy wszystkich graczy przez serwer (lockstep) z przewidywaniem (rollback):
 // ekran nie czeka na cudze ruchy, a rundę rozstrzyga stan policzony z prawdziwych komend.
 
-import { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
-import { createMatch, replayMatch } from '../game/match.js';
-import { Lockstep } from '../net/lockstep.js';
+import { BOARD_Y, COLORS, PLAYER_COLORS, TICKS_PER_SECOND, TICK_MS, VIEW_W } from '../config.js';
+import { createMatch, nextRoundSeed, replayMatch } from '../game/match.js';
+import { createRound } from '../game/round.js';
+import { INPUT_DELAY, JOIN_GRACE, Lockstep } from '../net/lockstep.js';
 import { Rollback } from '../net/rollback.js';
 import { mergeCommands } from '../input/touch.js';
 import { showRoomInAddressBar } from '../net/client.js';
@@ -30,6 +31,9 @@ export function attachSession(app, session) {
     } else if (msg.t === 'result' && app.lateJoin) {
       app.lateJoin.results[msg.r] = msg.w;
       tryLateStart(app, session);
+    } else if (app.lateJoin && ['input', 'left', 'joined'].includes(msg.t)) {
+      // Jeszcze wchodzimy do gry: ruchy przekażemy kontrolerowi, gdy powstanie
+      app.lateJoin.pending.push(msg);
     } else app.controller.receive?.(msg);
   };
   session.onClose = () => {
@@ -57,11 +61,12 @@ function startMatch(app, session, { seed, players }) {
 }
 
 /**
- * Dołączenie w trakcie meczu: czekamy w poczekalni na wyniki rund sprzed naszej rundy
- * (żeby znać stan meczu) i wchodzimy do gry od rundy r.
+ * Dołączenie w trakcie meczu, od razu: serwer podaje rundę r i klatkę f, w której pojawi się nasz wąż,
+ * oraz dotychczasowe ruchy tej rundy. Gdy znamy wyniki wcześniejszych rund (zwykle od razu),
+ * odtwarzamy u siebie bieżącą rundę i wchodzimy do gry bez odliczania.
  */
-function waitToJoin(app, session, { seed, r, players, results }) {
-  app.lateJoin = { seed, r, players, results: [...results] };
+function waitToJoin(app, session, { seed, r, f, players, results, left = [], log = [] }) {
+  app.lateJoin = { seed, r, f, players, results: [...results], left, log, pending: [], at: performance.now() };
   app.onLobby?.(session.lobby);
   tryLateStart(app, session);
 }
@@ -78,16 +83,28 @@ function tryLateStart(app, session) {
   const me = late.players.findIndex((p) => p.id === session.lobby?.you);
   app.players = late.players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = match;
-  app.controller = createOnlineController(app, session, me, late.players.map((p) => p.r));
-  app.scenes.go('countdown');
+  const controller = createOnlineController(app, session, me, late.players.map((p) => ({ r: p.r, f: p.f ?? 0 })));
+  app.controller = controller;
+  for (const l of late.left) controller.receive({ t: 'left', ...l });
+  for (const [p, f, d, s, m] of late.log) controller.receive({ t: 'input', p, r: late.r, f, d, s, m });
+  for (const msg of late.pending) controller.receive(msg);
+
+  // Bez odliczania, prosto do trwającej rundy (wąż pojawi się w klatce late.f)
+  app.round = createRound(nextRoundSeed(match), { players: controller.playersInRound(late.r) });
+  app.roundNumber = late.r + 1;
+  app.effects.clear();
+  // Nasz zegar: tam, gdzie są teraz inni (klatka z serwera + czas, który minął od wiadomości)
+  const elapsed = Math.floor((performance.now() - late.at) / TICK_MS);
+  controller.lateStart = { clock: Math.max(0, late.f - INPUT_DELAY + elapsed), firstOwn: late.f + JOIN_GRACE };
+  app.scenes.go('play');
 }
 
 /**
  * @param {any} app @param {import('../net/client.js').Session} session @param {number} me
- * @param {number[]} [joinRounds] od której rundy gra każdy gracz
+ * @param {({ r: number, f: number } | number)[]} [joins] od kiedy gra każdy gracz
  */
-export function createOnlineController(app, session, me, joinRounds) {
-  const lock = new Lockstep(app.players.length, me, joinRounds, { maxAhead: MAX_PREDICT });
+export function createOnlineController(app, session, me, joins) {
+  const lock = new Lockstep(app.players.length, me, joins, { maxAhead: MAX_PREDICT });
   const rollback = new Rollback(lock);
   let stalled = 0;
 
@@ -103,7 +120,7 @@ export function createOnlineController(app, session, me, joinRounds) {
       else if (msg.t === 'left') lock.markLeft(msg.p, msg.r, msg.f);
       else if (msg.t === 'joined') {
         // Nowy gracz w trakcie meczu: gra od rundy msg.r, do tego czasu nie ma węża
-        lock.addPlayer(msg.r);
+        lock.addPlayer(msg.r, msg.f ?? 0);
         app.players.push({ name: msg.name, color: msg.color ?? PLAYER_COLORS[msg.p] });
         app.match.wins.push(0);
       }
@@ -117,8 +134,16 @@ export function createOnlineController(app, session, me, joinRounds) {
       session.send({ t: 'result', r, w: result.winner });
     },
 
+    /** Ustawiane przy dołączeniu w trakcie rundy: skąd zaczyna zegar i od której klatki wysyłamy ruchy. */
+    lateStart: null,
+
     startRound(r) {
       rollback.startRound(r, app.round);
+      if (this.lateStart) {
+        lock.clock = this.lateStart.clock;
+        lock.sent = Math.max(lock.sent, this.lateStart.firstOwn);
+        this.lateStart = null;
+      }
       app.round = rollback.display;
       stalled = 0;
     },

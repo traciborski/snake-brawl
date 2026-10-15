@@ -1,10 +1,11 @@
 // Pokój gry online: poczekalnia, start meczu, przekazywanie ruchów, rozłączenia,
-// dołączanie w trakcie meczu (od rundy, której nikt jeszcze nie zaczął).
+// dołączanie w trakcie meczu (od razu, w trwającej rundzie, od klatki, której nikt jeszcze nie policzył).
 // Czysta logika bez sieci: gniazdo to dowolny obiekt z send(tekst) i close().
 // Używają jej lokalny serwer (scripts/serve.js) i Cloudflare (server/worker.js).
 
 import { MAX_PLAYERS, NAME_MAX } from '../src/config.js';
 import { PUBLIC_ROOMS, pickColor } from '../src/net/protocol.js';
+import { INPUT_DELAY } from '../src/net/lockstep.js';
 
 const DIRS_RE = /^[udlr]{0,3}$/;
 
@@ -33,8 +34,12 @@ export class Room {
     this.maxRound = -1;
     /** @type {(number | 'draw')[]} wyniki rozegranych rund (zgłaszane przez graczy) */
     this.results = [];
-    /** @type {number[]} od której rundy gra gracz o danym numerze */
-    this.joinRounds = [];
+    /** @type {{ r: number, f: number }[]} od której rundy i klatki gra gracz o danym numerze */
+    this.joins = [];
+    /** @type {Map<number, number[][]>} ruchy z ostatnich rund: runda → [p, f, d, s, m] (dla dołączających) */
+    this.log = new Map();
+    /** @type {{ p: number, r: number, f: number }[]} kto i od kiedy wyszedł w trakcie meczu */
+    this.leftAt = [];
     this.nextId = 1;
     /** Wywoływane po każdej zmianie widocznej na liście pokoi (gracze, mecz, runda) */
     this.onChange = () => {};
@@ -116,25 +121,37 @@ export class Room {
   }
 
   /**
-   * Dołączenie w trakcie meczu. Nowy gracz wchodzi od rundy maxRound + 2: nikt nie mógł jej
-   * jeszcze utworzyć, bo do tego trzeba skończyć rundę maxRound + 1, a jej ruchy serwer
-   * przekaże dopiero po tej wiadomości (kolejność wiadomości w połączeniu jest zachowana).
+   * Dołączenie w trakcie meczu, od razu: w bieżącej rundzie r (najwyższej, z której przyszedł ruch)
+   * wąż nowego gracza pojawia się w klatce f, której nikt jeszcze nie mógł policzyć. Klatkę liczy się
+   * dopiero z ruchami wszystkich graczy, a od każdego obecnego gracza serwer przekazał najwyżej
+   * klatkę last, więc wystarczy f = najmniejsze last + 1. Wiadomość `joined` dotrze do każdego
+   * przed dalszymi ruchami (kolejność w połączeniu jest zachowana), więc wszyscy dodadzą węża
+   * w tej samej klatce. Nowy gracz dostaje ruchy z tej rundy i sam ją u siebie odtwarza.
    * @param {Member} member
    */
   joinLate(member) {
-    const r = this.maxRound + 2;
+    const r = Math.max(0, this.maxRound);
+    const present = this.players.filter((m) => this.members.includes(m));
+    const lastIn = (m) => {
+      const last = this.last.get(m.id);
+      return last && last.r === r ? last.f : -1;
+    };
+    const f = present.length ? Math.max(INPUT_DELAY, Math.min(...present.map((m) => lastIn(m) + 1))) : INPUT_DELAY;
     const p = this.players.length;
     this.players.push(member);
-    this.joinRounds.push(r);
+    this.joins.push({ r, f });
     for (const m of this.members) {
-      if (m !== member) send(m.socket, { t: 'joined', p, id: member.id, name: member.name, color: member.color, r });
+      if (m !== member) send(m.socket, { t: 'joined', p, id: member.id, name: member.name, color: member.color, r, f });
     }
     send(member.socket, {
       t: 'late',
       seed: this.seed,
       r,
-      players: this.players.map((m, i) => ({ id: m.id, name: m.name, color: m.color, r: this.joinRounds[i] })),
+      f,
+      players: this.players.map((m, i) => ({ id: m.id, name: m.name, color: m.color, ...this.joins[i] })),
       results: this.results,
+      left: this.leftAt,
+      log: this.log.get(r) ?? [],
     });
   }
 
@@ -145,7 +162,9 @@ export class Room {
         if (this.phase !== 'lobby' || member !== this.members[0] || this.members.length < 2) return;
         this.phase = 'game';
         this.players = [...this.members];
-        this.joinRounds = this.players.map(() => 0);
+        this.joins = this.players.map(() => ({ r: 0, f: 0 }));
+        this.log.clear();
+        this.leftAt = [];
         this.last.clear();
         this.maxRound = -1;
         this.results = [];
@@ -164,7 +183,12 @@ export class Room {
         if (typeof d !== 'string' || !DIRS_RE.test(d)) return;
         this.last.set(member.id, { r, f });
         this.maxRound = Math.max(this.maxRound, r);
-        this.broadcast({ t: 'input', p, r, f, d, s: s ? 1 : 0, m: m ? 1 : 0 });
+        const sb = s ? 1 : 0;
+        const mb = m ? 1 : 0;
+        if (!this.log.has(r)) this.log.set(r, []);
+        this.log.get(r).push([p, f, d, sb, mb]);
+        for (const old of this.log.keys()) if (old < this.maxRound - 1) this.log.delete(old);
+        this.broadcast({ t: 'input', p, r, f, d, s: sb, m: mb });
         return;
       }
       case 'result': {
@@ -213,6 +237,7 @@ export class Room {
       // Od pierwszej klatki, której gracz już nie wysłał, jego wąż ginie u wszystkich
       const last = this.last.get(member.id);
       const at = last ? { r: last.r, f: last.f + 1 } : { r: 0, f: 0 };
+      this.leftAt.push({ p, ...at });
       this.broadcast({ t: 'left', p, ...at });
       if (this.members.length === 0) this.phase = 'lobby';
     } else if (this.phase === 'lobby') {

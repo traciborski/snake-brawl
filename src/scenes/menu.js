@@ -1,7 +1,7 @@
 import { COLORS, PLAYER_COLORS, VIEW_W } from '../config.js';
 import { blink, drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
-import { fetchRooms, serverUrl, showRoomInAddressBar } from '../net/client.js';
+import { fetchRooms, roomsPage, serverUrl, showRoomInAddressBar } from '../net/client.js';
 import { PUBLIC_ROOMS } from '../net/protocol.js';
 
 /** Co ile odświeżamy w menu stan pokoju publicznego. */
@@ -41,6 +41,10 @@ export function createMenuScene(app) {
         };
         refresh();
         timer = setInterval(refresh, PUBLIC_REFRESH_MS);
+        // Lista wszystkich pokoi to strona serwera gry (gra otwarta z dysku jej nie ma)
+        if (location.protocol !== 'file:') {
+          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '4  WSZYSTKIE POKOJE'));
+        }
       }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
       app.overlay.show(menu, { position: 'low' });
@@ -81,7 +85,7 @@ export function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1/2/3 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, 1–4 wybierają od razu, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
@@ -89,6 +93,7 @@ export function createMenuScene(app) {
     else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
     else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
     else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
+    else if ((e.code === 'Digit4' || e.code === 'Numpad4') && buttons[3]) buttons[3].click();
     else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();

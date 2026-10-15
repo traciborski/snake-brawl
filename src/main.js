@@ -76,6 +76,16 @@ function enterFullscreen() {
     .catch(() => {});
 }
 
+// Ctrl to strzał, a Ctrl+W zamyka kartę i przeglądarka nie pozwala tego zablokować.
+// W trakcie gry (i online w ogóle) prosimy więc o potwierdzenie wyjścia ze strony.
+window.addEventListener('beforeunload', (e) => {
+  const playing = app.scenes.name === 'countdown' || app.scenes.name === 'play' || app.scenes.name === 'roundEnd';
+  if (playing || app.session) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
 

@@ -159,7 +159,7 @@
                     ...rooms.map(roomRow),
                     ...(quiet ? [el('p', { className: 'empty' }, 'Nikt teraz nie gra. Wejdź do pokoju publicznego albo załóż własny i zaproś znajomych!')] : []),
                 );
-                sub.textContent = 'Kliknij DOŁĄCZ, wpisz imię i grasz. Do trwającego meczu wejdziesz od kolejnej rundy.';
+                sub.textContent = 'Kliknij DOŁĄCZ, wpisz imię i grasz. Do trwającego meczu wchodzisz od razu.';
             } catch {
                 sub.textContent = location.protocol === 'file:'
                     ? 'Lista pokoi działa na stronie gry w internecie albo przez npm start.'

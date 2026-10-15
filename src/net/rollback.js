@@ -10,7 +10,7 @@
 // - Przewidujemy najwyżej lock.maxAhead klatek do przodu. Dalej zegar staje (czekamy).
 // Czysta logika: bez sieci i bez rysowania.
 
-import { cloneRound, stepRound } from '../game/round.js';
+import { addSnake, cloneRound, stepRound } from '../game/round.js';
 
 /** Zdarzenia, które od razu pokazujemy z przewidywania (własny strzał i miecz bez czekania na sieć). */
 const INSTANT = new Set(['shot', 'swordSwing']);
@@ -36,6 +36,12 @@ export class Rollback {
     this.shownFrame = 0;
   }
 
+  /** Krok klatki f: najpierw węże graczy, którzy dołączają w tej klatce. */
+  step(state, f, commands) {
+    for (const p of this.lock.joiningAt(f)) if (state.snakes.length === p) addSnake(state, p);
+    return stepRound(state, commands);
+  }
+
   /**
    * Po ticku zegara (lock.tick() i wysłanie własnej komendy robi kontroler).
    * @returns {{ events: import('../game/types.js').GameEvent[], advanced: boolean }}
@@ -46,8 +52,10 @@ export class Rollback {
     const me = lock.me;
     const events = [];
     let commands;
-    while (!this.confirmed.result && (commands = lock.take())) {
-      for (const e of stepRound(this.confirmed, commands)) {
+    while (!this.confirmed.result) {
+      const f = lock.frame;
+      if (!(commands = lock.take())) break;
+      for (const e of this.step(this.confirmed, f, commands)) {
         // Własny strzał i miecz pokazaliśmy już z przewidywania
         if (!(INSTANT.has(e.type) && e.snake === me)) events.push(e);
       }
@@ -64,7 +72,7 @@ export class Rollback {
 
     const display = cloneRound(this.confirmed);
     for (let f = lock.frame; f < target; f++) {
-      const step = stepRound(display, lock.commandsAt(f));
+      const step = this.step(display, f, lock.commandsAt(f));
       if (f >= this.shownFrame) {
         for (const e of step) if (INSTANT.has(e.type) && e.snake === me) events.push(e);
       }

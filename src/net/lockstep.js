@@ -15,19 +15,27 @@ import { decodeCommand, encodeCommand } from './protocol.js';
 
 export const INPUT_DELAY = 1; // 55 ms (z przewidywaniem, patrz rollback.js)
 export const MAX_AHEAD = 1;
+/**
+ * Gracz dołączający w trakcie rundy przez pierwsze JOIN_GRACE klatek „nic nie robi” (nie czekamy
+ * na jego komendy): w tym czasie odtwarza u siebie rundę i dogania zegar innych (ok. 1,1 s).
+ */
+export const JOIN_GRACE = 20;
+
+/** @typedef {{ r: number, f: number }} JoinAt  od której rundy i klatki gracz ma węża */
 
 export class Lockstep {
   /**
    * @param {number} players liczba graczy
    * @param {number} me mój numer gracza
-   * @param {number[]} [joinRounds] od której rundy gra każdy gracz (dołączający w trakcie meczu)
+   * @param {(JoinAt | number)[]} [joins] od kiedy gra każdy gracz (liczba = od początku tej rundy)
    * @param {{ maxAhead?: number }} [opts] o ile klatek zegar może wyprzedzić potwierdzoną symulację
    */
-  constructor(players, me, joinRounds = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
+  constructor(players, me, joins = Array(players).fill(0), { maxAhead = MAX_AHEAD } = {}) {
     this.maxAhead = maxAhead;
     this.players = players;
     this.me = me;
-    this.joinRounds = [...joinRounds];
+    /** @type {JoinAt[]} */
+    this.joins = joins.map((j) => (typeof j === 'number' ? { r: j, f: 0 } : { ...j }));
     /** @type {Map<string, import('../game/types.js').Command>} klucz `runda:klatka:gracz` */
     this.buffer = new Map();
     /** @type {Map<number, { r: number, f: number }>} od kiedy gracz jest poza grą */
@@ -96,17 +104,38 @@ export class Lockstep {
     return !!at && (r > at.r || (r === at.r && f >= at.f));
   }
 
-  /** Nowy gracz dołącza w trakcie meczu, od rundy r. */
-  addPlayer(r) {
-    this.joinRounds.push(r);
+  /** Nowy gracz dołącza w trakcie meczu: od rundy r, klatki f (f = 0: od początku rundy). */
+  addPlayer(r, f = 0) {
+    this.joins.push({ r, f });
     this.players++;
   }
 
-  /** Ilu graczy (węży) jest w rundzie r: dołączający dopiero od swojej rundy. */
-  playersInRound(r) {
+  /** Ilu graczy ma węża w klatce f rundy r (dołączający pojawiają się w swojej klatce). */
+  playersAt(r, f) {
     let n = 0;
-    while (n < this.players && this.joinRounds[n] <= r) n++;
+    while (n < this.players && (this.joins[n].r < r || (this.joins[n].r === r && this.joins[n].f <= f))) n++;
     return n;
+  }
+
+  /** Ilu węży jest na starcie rundy r. */
+  playersInRound(r) {
+    return this.playersAt(r, 0);
+  }
+
+  /** Gracze, których wąż pojawia się w klatce f bieżącej rundy (dołączyli w trakcie rundy). */
+  joiningAt(f) {
+    const list = [];
+    if (f === 0) return list;
+    this.joins.forEach((j, p) => {
+      if (j.r === this.round && j.f === f) list.push(p);
+    });
+    return list;
+  }
+
+  /** Czy komenda gracza p w klatce f jest z góry pusta (dopiero dołączył i jeszcze się ładuje). */
+  graceAt(p, f) {
+    const j = this.joins[p];
+    return j.r === this.round && j.f > 0 && f < j.f + JOIN_GRACE;
   }
 
   /** Ilu graczy jeszcze gra (nie rozłączyło się). */
@@ -119,8 +148,8 @@ export class Lockstep {
   /** Gracze, na których komendy czekamy w bieżącej klatce. */
   waitingFor() {
     const missing = [];
-    for (let p = 0; p < this.playersInRound(this.round); p++) {
-      if (this.frame < INPUT_DELAY || this.isLeft(p)) continue;
+    for (let p = 0; p < this.playersAt(this.round, this.frame); p++) {
+      if (this.frame < INPUT_DELAY || this.isLeft(p) || this.graceAt(p, this.frame)) continue;
       if (!this.buffer.has(`${this.round}:${this.frame}:${p}`)) missing.push(p);
     }
     return missing;
@@ -132,7 +161,7 @@ export class Lockstep {
    */
   commandsAt(f) {
     const commands = [];
-    for (let p = 0; p < this.playersInRound(this.round); p++) {
+    for (let p = 0; p < this.playersAt(this.round, f); p++) {
       if (this.isLeft(p, this.round, f)) commands.push({ quit: true });
       else commands.push(this.buffer.get(`${this.round}:${f}:${p}`) ?? {});
     }
@@ -148,7 +177,7 @@ export class Lockstep {
     if (!this.due() || this.waitingFor().length) return null;
     const { round, frame } = this;
     const commands = [];
-    for (let p = 0; p < this.playersInRound(round); p++) {
+    for (let p = 0; p < this.playersAt(round, frame); p++) {
       const key = `${round}:${frame}:${p}`;
       if (this.isLeft(p)) commands.push({ quit: true });
       else commands.push(this.buffer.get(key) ?? {});

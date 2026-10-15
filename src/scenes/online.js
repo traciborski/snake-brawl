@@ -126,10 +126,10 @@ export function createOnlineScene(app) {
     const playing = !!lobby.playing;
     const isHost = lobby.host === lobby.you && !playing;
     const canStart = lobby.players.length >= 2;
-    // Dołączyliśmy w trakcie meczu: wchodzimy od rundy lateJoin.r (numerujemy od 1 dla ludzi)
+    // Dołączyliśmy w trakcie meczu: wchodzimy do trwającej rundy, gdy znamy wyniki wcześniejszych
     const status = playing
       ? app.lateJoin
-        ? `Trwa mecz. Dołączysz od rundy ${app.lateJoin.r + 1}…`
+        ? 'Trwa mecz. Zaraz dołączysz…'
         : 'Mecz właśnie się kończy, za chwilę wszyscy wrócą tutaj…'
       : isHost
         ? canStart
