@@ -68,6 +68,7 @@ src/
     round.js            createRound(seed), stepRound(stan, komendy) → zdarzenia, ruch węży
     snake.js            skręty, odbicie (zawrócenie węża), odcinanie ogona, śmierć
     bullets.js          strzał (1 segment = 10 strzałów), lot, kolizje pocisków
+    sword.js            miecz: wirowanie wokół głowy, cięcie w kole o promieniu 3 pól
     food.js             losowanie owoców na wolnych polach
     match.js            wynik rundy, licznik meczu, zwycięzca
   input/
@@ -277,8 +278,8 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 | serwer → klient | `lobby { you, host, players, playing, public }` | stan poczekalni (`playing`: trwa mecz, `public`: pokój publiczny) |
 | klient → serwer | `start` | założyciel zaczyna mecz |
 | serwer → wszyscy | `start { seed, players }` | początek meczu; kolejność graczy = kolory i rogi |
-| klient → serwer | `input { r, f, d, s }` | ruch: runda, klatka, skręty (`d`), strzał (`s`) |
-| serwer → wszyscy | `input { p, r, f, d, s }` | ruch gracza `p` |
+| klient → serwer | `input { r, f, d, s, m }` | ruch: runda, klatka, skręty (`d`), strzał (`s`), miecz (`m`) |
+| serwer → wszyscy | `input { p, r, f, d, s, m }` | ruch gracza `p` |
 | serwer → wszyscy | `left { p, r, f }` | gracz `p` się rozłączył: od klatki `(r, f)` jego wąż ginie |
 | klient → serwer | `result { r, w }` | wynik rundy `r` (`w`: numer zwycięzcy albo `null`) |
 | serwer → wszyscy | `result { r, w }` | pierwszy zgłoszony wynik rundy, dla dołączających w trakcie |

@@ -56,6 +56,10 @@ export class Effects {
         case 'bulletWall':
           this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
           break;
+        case 'swordSwing':
+          this.burstAt(e.pos, color(e.snake), 14, 200, 0.3, 3);
+          this.addShake(2);
+          break;
         case 'bulletBounce':
           this.burstAt(e.pos, COLORS.walls[1][0], 6, 80, 0.2, 2);
           break;

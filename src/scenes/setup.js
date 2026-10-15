@@ -43,7 +43,7 @@ export function createSetupScene(app) {
       const saved = load('names', DEFAULT_NAMES);
       let count = clampPlayers(load('offlinePlayers', OFFLINE_DEFAULT_PLAYERS));
       // Pola na imiona wszystkich czterech graczy: przy zmianie liczby graczy wpisane imiona zostają
-      const inputs = DEFAULT_NAMES.map((fallback, i) =>
+      const inputs = DEFAULT_NAMES.slice(0, OFFLINE_MAX_PLAYERS).map((fallback, i) =>
         h('input', { value: saved[i] ?? fallback, maxLength: NAME_MAX, placeholder: fallback, 'aria-label': `Imię gracza ${i + 1}` }),
       );
 

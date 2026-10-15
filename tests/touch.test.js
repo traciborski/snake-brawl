@@ -39,7 +39,7 @@ test('przesunięcie palcem w trakcie rundy daje skręty, także kilka bez odrywa
   send('pointermove', { clientX: 100, clientY: 70 }); // w górę
   send('pointermove', { clientX: 60, clientY: 70 }); // w lewo
   send('pointermove', { clientX: 61, clientY: 71 }); // drgnięcie: nic
-  assert.deepEqual(touch.consume(), { turns: ['up', 'left'], shoot: false });
+  assert.deepEqual(touch.consume(), { turns: ['up', 'left'], shoot: false, sword: false });
   assert.deepEqual(touch.consume().turns, [], 'skręty zużyte');
 });
 
@@ -67,9 +67,11 @@ test('przycisk STRZAŁ: stuknięcie i przytrzymanie', () => {
 });
 
 test('łączenie komend z klawiatury i dotyku', () => {
-  assert.deepEqual(mergeCommands({ turns: ['up'], shoot: false }, { turns: ['left'], shoot: true }), {
+  assert.deepEqual(mergeCommands({ turns: ['up'], shoot: false, sword: false }, { turns: ['left'], shoot: true, sword: false }), {
     turns: ['up', 'left'],
     shoot: true,
+    sword: false,
   });
-  assert.deepEqual(mergeCommands({}, {}), { turns: [], shoot: false });
+  assert.equal(mergeCommands({ sword: true }, {}).sword, true);
+  assert.deepEqual(mergeCommands({}, {}), { turns: [], shoot: false, sword: false });
 });

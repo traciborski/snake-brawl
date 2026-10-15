@@ -79,9 +79,9 @@ export class Lockstep {
   }
 
   /** Komenda innego gracza z serwera (własne echo pomijamy, bo już ją mamy). */
-  receive({ p, r, f, d, s }) {
+  receive({ p, r, f, d, s, m }) {
     if (p === this.me) return;
-    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s }));
+    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s, m }));
   }
 
   /** Gracz się rozłączył: od klatki (r, f) jego wąż ginie. */

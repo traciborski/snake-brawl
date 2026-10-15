@@ -1,8 +1,9 @@
 // Sterowanie dotykiem (telefon, tablet): przesunięcie palcem w dowolnym miejscu skręca węża,
-// przycisk STRZAŁ (można przytrzymać) strzela. Daje te same komendy co klawiatura.
+// przycisk STRZAŁ (można przytrzymać) strzela, przycisk MIECZ tnie wokół głowy.
+// Daje te same komendy co klawiatura.
 //
 // Sterowanie włącza się samo przy pierwszym dotknięciu ekranu. Kto gra myszą i klawiaturą,
-// nigdy go nie zobaczy. Przycisk widać tylko w trakcie rundy (setVisible).
+// nigdy go nie zobaczy. Przyciski widać tylko w trakcie rundy (setVisible).
 
 /** @typedef {import('../game/types.js').Dir} Dir */
 /** @typedef {import('../game/types.js').Command} Command */
@@ -22,9 +23,11 @@ export class Touch {
   /**
    * @param {EventTarget} target  gdzie słuchać palców (okno)
    * @param {HTMLElement | null} fireButton
+   * @param {HTMLElement | null} swordButton
    */
-  constructor(target, fireButton = null) {
+  constructor(target, fireButton = null, swordButton = null) {
     this.fireButton = fireButton;
+    this.swordButton = swordButton;
     /** czy ktoś już grał dotykiem na tym urządzeniu */
     this.active = false;
     this.visible = false;
@@ -34,6 +37,7 @@ export class Touch {
     this.turns = [];
     this.firing = false;
     this.fireTapped = false;
+    this.swordTapped = false;
     /** @type {(() => void)[]} */
     this.onFirstTouch = [];
 
@@ -53,6 +57,10 @@ export class Touch {
         fireButton.addEventListener(type, () => (this.firing = false));
       }
     }
+    swordButton?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.swordTapped = true;
+    });
   }
 
   /** @param {PointerEvent} e */
@@ -63,7 +71,7 @@ export class Touch {
       this.updateButton();
       for (const fn of this.onFirstTouch) fn();
     }
-    if (!this.visible || e.target === this.fireButton) return;
+    if (!this.visible || e.target === this.fireButton || e.target === this.swordButton) return;
     this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
@@ -77,7 +85,7 @@ export class Touch {
     this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
-  /** Przycisk STRZAŁ i przesuwanie działają tylko w trakcie rundy. */
+  /** Przyciski STRZAŁ i MIECZ oraz przesuwanie działają tylko w trakcie rundy. */
   setVisible(visible) {
     if (visible === this.visible) return;
     this.visible = visible;
@@ -86,14 +94,17 @@ export class Touch {
   }
 
   updateButton() {
-    if (this.fireButton) this.fireButton.hidden = !(this.active && this.visible);
+    const hidden = !(this.active && this.visible);
+    if (this.fireButton) this.fireButton.hidden = hidden;
+    if (this.swordButton) this.swordButton.hidden = hidden;
   }
 
   /** @returns {Command} komenda na ten tick (jak z klawiatury) */
   consume() {
-    const cmd = { turns: this.turns, shoot: this.firing || this.fireTapped };
+    const cmd = { turns: this.turns, shoot: this.firing || this.fireTapped, sword: this.swordTapped };
     this.turns = [];
     this.fireTapped = false;
+    this.swordTapped = false;
     return cmd;
   }
 
@@ -102,10 +113,11 @@ export class Touch {
     this.turns = [];
     this.firing = false;
     this.fireTapped = false;
+    this.swordTapped = false;
   }
 }
 
 /** Łączy dwie komendy w jedną (np. klawiatura + dotyk). @param {Command} a @param {Command} b */
 export function mergeCommands(a, b) {
-  return { turns: [...(a.turns ?? []), ...(b.turns ?? [])], shoot: !!(a.shoot || b.shoot) };
+  return { turns: [...(a.turns ?? []), ...(b.turns ?? [])], shoot: !!(a.shoot || b.shoot), sword: !!(a.sword || b.sword) };
 }

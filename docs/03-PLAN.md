@@ -112,6 +112,14 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Zasięg 48 pól i najwyżej 3 odbicia; efekty i dźwięki odbicia i przeniesienia pocisku
 - **Testy:** każdy rodzaj ściany, krawędź, limit odbić, zasięg, odbity pocisk trafia rywala.
 
+## Krok 17: Miecz i pełny ekran na telefonie
+- [x] `game/sword.js`: wirowanie 8 ticków, koło o promieniu 3, głowa ginie, ogon odcięty, pociski zniszczone
+- [x] Klawisze miecza (E, prawy Shift, O, numpad ,), przycisk MIECZ na dotyku, `m` w protokole
+- [x] Animacja ostrza, pasek gotowości w górnym pasku, dźwięk, napis „Cięcie mieczem”
+- [x] Pełny ekran przy puszczeniu palca (pointerup), manifest i tryb aplikacji na iPhonie
+- [x] Poprawka: ekran gry na jednym komputerze nie otwierał się po dodaniu imion dla 6 graczy
+- **Testy:** zasięg (koło, krawędź), głowa, ogon, czas wirowania, cooldown, pociski, dwa miecze.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

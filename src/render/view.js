@@ -1,7 +1,7 @@
 // Widok rundy: plansza + obiekty + efekty + HUD. Wspólny dla odliczania, gry i wyników.
 
 import { drawBoard } from './board.js';
-import { drawBullets, drawFood, drawSnake } from './entities.js';
+import { drawBullets, drawFood, drawSnake, drawSword } from './entities.js';
 import { drawHud } from './hud.js';
 
 /**
@@ -20,6 +20,7 @@ export function drawRoundView(app, time) {
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
   for (const snake of round.snakes) drawSnake(ctx, snake, players[snake.id].color);
+  for (const snake of round.snakes) drawSword(ctx, snake, players[snake.id].color, app.alpha ?? 0);
   drawBullets(ctx, round, players);
   effects.draw(ctx);
   ctx.restore();

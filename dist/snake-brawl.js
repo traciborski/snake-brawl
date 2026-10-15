@@ -38,7 +38,7 @@ const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game')
 const app = {
   renderer: new Renderer(canvas),
   keyboard: new Keyboard(window, KEYMAPS),
-  touch: new Touch(window, document.getElementById('fire')),
+  touch: new Touch(window, document.getElementById('fire'), document.getElementById('sword')),
   overlay: new Overlay(/** @type {HTMLElement} */ (document.getElementById('overlay'))),
   audio: new Sfx(),
   effects: new Effects(),
@@ -47,6 +47,7 @@ const app = {
   /** @type {import('./game/types.js').RoundState | null} */
   round: null,
   roundNumber: 0,
+  alpha: 0,
   /** @type {import('./net/client.js').Session | null} sesja w pokoju gry online */
   session: null,
   /** @type {((lobby: any) => void) | null} */
@@ -71,13 +72,23 @@ app.scenes.register('play', createPlayScene(app));
 app.scenes.register('roundEnd', createRoundEndScene(app));
 app.scenes.register('matchEnd', createMatchEndScene(app));
 
-// Telefon: po pierwszym dotknięciu pełny ekran i (gdzie się da) blokada w poziomie
-app.touch.onFirstTouch.push(() => {
-  document.documentElement.requestFullscreen?.().then(
-    () => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}),
-    () => {},
-  );
+// Telefon i tablet: pełny ekran przy pierwszym stuknięciu (i znowu po każdym, jeśli ktoś z niego
+// wyszedł). Przeglądarka pozwala na to dopiero przy puszczeniu palca (pointerup), nie przy dotknięciu.
+// iPhone nie ma pełnego ekranu dla stron: tam pomaga „Dodaj do ekranu początkowego” (manifest).
+window.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') enterFullscreen();
 });
+
+function enterFullscreen() {
+  const doc = /** @type {any} */ (document);
+  if (doc.fullscreenElement || doc.webkitFullscreenElement) return;
+  const el = /** @type {any} */ (document.documentElement);
+  const request = el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el);
+  if (!request) return;
+  Promise.resolve(request({ navigationUI: 'hide' }))
+    .then(() => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}))
+    .catch(() => {});
+}
 
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
@@ -101,6 +112,7 @@ startLoop({
     app.touch.setVisible(inRound);
     document.body.classList.toggle('in-round', inRound);
     app.effects.update(dt);
+    app.alpha = alpha; // część ticka od ostatniego kroku logiki (płynne animacje, np. miecz)
     app.scenes.render(alpha, dt);
   },
 });
@@ -138,6 +150,10 @@ const BULLET_PER_TICKS = 2;
 // Ściany działają na pocisk jak na węża, więc pocisk ma zasięg i limit odbić (żeby nie latał w kółko)
 const BULLET_RANGE = 48; // pól, czyli jedna szerokość planszy
 const BULLET_MAX_BOUNCES = 3;
+// Miecz: ostrze wiruje wokół głowy i tnie wszystko w kole o promieniu SWORD_RADIUS pól
+const SWORD_RADIUS = 3;
+const SWORD_TICKS = 8; // ok. 0,45 s wirowania
+const SWORD_COOLDOWN = 72; // ok. 4 s od wciśnięcia do następnego cięcia
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 const FOOD_COUNT = 3;
 const WINS_TO_MATCH = 3;
@@ -174,8 +190,9 @@ const KEYMAPS = [
       left: ['KeyA'],
       right: ['KeyD'],
       shoot: ['Space'],
+      sword: ['KeyE'],
     },
-    help: 'W A S D  +  SPACJA',
+    help: 'W A S D  +  SPACJA  +  E',
   },
   {
     keys: {
@@ -184,8 +201,9 @@ const KEYMAPS = [
       left: ['ArrowLeft'],
       right: ['ArrowRight'],
       shoot: ['Enter', 'NumpadEnter'],
+      sword: ['ShiftRight', 'ControlRight'],
     },
-    help: 'STRZAŁKI  +  ENTER',
+    help: 'STRZAŁKI  +  ENTER  +  PR. SHIFT',
   },
   {
     keys: {
@@ -194,8 +212,9 @@ const KEYMAPS = [
       left: ['KeyJ'],
       right: ['KeyL'],
       shoot: ['KeyU'],
+      sword: ['KeyO'],
     },
-    help: 'I J K L  +  U',
+    help: 'I J K L  +  U  +  O',
   },
   {
     keys: {
@@ -204,12 +223,13 @@ const KEYMAPS = [
       left: ['Numpad4'],
       right: ['Numpad6'],
       shoot: ['Numpad0'],
+      sword: ['NumpadDecimal'],
     },
-    help: 'NUMPAD 8 4 5 6  +  0',
+    help: 'NUMPAD 8 4 5 6  +  0  +  ,',
   },
 ];
 /** Podpowiedź klawiszy w treningu (steruje się dowolnym zestawem). */
-const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA';
+const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA  +  E';
 
 // Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
 // np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`
@@ -244,7 +264,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -396,6 +416,7 @@ class Keyboard {
     /** @type {Dir[][]} */
     this.turns = players.map(() => []);
     this.shootTapped = players.map(() => false);
+    this.swordTapped = players.map(() => false);
     /** @type {((e: KeyboardEvent) => void)[]} */
     this.listeners = [];
 
@@ -425,6 +446,8 @@ class Keyboard {
     if (!binding) return;
     if (binding.action === 'shoot') {
       this.shootTapped[binding.player] = true;
+    } else if (binding.action === 'sword') {
+      this.swordTapped[binding.player] = true;
     } else if (DIRS.has(binding.action)) {
       const queue = this.turns[binding.player];
       if (queue.length < MAX_PENDING_TURNS) queue.push(/** @type {Dir} */ (binding.action));
@@ -443,7 +466,10 @@ class Keyboard {
       const held = p.keys.shoot.some((code) => this.down.has(code));
       const shoot = held || this.shootTapped[i];
       this.shootTapped[i] = false;
-      return { turns, shoot };
+      // Miecz: wystarczy wcisnąć (trzymany tnie znowu, gdy tylko minie cooldown)
+      const sword = (p.keys.sword ?? []).some((code) => this.down.has(code)) || this.swordTapped[i];
+      this.swordTapped[i] = false;
+      return { turns, shoot, sword };
     });
   }
 
@@ -463,13 +489,14 @@ class Keyboard {
   /** Komendy ze wszystkich zestawów klawiszy połączone w jedną (gra online: jeden wąż). */
   consumeMerged() {
     const all = this.consumeCommands();
-    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot) };
+    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot), sword: all.some((c) => c.sword) };
   }
 
   reset() {
     this.pressed.clear();
     this.turns = this.players.map(() => []);
     this.shootTapped = this.players.map(() => false);
+    this.swordTapped = this.players.map(() => false);
   }
 }
 
@@ -479,10 +506,11 @@ Object.assign(__exports, { Keyboard });
 // ---- src/input/touch.js ----
 __factories["src/input/touch.js"] = function (__exports) {
 // Sterowanie dotykiem (telefon, tablet): przesunięcie palcem w dowolnym miejscu skręca węża,
-// przycisk STRZAŁ (można przytrzymać) strzela. Daje te same komendy co klawiatura.
+// przycisk STRZAŁ (można przytrzymać) strzela, przycisk MIECZ tnie wokół głowy.
+// Daje te same komendy co klawiatura.
 //
 // Sterowanie włącza się samo przy pierwszym dotknięciu ekranu. Kto gra myszą i klawiaturą,
-// nigdy go nie zobaczy. Przycisk widać tylko w trakcie rundy (setVisible).
+// nigdy go nie zobaczy. Przyciski widać tylko w trakcie rundy (setVisible).
 
 /** @typedef {import('../game/types.js').Dir} Dir */
 /** @typedef {import('../game/types.js').Command} Command */
@@ -502,9 +530,11 @@ class Touch {
   /**
    * @param {EventTarget} target  gdzie słuchać palców (okno)
    * @param {HTMLElement | null} fireButton
+   * @param {HTMLElement | null} swordButton
    */
-  constructor(target, fireButton = null) {
+  constructor(target, fireButton = null, swordButton = null) {
     this.fireButton = fireButton;
+    this.swordButton = swordButton;
     /** czy ktoś już grał dotykiem na tym urządzeniu */
     this.active = false;
     this.visible = false;
@@ -514,6 +544,7 @@ class Touch {
     this.turns = [];
     this.firing = false;
     this.fireTapped = false;
+    this.swordTapped = false;
     /** @type {(() => void)[]} */
     this.onFirstTouch = [];
 
@@ -533,6 +564,10 @@ class Touch {
         fireButton.addEventListener(type, () => (this.firing = false));
       }
     }
+    swordButton?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.swordTapped = true;
+    });
   }
 
   /** @param {PointerEvent} e */
@@ -543,7 +578,7 @@ class Touch {
       this.updateButton();
       for (const fn of this.onFirstTouch) fn();
     }
-    if (!this.visible || e.target === this.fireButton) return;
+    if (!this.visible || e.target === this.fireButton || e.target === this.swordButton) return;
     this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
@@ -557,7 +592,7 @@ class Touch {
     this.swipes.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
-  /** Przycisk STRZAŁ i przesuwanie działają tylko w trakcie rundy. */
+  /** Przyciski STRZAŁ i MIECZ oraz przesuwanie działają tylko w trakcie rundy. */
   setVisible(visible) {
     if (visible === this.visible) return;
     this.visible = visible;
@@ -566,14 +601,17 @@ class Touch {
   }
 
   updateButton() {
-    if (this.fireButton) this.fireButton.hidden = !(this.active && this.visible);
+    const hidden = !(this.active && this.visible);
+    if (this.fireButton) this.fireButton.hidden = hidden;
+    if (this.swordButton) this.swordButton.hidden = hidden;
   }
 
   /** @returns {Command} komenda na ten tick (jak z klawiatury) */
   consume() {
-    const cmd = { turns: this.turns, shoot: this.firing || this.fireTapped };
+    const cmd = { turns: this.turns, shoot: this.firing || this.fireTapped, sword: this.swordTapped };
     this.turns = [];
     this.fireTapped = false;
+    this.swordTapped = false;
     return cmd;
   }
 
@@ -582,12 +620,13 @@ class Touch {
     this.turns = [];
     this.firing = false;
     this.fireTapped = false;
+    this.swordTapped = false;
   }
 }
 
 /** Łączy dwie komendy w jedną (np. klawiatura + dotyk). @param {Command} a @param {Command} b */
 function mergeCommands(a, b) {
-  return { turns: [...(a.turns ?? []), ...(b.turns ?? [])], shoot: !!(a.shoot || b.shoot) };
+  return { turns: [...(a.turns ?? []), ...(b.turns ?? [])], shoot: !!(a.shoot || b.shoot), sword: !!(a.sword || b.sword) };
 }
 
 Object.assign(__exports, { SWIPE_PX, swipeDir, Touch, mergeCommands });
@@ -666,11 +705,16 @@ class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
+  /** @param {'shoot' | 'sword' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
   play(name) {
     switch (name) {
       case 'shoot':
         this.tone({ freq: 880, to: 220, dur: 0.08, vol: 0.25 });
+        break;
+      case 'sword':
+        // Świst ostrza: szum opadający i szybko rosnący ton
+        this.noise({ dur: 0.35, vol: 0.45, freq: 5000 });
+        this.tone({ freq: 220, to: 1400, dur: 0.18, type: 'sawtooth', vol: 0.15 });
         break;
       case 'eat':
         this.tone({ freq: 520, to: 1040, dur: 0.08, type: 'triangle', vol: 0.5 });
@@ -723,6 +767,7 @@ class Sfx {
       bulletWall: 'wall',
       bulletClash: 'clash',
       bulletBounce: 'bounce',
+      swordSwing: 'sword',
       bulletWarp: 'warp',
       died: 'die',
     };
@@ -794,6 +839,10 @@ class Effects {
           break;
         case 'bulletWall':
           this.burstAt(e.pos, '#ffffff', 10, 110, 0.3, 3);
+          break;
+        case 'swordSwing':
+          this.burstAt(e.pos, color(e.snake), 14, 200, 0.3, 3);
+          this.addShake(2);
           break;
         case 'bulletBounce':
           this.burstAt(e.pos, COLORS.walls[1][0], 6, 80, 0.2, 2);
@@ -1337,17 +1386,17 @@ const DIR_TO_CHAR = { up: 'u', down: 'd', left: 'l', right: 'r' };
 const CHAR_TO_DIR = { u: 'up', d: 'down', l: 'left', r: 'right' };
 
 /**
- * Komenda gry → zwarta postać do wiadomości: { d: 'ul', s: 1 } (max 3 skręty).
+ * Komenda gry → zwarta postać do wiadomości: { d: 'ul', s: 1, m: 1 } (max 3 skręty, s = strzał, m = miecz).
  * @param {import('../game/types.js').Command} cmd
  */
 function encodeCommand(cmd) {
   const d = (cmd.turns ?? []).slice(0, 3).map((t) => DIR_TO_CHAR[t]).join('');
-  return { d, s: cmd.shoot ? 1 : 0 };
+  return { d, s: cmd.shoot ? 1 : 0, m: cmd.sword ? 1 : 0 };
 }
 
 /** @returns {import('../game/types.js').Command} */
-function decodeCommand({ d = '', s = 0 }) {
-  return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s };
+function decodeCommand({ d = '', s = 0, m = 0 }) {
+  return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s, sword: !!m };
 }
 
 Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, PUBLIC_ROOMS, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand });
@@ -1400,7 +1449,7 @@ function createSetupScene(app) {
       const saved = load('names', DEFAULT_NAMES);
       let count = clampPlayers(load('offlinePlayers', OFFLINE_DEFAULT_PLAYERS));
       // Pola na imiona wszystkich czterech graczy: przy zmianie liczby graczy wpisane imiona zostają
-      const inputs = DEFAULT_NAMES.map((fallback, i) =>
+      const inputs = DEFAULT_NAMES.slice(0, OFFLINE_MAX_PLAYERS).map((fallback, i) =>
         h('input', { value: saved[i] ?? fallback, maxLength: NAME_MAX, placeholder: fallback, 'aria-label': `Imię gracza ${i + 1}` }),
       );
 
@@ -2077,9 +2126,9 @@ class Lockstep {
   }
 
   /** Komenda innego gracza z serwera (własne echo pomijamy, bo już ją mamy). */
-  receive({ p, r, f, d, s }) {
+  receive({ p, r, f, d, s, m }) {
     if (p === this.me) return;
-    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s }));
+    this.buffer.set(`${r}:${f}:${p}`, decodeCommand({ d, s, m }));
   }
 
   /** Gracz się rozłączył: od klatki (r, f) jego wąż ginie. */
@@ -2215,6 +2264,7 @@ const { eatFood, refillFood } = __require("src/game/food.js");
 const { cellIndex, passThrough, samePos } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
 const { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } = __require("src/game/snake.js");
+const { applySwords, swing } = __require("src/game/sword.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
@@ -2274,9 +2324,10 @@ function stepRound(state, commands = []) {
   // 2. Timery
   for (const snake of state.snakes) tickTimers(snake);
 
-  // 3. Strzały
+  // 3. Strzały i miecz
   state.snakes.forEach((snake, i) => {
     if (commands[i]?.shoot) fire(state, snake, events);
+    if (commands[i]?.sword) swing(snake, events);
   });
 
   // 4. Pociski
@@ -2284,6 +2335,9 @@ function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
+
+  // 5b. Miecze tną wokół głów (już po ruchu)
+  applySwords(state, events);
 
   // 6. Jedzenie
   eatFood(state, events);
@@ -2668,6 +2722,8 @@ function createSnake(id, body, dir) {
     growPending: 0,
     eaten: 0,
     cooldown: 0,
+    swordTicks: 0,
+    swordCooldown: 0,
     ammo: 0,
     alive: true,
     death: null,
@@ -2689,6 +2745,7 @@ function queueTurn(snake, dir) {
 /** @param {Snake} snake */
 function tickTimers(snake) {
   if (snake.cooldown > 0) snake.cooldown--;
+  if (snake.swordCooldown > 0) snake.swordCooldown--;
 }
 
 /** @param {Snake} snake */
@@ -2712,7 +2769,7 @@ function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'left'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} cause */
 function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;
@@ -2961,12 +3018,94 @@ function generateMaze(grid, rng, spawns, { density = 0.08, attempts = 30 } = {})
 Object.assign(__exports, { symmetric, spawnPoints, reachable, generateMaze });
 };
 
+// ---- src/game/sword.js ----
+__factories["src/game/sword.js"] = function (__exports) {
+// Miecz: atak z bliska. Po wciśnięciu wokół głowy wiruje ostrze (przez SWORD_TICKS ticków)
+// i w kole o promieniu SWORD_RADIUS pól wokół głowy:
+// - głowa rywala → śmierć,
+// - ciało rywala → odcięcie ogona od pierwszego segmentu w zasięgu (jak trafienie pociskiem),
+// - cudze pociski → zniszczone.
+// Ściany nie zasłaniają. Zasięg liczy się też przez krawędź planszy (plansza jest „zawinięta”).
+// Własny wąż i własne pociski są bezpieczne. Wszystkie miecze tnące w tym samym ticku działają
+// naraz, więc dwa węże z mieczami w swoim zasięgu giną oba.
+
+const { SWORD_COOLDOWN, SWORD_RADIUS, SWORD_TICKS } = __require("src/config.js");
+const { kill } = __require("src/game/snake.js");
+
+/** @typedef {import('./types.js').RoundState} RoundState */
+/** @typedef {import('./types.js').Snake} Snake */
+/** @typedef {import('./types.js').Pos} Pos */
+/** @typedef {import('./types.js').GameEvent} GameEvent */
+
+/** @param {Snake} snake */
+function canSwing(snake) {
+  return snake.alive && snake.swordCooldown === 0;
+}
+
+/** Wciśnięcie miecza: ostrze zaczyna wirować. @returns {boolean} czy zadziałało */
+function swing(snake, events) {
+  if (!canSwing(snake)) return false;
+  snake.swordTicks = SWORD_TICKS;
+  snake.swordCooldown = SWORD_COOLDOWN;
+  events.push({ type: 'swordSwing', snake: snake.id, pos: { ...snake.body[0] } });
+  return true;
+}
+
+/** Czy pole p leży w kole miecza wokół pola center (z zawinięciem przez krawędzie). */
+function inSwordRange(grid, center, p) {
+  const ax = Math.abs(p.x - center.x);
+  const ay = Math.abs(p.y - center.y);
+  const dx = Math.min(ax, grid.w - ax);
+  const dy = Math.min(ay, grid.h - ay);
+  return dx * dx + dy * dy <= SWORD_RADIUS * SWORD_RADIUS;
+}
+
+/**
+ * Cięcia wszystkich wirujących mieczy w tym ticku (po ruchu węży i pocisków).
+ * @param {RoundState} state @param {GameEvent[]} events
+ */
+function applySwords(state, events) {
+  const swords = state.snakes.filter((s) => s.alive && s.swordTicks > 0);
+  if (!swords.length) return;
+
+  // Najpierw zbieramy wszystkie trafienia (miecze działają naraz), potem je stosujemy
+  /** @type {Map<Snake, { by: number, index: number }>} */
+  const cuts = new Map();
+  const goneBullets = new Set();
+  for (const sword of swords) {
+    const center = sword.body[0];
+    for (const target of state.snakes) {
+      if (target === sword || !target.alive) continue;
+      const index = target.body.findIndex((p) => inSwordRange(state.grid, center, p));
+      if (index < 0) continue;
+      const prev = cuts.get(target);
+      if (!prev || index < prev.index) cuts.set(target, { by: sword.id, index });
+    }
+    for (const b of state.bullets) {
+      if (b.owner !== sword.id && inSwordRange(state.grid, center, b.pos)) goneBullets.add(b);
+    }
+  }
+
+  for (const b of goneBullets) events.push({ type: 'bulletClash', pos: { ...b.pos } });
+  state.bullets = state.bullets.filter((b) => !goneBullets.has(b));
+
+  for (const [target, { by, index }] of cuts) {
+    if (index === 0) kill(target, 'sword', by, events);
+    else events.push({ type: 'bodyHit', snake: target.id, by, cells: target.body.splice(index) });
+  }
+
+  for (const sword of swords) sword.swordTicks--;
+}
+
+Object.assign(__exports, { canSwing, swing, inSwordRange, applySwords });
+};
+
 // ---- src/render/view.js ----
 __factories["src/render/view.js"] = function (__exports) {
 // Widok rundy: plansza + obiekty + efekty + HUD. Wspólny dla odliczania, gry i wyników.
 
 const { drawBoard } = __require("src/render/board.js");
-const { drawBullets, drawFood, drawSnake } = __require("src/render/entities.js");
+const { drawBullets, drawFood, drawSnake, drawSword } = __require("src/render/entities.js");
 const { drawHud } = __require("src/render/hud.js");
 
 /**
@@ -2985,6 +3124,7 @@ function drawRoundView(app, time) {
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
   for (const snake of round.snakes) drawSnake(ctx, snake, players[snake.id].color);
+  for (const snake of round.snakes) drawSword(ctx, snake, players[snake.id].color, app.alpha ?? 0);
   drawBullets(ctx, round, players);
   effects.draw(ctx);
   ctx.restore();
@@ -3075,7 +3215,7 @@ Object.assign(__exports, { drawBoard });
 __factories["src/render/entities.js"] = function (__exports) {
 // Węże, pociski i owoce. Każda grupa to jedna ścieżka = jedna operacja poświaty.
 
-const { BOARD_Y, CELL, COLORS } = __require("src/config.js");
+const { BOARD_Y, CELL, COLORS, SWORD_RADIUS, SWORD_TICKS } = __require("src/config.js");
 const { DIR_VEC } = __require("src/game/grid.js");
 
 /** @typedef {import('../game/types.js').Snake} Snake */
@@ -3166,7 +3306,56 @@ function drawFood(ctx, round, time) {
   ctx.restore();
 }
 
-Object.assign(__exports, { drawSnake, drawBullets, drawFood });
+/**
+ * Wirujący miecz wokół głowy: koło zasięgu i dwa ostrza obracające się w trakcie cięcia.
+ * @param {CanvasRenderingContext2D} ctx @param {Snake} snake @param {string} color @param {number} alpha część ticka (płynny obrót)
+ */
+function drawSword(ctx, snake, color, alpha = 0) {
+  if (!snake.alive || snake.swordTicks <= 0) return;
+  const head = snake.body[0];
+  const cx = px(head) + CELL / 2;
+  const cy = py(head) + CELL / 2;
+  const reach = (SWORD_RADIUS + 0.5) * CELL;
+  // Postęp cięcia 0..1 (półtora obrotu na całe wirowanie)
+  const progress = Math.min(1, (SWORD_TICKS - snake.swordTicks + alpha) / SWORD_TICKS);
+  const angle = progress * Math.PI * 3;
+
+  ctx.save();
+  // Zasięg
+  ctx.globalAlpha = 0.25 * (1 - progress) + 0.1;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, reach, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Ostrza: smuga i jasna klinga
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 14;
+  ctx.lineCap = 'round';
+  for (const offset of [0, Math.PI]) {
+    const a = angle + offset;
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(cx, cy, reach * 0.7, a - 0.7, a);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * CELL * 0.6, cy + Math.sin(a) * CELL * 0.6);
+    ctx.lineTo(cx + Math.cos(a) * reach, cy + Math.sin(a) * reach);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+Object.assign(__exports, { drawSnake, drawBullets, drawFood, drawSword });
 };
 
 // ---- src/render/hud.js ----
@@ -3176,7 +3365,7 @@ __factories["src/render/hud.js"] = function (__exports) {
 // Gracze 0, 2, 4 po lewej, 1, 3, 5 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
 // Przy 5–6 graczach po trzy miejsca na stronę i mniejsze imiona.
 
-const { COLORS, TICK_MS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
+const { COLORS, SWORD_COOLDOWN, TICK_MS, VIEW_W, WINS_TO_MATCH } = __require("src/config.js");
 const { drawText } = __require("src/render/text.js");
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
@@ -3201,6 +3390,26 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
     }
     ctx.restore();
   }
+}
+
+/** Pasek gotowości miecza: pełny i świecący = można ciąć. */
+function drawSwordBar(ctx, x, y, snake, alignRight) {
+  const w = 30;
+  const h = 10;
+  const left = alignRight ? x - w : x;
+  const ready = snake.swordCooldown === 0;
+  const fill = ready ? 1 : 1 - snake.swordCooldown / SWORD_COOLDOWN;
+  ctx.save();
+  ctx.strokeStyle = ready ? COLORS.text : COLORS.dim;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = ready ? COLORS.text : COLORS.dim;
+  if (ready) {
+    ctx.shadowColor = COLORS.text;
+    ctx.shadowBlur = 8;
+  }
+  ctx.fillRect(left + 3, y + 3, Math.round((w - 6) * fill), h - 6);
+  ctx.restore();
 }
 
 const SLOT_X = [16, 216];
@@ -3228,6 +3437,9 @@ function drawHud(ctx, round, match, players, roundNumber) {
     ctx.save();
     ctx.globalAlpha = alpha;
     if (!solo) drawPips(ctx, x, 27, match.wins[i], color, right);
+    // Obok wygranych: gotowość miecza
+    const barOffset = solo ? 0 : WINS_TO_MATCH * 15 + 10;
+    if (snake.alive) drawSwordBar(ctx, right ? x - barOffset : x + barOffset, 27, snake, right);
     ctx.restore();
     const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : snake.death === 'left' ? 'WYSZEDŁ' : 'ODPADŁ';
     drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });
@@ -3343,6 +3555,7 @@ const DEATH = {
   wall: 'Rywal wjechał w czerwoną ścianę',
   body: 'Rywal wjechał w ogon',
   crash: 'Zderzenie głowami',
+  sword: 'Cięcie mieczem',
   left: 'Rywal wyszedł z gry',
 };
 

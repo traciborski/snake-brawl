@@ -105,8 +105,8 @@ test('ruchy idą do wszystkich z numerem gracza, złe ruchy są odrzucane', () =
   const a = client(room, 'A', true);
   const b = client(room, 'B');
   a.send({ t: 'start' });
-  b.send({ t: 'input', r: 0, f: 3, d: 'ul', s: 1 });
-  assert.deepEqual(a.socket.last('input'), { t: 'input', p: 1, r: 0, f: 3, d: 'ul', s: 1 });
+  b.send({ t: 'input', r: 0, f: 3, d: 'ul', s: 1, m: 1 });
+  assert.deepEqual(a.socket.last('input'), { t: 'input', p: 1, r: 0, f: 3, d: 'ul', s: 1, m: 1 });
   b.send({ t: 'input', r: 0, f: 4, d: 'xyz' });
   b.send({ t: 'input', r: -1, f: 4 });
   assert.equal(a.socket.sent.filter((m) => m.t === 'input').length, 1);
@@ -141,9 +141,9 @@ test('protokół: kody pokoi i zapis komend', () => {
   assert.equal(normalizeCode(' kot7 '), 'KOT7');
   assert.equal(normalizeCode('KO'), null);
   assert.equal(normalizeCode('KOT0'), null); // 0 i 1 nie występują w kodach
-  const cmd = { turns: ['up', 'left'], shoot: true };
+  const cmd = { turns: ['up', 'left'], shoot: true, sword: true };
   assert.deepEqual(decodeCommand(encodeCommand(cmd)), cmd);
-  assert.deepEqual(decodeCommand(encodeCommand({})), { turns: [], shoot: false });
+  assert.deepEqual(decodeCommand(encodeCommand({})), { turns: [], shoot: false, sword: false });
 });
 
 test('lokalny serwer: dwóch graczy przez prawdziwe WebSockety', async () => {
@@ -182,7 +182,7 @@ test('lokalny serwer: dwóch graczy przez prawdziwe WebSockety', async () => {
     assert.equal(startA.seed, startB.seed);
 
     b.ws.send(JSON.stringify({ t: 'input', r: 0, f: 3, d: 'r', s: 0 }));
-    assert.deepEqual(await waitFor(a.inbox, 'input'), { t: 'input', p: 1, r: 0, f: 3, d: 'r', s: 0 });
+    assert.deepEqual(await waitFor(a.inbox, 'input'), { t: 'input', p: 1, r: 0, f: 3, d: 'r', s: 0, m: 0 });
 
     b.ws.close();
     assert.equal((await waitFor(a.inbox, 'left')).p, 1);

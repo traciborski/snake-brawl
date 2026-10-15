@@ -3,7 +3,7 @@
 // Gracze 0, 2, 4 po lewej, 1, 3, 5 po prawej (zewnętrzne miejsca dla pierwszej dwójki).
 // Przy 5–6 graczach po trzy miejsca na stronę i mniejsze imiona.
 
-import { COLORS, TICK_MS, VIEW_W, WINS_TO_MATCH } from '../config.js';
+import { COLORS, SWORD_COOLDOWN, TICK_MS, VIEW_W, WINS_TO_MATCH } from '../config.js';
 import { drawText } from './text.js';
 
 /** @typedef {import('../game/types.js').RoundState} RoundState */
@@ -28,6 +28,26 @@ function drawPips(ctx, x, y, wins, color, alignRight) {
     }
     ctx.restore();
   }
+}
+
+/** Pasek gotowości miecza: pełny i świecący = można ciąć. */
+function drawSwordBar(ctx, x, y, snake, alignRight) {
+  const w = 30;
+  const h = 10;
+  const left = alignRight ? x - w : x;
+  const ready = snake.swordCooldown === 0;
+  const fill = ready ? 1 : 1 - snake.swordCooldown / SWORD_COOLDOWN;
+  ctx.save();
+  ctx.strokeStyle = ready ? COLORS.text : COLORS.dim;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = ready ? COLORS.text : COLORS.dim;
+  if (ready) {
+    ctx.shadowColor = COLORS.text;
+    ctx.shadowBlur = 8;
+  }
+  ctx.fillRect(left + 3, y + 3, Math.round((w - 6) * fill), h - 6);
+  ctx.restore();
 }
 
 const SLOT_X = [16, 216];
@@ -55,6 +75,9 @@ export function drawHud(ctx, round, match, players, roundNumber) {
     ctx.save();
     ctx.globalAlpha = alpha;
     if (!solo) drawPips(ctx, x, 27, match.wins[i], color, right);
+    // Obok wygranych: gotowość miecza
+    const barOffset = solo ? 0 : WINS_TO_MATCH * 15 + 10;
+    if (snake.alive) drawSwordBar(ctx, right ? x - barOffset : x + barOffset, 27, snake, right);
     ctx.restore();
     const stats = snake.alive ? `DŁ ${snake.body.length}  AMMO ${snake.ammo}` : snake.death === 'left' ? 'WYSZEDŁ' : 'ODPADŁ';
     drawText(ctx, stats, x, 50, { size: 8, color: COLORS.dim, align, alpha });

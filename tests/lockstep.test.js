@@ -23,8 +23,8 @@ test('własna komenda działa dokładnie INPUT_DELAY ticków później, jedna ko
   // Tick 1 (tak jak w grze: najpierw upływ czasu, potem wysłanie, potem krok)
   lock.tick();
   assert.equal(lock.canSend(), true);
-  const msg = lock.makeInput({ turns: ['up'], shoot: true });
-  assert.deepEqual(msg, { t: 'input', r: 0, f: INPUT_DELAY, d: 'u', s: 1 });
+  const msg = lock.makeInput({ turns: ['up'], shoot: true, sword: false });
+  assert.deepEqual(msg, { t: 'input', r: 0, f: INPUT_DELAY, d: 'u', s: 1, m: 0 });
   assert.equal(lock.canSend(), false, 'jedna komenda na tick');
   assert.deepEqual(lock.take(), [{}]);
   // Komenda z ticku 1 wykonuje się w ticku 1 + INPUT_DELAY
@@ -33,7 +33,7 @@ test('własna komenda działa dokładnie INPUT_DELAY ticków później, jedna ko
     if (lock.canSend()) lock.makeInput({});
     const cmds = lock.take();
     if (t < 1 + INPUT_DELAY) assert.deepEqual(cmds, [{}]);
-    else assert.deepEqual(cmds, [{ turns: ['up'], shoot: true }]);
+    else assert.deepEqual(cmds, [{ turns: ['up'], shoot: true, sword: false }]);
   }
 });
 
@@ -60,10 +60,10 @@ test('krok, gdy przyjdą komendy wszystkich; echo własnej komendy jest pomijane
   lock.tick();
   assert.deepEqual(lock.waitingFor(), [0]);
   lock.receive({ p: 0, r: 0, f: INPUT_DELAY, d: 'r', s: 0 });
-  lock.receive({ p: 1, r: 0, f: INPUT_DELAY, d: 'u', s: 1 }); // echo: ignorowane
+  lock.receive({ p: 1, r: 0, f: INPUT_DELAY, d: 'u', s: 1, m: 0 }); // echo: ignorowane
   assert.deepEqual(lock.take(), [
-    { turns: ['right'], shoot: false },
-    { turns: ['left'], shoot: false },
+    { turns: ['right'], shoot: false, sword: false },
+    { turns: ['left'], shoot: false, sword: false },
   ]);
 });
 
@@ -74,7 +74,7 @@ test('komendy następnej rundy przychodzące za wcześnie są przechowane', () =
   lock.startRound(1);
   for (let f = 0; f < INPUT_DELAY; f++) tickTake(lock);
   lock.makeInput({});
-  assert.deepEqual(tickTake(lock)[1], { turns: ['down'], shoot: false });
+  assert.deepEqual(tickTake(lock)[1], { turns: ['down'], shoot: false, sword: false });
 });
 
 test('rozłączony gracz: od podanej klatki dostaje komendę quit, nie czekamy na niego', () => {
@@ -85,7 +85,7 @@ test('rozłączony gracz: od podanej klatki dostaje komendę quit, nie czekamy n
   lock.makeInput({});
   lock.receive({ p: 1, r: 2, f: INPUT_DELAY, d: '', s: 0 });
   lock.receive({ p: 2, r: 2, f: INPUT_DELAY, d: '', s: 0 });
-  assert.deepEqual(tickTake(lock)[2], { turns: [], shoot: false });
+  assert.deepEqual(tickTake(lock)[2], { turns: [], shoot: false, sword: false });
   lock.makeInput({});
   lock.receive({ p: 1, r: 2, f: INPUT_DELAY + 1, d: '', s: 0 });
   assert.deepEqual(tickTake(lock)[2], { quit: true });

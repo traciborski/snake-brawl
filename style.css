@@ -206,12 +206,35 @@ canvas {
     z-index: 10;
 }
 
-#fire[hidden] {
+#fire[hidden],
+#sword[hidden] {
     display: none;
 }
 
 #fire:active {
     background: rgba(255, 215, 0, 0.35);
+}
+
+/* Przycisk MIECZ: mniejszy, nad przyciskiem STRZAŁ */
+#sword {
+    position: fixed;
+    right: calc(max(2vw, env(safe-area-inset-right)) + min(4vh, 5vw));
+    bottom: calc(6vh + min(22vh, 26vw) + 3vh);
+    width: min(15vh, 18vw);
+    height: min(15vh, 18vw);
+    border-radius: 50%;
+    border: 3px solid #e8ecff;
+    background: rgba(232, 236, 255, 0.1);
+    box-shadow: 0 0 14px rgba(232, 236, 255, 0.5);
+    color: #e8ecff;
+    font: inherit;
+    font-size: min(1.8vh, 2.2vw);
+    touch-action: none;
+    z-index: 10;
+}
+
+#sword:active {
+    background: rgba(232, 236, 255, 0.35);
 }
 
 #rotate {

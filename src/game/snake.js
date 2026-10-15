@@ -19,6 +19,8 @@ export function createSnake(id, body, dir) {
     growPending: 0,
     eaten: 0,
     cooldown: 0,
+    swordTicks: 0,
+    swordCooldown: 0,
     ammo: 0,
     alive: true,
     death: null,
@@ -40,6 +42,7 @@ export function queueTurn(snake, dir) {
 /** @param {Snake} snake */
 export function tickTimers(snake) {
   if (snake.cooldown > 0) snake.cooldown--;
+  if (snake.swordCooldown > 0) snake.swordCooldown--;
 }
 
 /** @param {Snake} snake */
@@ -63,7 +66,7 @@ export function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'left'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} cause */
 export function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;

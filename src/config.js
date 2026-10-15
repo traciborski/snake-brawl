@@ -25,6 +25,10 @@ export const BULLET_PER_TICKS = 2;
 // Ściany działają na pocisk jak na węża, więc pocisk ma zasięg i limit odbić (żeby nie latał w kółko)
 export const BULLET_RANGE = 48; // pól, czyli jedna szerokość planszy
 export const BULLET_MAX_BOUNCES = 3;
+// Miecz: ostrze wiruje wokół głowy i tnie wszystko w kole o promieniu SWORD_RADIUS pól
+export const SWORD_RADIUS = 3;
+export const SWORD_TICKS = 8; // ok. 0,45 s wirowania
+export const SWORD_COOLDOWN = 72; // ok. 4 s od wciśnięcia do następnego cięcia
 export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 export const FOOD_COUNT = 3;
 export const WINS_TO_MATCH = 3;
@@ -61,8 +65,9 @@ export const KEYMAPS = [
       left: ['KeyA'],
       right: ['KeyD'],
       shoot: ['Space'],
+      sword: ['KeyE'],
     },
-    help: 'W A S D  +  SPACJA',
+    help: 'W A S D  +  SPACJA  +  E',
   },
   {
     keys: {
@@ -71,8 +76,9 @@ export const KEYMAPS = [
       left: ['ArrowLeft'],
       right: ['ArrowRight'],
       shoot: ['Enter', 'NumpadEnter'],
+      sword: ['ShiftRight', 'ControlRight'],
     },
-    help: 'STRZAŁKI  +  ENTER',
+    help: 'STRZAŁKI  +  ENTER  +  PR. SHIFT',
   },
   {
     keys: {
@@ -81,8 +87,9 @@ export const KEYMAPS = [
       left: ['KeyJ'],
       right: ['KeyL'],
       shoot: ['KeyU'],
+      sword: ['KeyO'],
     },
-    help: 'I J K L  +  U',
+    help: 'I J K L  +  U  +  O',
   },
   {
     keys: {
@@ -91,12 +98,13 @@ export const KEYMAPS = [
       left: ['Numpad4'],
       right: ['Numpad6'],
       shoot: ['Numpad0'],
+      sword: ['NumpadDecimal'],
     },
-    help: 'NUMPAD 8 4 5 6  +  0',
+    help: 'NUMPAD 8 4 5 6  +  0  +  ,',
   },
 ];
 /** Podpowiedź klawiszy w treningu (steruje się dowolnym zestawem). */
-export const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA';
+export const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA  +  E';
 
 // Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
 // np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`

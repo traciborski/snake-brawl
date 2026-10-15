@@ -27,20 +27,24 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
   pomarańczowy `#FF9100`, a online jeszcze fioletowy `#B388FF` i biały `#FFFFFF`
   (żaden nie myli się ze ścianami ani jedzeniem).
 
-| Gracz (offline) | Klawisze |
-|-----------------|----------|
-| 1 | `W A S D` + `Spacja` |
-| 2 | strzałki + `Enter` |
-| 3 | `I J K L` + `U` |
-| 4 | klawiatura numeryczna `8 4 5 6` (albo `2` w dół) + `0` |
+| Gracz (offline) | Ruch | Strzał | Miecz |
+|-----------------|------|--------|-------|
+| 1 | `W A S D` | `Spacja` | `E` |
+| 2 | strzałki | `Enter` | prawy `Shift` (albo prawy `Ctrl`) |
+| 3 | `I J K L` | `U` | `O` |
+| 4 | klawiatura numeryczna `8 4 5 6` (albo `2` w dół) | `0` | `,` (numpad) |
 | Trening (sam) | dowolny z tych zestawów |
 | Online | każdy steruje swoim wężem dowolnym z tych zestawów |
 
 **Telefon i tablet** (ta sama strona, bez osobnej wersji): sterowanie dotykiem włącza się samo
 po pierwszym dotknięciu ekranu. Przesunięcie palcem w dowolnym miejscu skręca węża, a przycisk
-**STRZAŁ** w prawym dolnym rogu (można go przytrzymać) strzela. Przycisk widać tylko na ekranie
-grającego dotykiem i tylko w trakcie rundy. Gra prosi o trzymanie telefonu poziomo i przechodzi
-na pełny ekran. Na jednym urządzeniu dotyk steruje graczem 1, więc telefon nadaje się głównie
+**STRZAŁ** w prawym dolnym rogu (można go przytrzymać) strzela, a mniejszy przycisk **MIECZ** nad
+nim tnie. Przyciski widać tylko na ekranie grającego dotykiem i tylko w trakcie rundy. Gra prosi
+o trzymanie telefonu poziomo i przy pierwszym stuknięciu przechodzi na pełny ekran (i wraca na
+niego przy kolejnym stuknięciu, jeśli ktoś z niego wyszedł). Przeglądarki nie pozwalają włączyć
+pełnego ekranu bez stuknięcia. iPhone w ogóle nie daje stronom pełnego ekranu: tam trzeba
+dodać grę do ekranu początkowego („Udostępnij → Do ekranu początkowego”), wtedy otwiera się
+jak aplikacja, bez paska przeglądarki. Na jednym urządzeniu dotyk steruje graczem 1, więc telefon nadaje się głównie
 do gry przez internet.
 
 ## 4. Mecz i runda
@@ -92,6 +96,17 @@ do gry przez internet.
 - Pocisk ma **zasięg jednej szerokości planszy** (48 pól) i znika po **3 odbiciach**, żeby nie latał w kółko.
 - Ściany są niezniszczalne.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
+
+**Miecz (atak z bliska)**
+- Drugi przycisk ataku. Po wciśnięciu wokół głowy wiruje ostrze przez ok. 0,45 s i tnie wszystko
+  w **kole o promieniu 3 pól** wokół głowy (także przez krawędź planszy, ściany nie zasłaniają):
+  - głowa rywala w zasięgu → rywal ginie,
+  - ciało rywala w zasięgu → ogon odcięty od pierwszego trafionego segmentu,
+  - cudze pociski w zasięgu → zniszczone (miecz to też tarcza).
+- Ostrze tnie przez cały czas wirowania, także rywala, który dopiero wjedzie w zasięg.
+- Własny wąż i własne pociski są bezpieczne. Dwa miecze naraz w swoim zasięgu: giną obaj.
+- Nic nie kosztuje, ale kolejne cięcie dopiero po **ok. 4 s**. Pasek obok wygranych w górnym
+  pasku pokazuje, kiedy miecz jest gotowy (pełny i świeci).
 
 **Labirynt**
 - Generowany losowo, ale symetrycznie w obu osiach, żeby wszystkie cztery rogi (i oba środki boków)

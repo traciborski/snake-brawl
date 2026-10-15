@@ -8,6 +8,7 @@ import { eatFood, refillFood } from './food.js';
 import { cellIndex, passThrough, samePos } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
 import { applyHit, bounce, createSnake, kill, queueTurn, tickTimers } from './snake.js';
+import { applySwords, swing } from './sword.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Command} Command */
@@ -67,9 +68,10 @@ export function stepRound(state, commands = []) {
   // 2. Timery
   for (const snake of state.snakes) tickTimers(snake);
 
-  // 3. Strzały
+  // 3. Strzały i miecz
   state.snakes.forEach((snake, i) => {
     if (commands[i]?.shoot) fire(state, snake, events);
+    if (commands[i]?.sword) swing(snake, events);
   });
 
   // 4. Pociski
@@ -77,6 +79,9 @@ export function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
+
+  // 5b. Miecze tną wokół głów (już po ruchu)
+  applySwords(state, events);
 
   // 6. Jedzenie
   eatFood(state, events);

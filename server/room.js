@@ -152,12 +152,12 @@ export class Room {
       case 'input': {
         const p = this.players.indexOf(member);
         if (this.phase !== 'game' || p < 0) return;
-        const { r, f, d = '', s = 0 } = msg;
+        const { r, f, d = '', s = 0, m = 0 } = msg;
         if (!Number.isInteger(r) || !Number.isInteger(f) || r < 0 || f < 0) return;
         if (typeof d !== 'string' || !DIRS_RE.test(d)) return;
         this.last.set(member.id, { r, f });
         this.maxRound = Math.max(this.maxRound, r);
-        this.broadcast({ t: 'input', p, r, f, d, s: s ? 1 : 0 });
+        this.broadcast({ t: 'input', p, r, f, d, s: s ? 1 : 0, m: m ? 1 : 0 });
         return;
       }
       case 'result': {

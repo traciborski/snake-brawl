@@ -1,6 +1,6 @@
 // Węże, pociski i owoce. Każda grupa to jedna ścieżka = jedna operacja poświaty.
 
-import { BOARD_Y, CELL, COLORS } from '../config.js';
+import { BOARD_Y, CELL, COLORS, SWORD_RADIUS, SWORD_TICKS } from '../config.js';
 import { DIR_VEC } from '../game/grid.js';
 
 /** @typedef {import('../game/types.js').Snake} Snake */
@@ -88,5 +88,54 @@ export function drawFood(ctx, round, time) {
     path.rect(px(f) + s, py(f) + s, CELL - 2 * s, CELL - 2 * s);
   }
   ctx.fill(path);
+  ctx.restore();
+}
+
+/**
+ * Wirujący miecz wokół głowy: koło zasięgu i dwa ostrza obracające się w trakcie cięcia.
+ * @param {CanvasRenderingContext2D} ctx @param {Snake} snake @param {string} color @param {number} alpha część ticka (płynny obrót)
+ */
+export function drawSword(ctx, snake, color, alpha = 0) {
+  if (!snake.alive || snake.swordTicks <= 0) return;
+  const head = snake.body[0];
+  const cx = px(head) + CELL / 2;
+  const cy = py(head) + CELL / 2;
+  const reach = (SWORD_RADIUS + 0.5) * CELL;
+  // Postęp cięcia 0..1 (półtora obrotu na całe wirowanie)
+  const progress = Math.min(1, (SWORD_TICKS - snake.swordTicks + alpha) / SWORD_TICKS);
+  const angle = progress * Math.PI * 3;
+
+  ctx.save();
+  // Zasięg
+  ctx.globalAlpha = 0.25 * (1 - progress) + 0.1;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, reach, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Ostrza: smuga i jasna klinga
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 14;
+  ctx.lineCap = 'round';
+  for (const offset of [0, Math.PI]) {
+    const a = angle + offset;
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(cx, cy, reach * 0.7, a - 0.7, a);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * CELL * 0.6, cy + Math.sin(a) * CELL * 0.6);
+    ctx.lineTo(cx + Math.cos(a) * reach, cy + Math.sin(a) * reach);
+    ctx.stroke();
+  }
   ctx.restore();
 }

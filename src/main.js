@@ -24,7 +24,7 @@ const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game')
 const app = {
   renderer: new Renderer(canvas),
   keyboard: new Keyboard(window, KEYMAPS),
-  touch: new Touch(window, document.getElementById('fire')),
+  touch: new Touch(window, document.getElementById('fire'), document.getElementById('sword')),
   overlay: new Overlay(/** @type {HTMLElement} */ (document.getElementById('overlay'))),
   audio: new Sfx(),
   effects: new Effects(),
@@ -33,6 +33,7 @@ const app = {
   /** @type {import('./game/types.js').RoundState | null} */
   round: null,
   roundNumber: 0,
+  alpha: 0,
   /** @type {import('./net/client.js').Session | null} sesja w pokoju gry online */
   session: null,
   /** @type {((lobby: any) => void) | null} */
@@ -57,13 +58,23 @@ app.scenes.register('play', createPlayScene(app));
 app.scenes.register('roundEnd', createRoundEndScene(app));
 app.scenes.register('matchEnd', createMatchEndScene(app));
 
-// Telefon: po pierwszym dotknięciu pełny ekran i (gdzie się da) blokada w poziomie
-app.touch.onFirstTouch.push(() => {
-  document.documentElement.requestFullscreen?.().then(
-    () => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}),
-    () => {},
-  );
+// Telefon i tablet: pełny ekran przy pierwszym stuknięciu (i znowu po każdym, jeśli ktoś z niego
+// wyszedł). Przeglądarka pozwala na to dopiero przy puszczeniu palca (pointerup), nie przy dotknięciu.
+// iPhone nie ma pełnego ekranu dla stron: tam pomaga „Dodaj do ekranu początkowego” (manifest).
+window.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') enterFullscreen();
 });
+
+function enterFullscreen() {
+  const doc = /** @type {any} */ (document);
+  if (doc.fullscreenElement || doc.webkitFullscreenElement) return;
+  const el = /** @type {any} */ (document.documentElement);
+  const request = el.requestFullscreen?.bind(el) ?? el.webkitRequestFullscreen?.bind(el);
+  if (!request) return;
+  Promise.resolve(request({ navigationUI: 'hide' }))
+    .then(() => /** @type {any} */ (screen.orientation)?.lock?.('landscape').catch(() => {}))
+    .catch(() => {});
+}
 
 // Przeglądarka pozwala włączyć dźwięk dopiero po geście użytkownika
 for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, () => app.audio.unlock());
@@ -87,6 +98,7 @@ startLoop({
     app.touch.setVisible(inRound);
     document.body.classList.toggle('in-round', inRound);
     app.effects.update(dt);
+    app.alpha = alpha; // część ticka od ostatniego kroku logiki (płynne animacje, np. miecz)
     app.scenes.render(alpha, dt);
   },
 });

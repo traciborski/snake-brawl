@@ -34,6 +34,7 @@ export class Keyboard {
     /** @type {Dir[][]} */
     this.turns = players.map(() => []);
     this.shootTapped = players.map(() => false);
+    this.swordTapped = players.map(() => false);
     /** @type {((e: KeyboardEvent) => void)[]} */
     this.listeners = [];
 
@@ -63,6 +64,8 @@ export class Keyboard {
     if (!binding) return;
     if (binding.action === 'shoot') {
       this.shootTapped[binding.player] = true;
+    } else if (binding.action === 'sword') {
+      this.swordTapped[binding.player] = true;
     } else if (DIRS.has(binding.action)) {
       const queue = this.turns[binding.player];
       if (queue.length < MAX_PENDING_TURNS) queue.push(/** @type {Dir} */ (binding.action));
@@ -81,7 +84,10 @@ export class Keyboard {
       const held = p.keys.shoot.some((code) => this.down.has(code));
       const shoot = held || this.shootTapped[i];
       this.shootTapped[i] = false;
-      return { turns, shoot };
+      // Miecz: wystarczy wcisnąć (trzymany tnie znowu, gdy tylko minie cooldown)
+      const sword = (p.keys.sword ?? []).some((code) => this.down.has(code)) || this.swordTapped[i];
+      this.swordTapped[i] = false;
+      return { turns, shoot, sword };
     });
   }
 
@@ -101,12 +107,13 @@ export class Keyboard {
   /** Komendy ze wszystkich zestawów klawiszy połączone w jedną (gra online: jeden wąż). */
   consumeMerged() {
     const all = this.consumeCommands();
-    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot) };
+    return { turns: all.flatMap((c) => c.turns), shoot: all.some((c) => c.shoot), sword: all.some((c) => c.sword) };
   }
 
   reset() {
     this.pressed.clear();
     this.turns = this.players.map(() => []);
     this.shootTapped = this.players.map(() => false);
+    this.swordTapped = this.players.map(() => false);
   }
 }

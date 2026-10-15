@@ -6,13 +6,13 @@ Mecz gramy do 3 wygranych.
 
 | Tryb | Sterowanie |
 |------|------------|
-| Jeden komputer, gracz 1 | `W A S D` + `Spacja` |
-| Jeden komputer, gracz 2 | strzałki + `Enter` |
-| Jeden komputer, gracz 3 | `I J K L` + `U` |
-| Jeden komputer, gracz 4 | numpad `8 4 5 6` + `0` |
+| Jeden komputer, gracz 1 | `W A S D` + `Spacja` (strzał) + `E` (miecz) |
+| Jeden komputer, gracz 2 | strzałki + `Enter` + prawy `Shift` |
+| Jeden komputer, gracz 3 | `I J K L` + `U` + `O` |
+| Jeden komputer, gracz 4 | numpad `8 4 5 6` + `0` + `,` |
 | Trening (sam) | dowolny z tych zestawów |
 | Przez internet | każdy steruje swoim wężem dowolnym z tych zestawów |
-| Telefon / tablet | przesunięcie palcem = skręt, przycisk **STRZAŁ** (telefon poziomo) |
+| Telefon / tablet | przesunięcie palcem = skręt, przyciski **STRZAŁ** i **MIECZ** (telefon poziomo, pełny ekran po stuknięciu) |
 
 `P` pauza (tylko offline) · `Esc` menu · `M` dźwięk
 

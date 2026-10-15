@@ -13,10 +13,12 @@
  * @property {number} growPending
  * @property {number} eaten      zjedzone owoce w tej rundzie (wynik treningu)
  * @property {number} cooldown   ticki do kolejnego strzału
+ * @property {number} swordTicks     ile ticków jeszcze wiruje miecz (0 = nie wiruje)
+ * @property {number} swordCooldown  ticki do kolejnego cięcia mieczem
  * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive
- * @property {null | 'shot' | 'wall' | 'crash' | 'body' | 'left'} death   przyczyna śmierci
- *   (crash = zderzenie głowami, body = wjazd w rywala, left = rozłączenie online)
+ * @property {null | 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} death   przyczyna śmierci
+ *   (crash = zderzenie głowami, body = wjazd w rywala, sword = cięcie mieczem, left = rozłączenie online)
  */
 
 /** @typedef {{ owner: number, pos: Pos, dir: Dir, travel?: number, bounces?: number }} Bullet  travel: przelecone pola */
@@ -36,7 +38,7 @@
  * @property {RoundResult | null} result
  */
 
-/** @typedef {{ turns?: Dir[], shoot?: boolean, quit?: boolean }} Command */
+/** @typedef {{ turns?: Dir[], shoot?: boolean, sword?: boolean, quit?: boolean }} Command */
 
 /**
  * Zdarzenia zwracane przez stepRound, czytane przez render i audio.
@@ -46,11 +48,12 @@
  *   { type: 'bulletClash', pos: Pos } |
  *   { type: 'bulletBounce', pos: Pos } |
  *   { type: 'bulletWarp', pos: Pos } |
+ *   { type: 'swordSwing', snake: number, pos: Pos } |
  *   { type: 'bodyHit', snake: number, by: number, cells: Pos[] } |
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |
  *   { type: 'ate', snake: number, pos: Pos } |
- *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'left' } |
+ *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' } |
  *   { type: 'roundOver', result: RoundResult }
  * )} GameEvent
  */

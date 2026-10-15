@@ -69,11 +69,16 @@ export class Sfx {
     src.stop(t + dur + 0.02);
   }
 
-  /** @param {'shoot' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
+  /** @param {'shoot' | 'sword' | 'eat' | 'hit' | 'bounce' | 'warp' | 'wall' | 'clash' | 'die' | 'beep' | 'go' | 'round' | 'win'} name */
   play(name) {
     switch (name) {
       case 'shoot':
         this.tone({ freq: 880, to: 220, dur: 0.08, vol: 0.25 });
+        break;
+      case 'sword':
+        // Świst ostrza: szum opadający i szybko rosnący ton
+        this.noise({ dur: 0.35, vol: 0.45, freq: 5000 });
+        this.tone({ freq: 220, to: 1400, dur: 0.18, type: 'sawtooth', vol: 0.15 });
         break;
       case 'eat':
         this.tone({ freq: 520, to: 1040, dur: 0.08, type: 'triangle', vol: 0.5 });
@@ -126,6 +131,7 @@ export class Sfx {
       bulletWall: 'wall',
       bulletClash: 'clash',
       bulletBounce: 'bounce',
+      swordSwing: 'sword',
       bulletWarp: 'warp',
       died: 'die',
     };

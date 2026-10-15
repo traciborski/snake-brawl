@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#05060f">
+    <!-- Dodana do ekranu początkowego gra otwiera się na pełnym ekranie (także na iPhonie) -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Snake Brawl">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
     <title>Snake Brawl</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,6 +24,7 @@
     </div>
     <!-- Sterowanie dotykiem: pokazuje się tylko po dotknięciu ekranu i tylko w trakcie rundy -->
     <button id="fire" type="button" hidden aria-label="Strzał">STRZAŁ</button>
+    <button id="sword" type="button" hidden aria-label="Miecz">MIECZ</button>
     <!-- Telefon trzymany pionowo: plansza byłaby za mała -->
     <div id="rotate">Obróć telefon poziomo</div>
     <noscript>Snake Brawl wymaga włączonego JavaScriptu.</noscript>

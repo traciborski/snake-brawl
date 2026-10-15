@@ -13,6 +13,7 @@ const DEATH = {
   wall: 'Rywal wjechał w czerwoną ścianę',
   body: 'Rywal wjechał w ogon',
   crash: 'Zderzenie głowami',
+  sword: 'Cięcie mieczem',
   left: 'Rywal wyszedł z gry',
 };
 
