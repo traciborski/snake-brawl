@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Room } from '../server/room.js';
 import { MAX_PLAYERS } from '../src/config.js';
 import { createGameServer } from '../scripts/serve.js';
-import { decodeCommand, encodeCommand, normalizeCode, randomCode } from '../src/net/protocol.js';
+import { decodeCommand, encodeCommand, nextColor, normalizeCode, pickColor, randomCode } from '../src/net/protocol.js';
 
 /** Udawane gniazdo: zapisuje wysłane wiadomości. */
 function fakeSocket() {
@@ -69,7 +69,7 @@ test('dołączenie w trakcie meczu: od rundy maxRound + 2, wszyscy się dowiaduj
   assert.equal(late.seed, room.seed);
   assert.deepEqual(late.results, [1]);
   assert.deepEqual(late.players.map((p) => [p.name, p.r]), [['A', 0], ['B', 0], ['Celina', 3]]);
-  assert.deepEqual(b.socket.last('joined'), { t: 'joined', p: 2, id: late.players[2].id, name: 'Celina', r: 3 });
+  assert.deepEqual(b.socket.last('joined'), { t: 'joined', p: 2, id: late.players[2].id, name: 'Celina', color: '#39FF14', r: 3 });
   // dołączający gra normalnie: jego ruchy idą do wszystkich
   c.send({ t: 'input', r: 3, f: 2, d: 'u', s: 0 });
   assert.equal(a.socket.last('input').p, 2);
@@ -207,4 +207,35 @@ test('pokój publiczny 4B istnieje zawsze: wchodzi się bez zakładania, pierwsz
   assert.equal(after.host, after.you);
   assert.equal(normalizeCode('4b'), '4B');
   assert.equal(normalizeCode('4C'), null);
+});
+
+test('kolory: każdy dostaje wybrany, jeśli wolny, inaczej pierwszy wolny; zmiana tylko w poczekalni', () => {
+  const room = new Room('KOT7');
+  const hello = (name, color, create = false) => {
+    const socket = { sent: [], send(t) { this.sent.push(JSON.parse(t)); }, close() {}, last(type) { return [...this.sent].reverse().find((m) => m.t === type); } };
+    const conn = room.connect(socket);
+    conn.receive(JSON.stringify({ t: 'hello', name, create, color }));
+    return { socket, send: (msg) => conn.receive(JSON.stringify(msg)) };
+  };
+  const a = hello('Ala', '#b388ff', true);
+  const b = hello('Bartek', '#B388FF'); // zajęty → pierwszy wolny
+  const c = hello('Celina', 'red; background: url(x)'); // spoza listy → pierwszy wolny
+  const colors = () => a.socket.last('lobby').players.map((p) => p.color);
+  assert.deepEqual(colors(), ['#B388FF', '#FFD700', '#00E5FF']);
+
+  b.send({ t: 'color', c: '#B388FF' }); // zajęty: bez zmian
+  b.send({ t: 'color', c: '#1DE9B6' });
+  assert.deepEqual(colors(), ['#B388FF', '#1DE9B6', '#00E5FF']);
+
+  a.send({ t: 'start' });
+  assert.deepEqual(a.socket.last('start').players.map((p) => p.color), ['#B388FF', '#1DE9B6', '#00E5FF']);
+  c.send({ t: 'color', c: '#FFFFFF' }); // w trakcie meczu nie wolno
+  assert.equal(room.members[2].color, '#00E5FF');
+});
+
+test('kolory: nextColor pomija zajęte, pickColor odrzuca kolory spoza listy', () => {
+  assert.equal(nextColor('#FFD700', ['#00E5FF']), '#39FF14');
+  assert.equal(nextColor('#1DE9B6', []), '#FFD700', 'po ostatnim wraca na początek');
+  assert.equal(pickColor('#123456', []), '#FFD700');
+  assert.equal(pickColor('#c6ff00', []), '#C6FF00');
 });

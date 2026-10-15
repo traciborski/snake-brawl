@@ -1,4 +1,6 @@
-// Wspólne dla gry i serwera: kody pokoi i zapis komend w wiadomościach sieciowych.
+// Wspólne dla gry i serwera: kody pokoi, kolory graczy i zapis komend w wiadomościach sieciowych.
+
+import { COLOR_CHOICES } from '../config.js';
 
 /** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -37,4 +39,27 @@ export function encodeCommand(cmd) {
 /** @returns {import('../game/types.js').Command} */
 export function decodeCommand({ d = '', s = 0, m = 0 }) {
   return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s, sword: !!m };
+}
+
+/**
+ * Kolor dla gracza: wybrany, jeśli jest na liście i nikt go nie ma, inaczej pierwszy wolny.
+ * @param {unknown} wanted @param {string[]} taken kolory innych graczy
+ */
+export function pickColor(wanted, taken) {
+  const free = COLOR_CHOICES.filter((c) => !taken.includes(c));
+  if (typeof wanted === 'string' && free.includes(wanted.toUpperCase())) return wanted.toUpperCase();
+  return free[0] ?? COLOR_CHOICES[0];
+}
+
+/**
+ * Następny wolny kolor po `current` (kliknięcie w kwadracik koloru).
+ * @param {string} current @param {string[]} taken kolory innych graczy
+ */
+export function nextColor(current, taken) {
+  const start = Math.max(0, COLOR_CHOICES.indexOf(current));
+  for (let i = 1; i <= COLOR_CHOICES.length; i++) {
+    const c = COLOR_CHOICES[(start + i) % COLOR_CHOICES.length];
+    if (!taken.includes(c)) return c;
+  }
+  return current;
 }

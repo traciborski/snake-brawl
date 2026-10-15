@@ -177,6 +177,8 @@ const OFFLINE_DEFAULT_PLAYERS = 2;
 const NAME_MAX = 12;
 // Kolory graczy: neonowe, inne niż ściany (czerwona, niebieska, szara) i jedzenie (różowe)
 const PLAYER_COLORS = ['#FFD700', '#00E5FF', '#39FF14', '#FF9100', '#B388FF', '#FFFFFF'];
+// Kolory do wyboru (domyślne graczy + dwa dodatkowe); dwóch graczy nie może mieć tego samego
+const COLOR_CHOICES = [...PLAYER_COLORS, '#C6FF00', '#1DE9B6'];
 const DEFAULT_NAMES = ['Gracz 1', 'Gracz 2', 'Gracz 3', 'Gracz 4', 'Gracz 5', 'Gracz 6'];
 
 // Zestawy klawiszy (KeyboardEvent.code, niezależne od układu klawiatury).
@@ -264,7 +266,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -1257,7 +1259,7 @@ async function fetchRooms() {
  * (np. { code: 'exists' | 'missing' | 'full' | 'playing' | 'network', msg }).
  * @returns {Promise<Session>}
  */
-function joinRoom(baseUrl, code, name, create) {
+function joinRoom(baseUrl, code, name, create, color = null) {
   return new Promise((resolve, reject) => {
     const networkError = { code: 'network', msg: 'Nie udało się połączyć z serwerem gry' };
     /** @type {WebSocket} */
@@ -1286,7 +1288,7 @@ function joinRoom(baseUrl, code, name, create) {
       },
     };
 
-    ws.onopen = () => session.send({ t: 'hello', name, create });
+    ws.onopen = () => session.send({ t: 'hello', name, create, color });
     ws.onmessage = (e) => {
       let msg;
       try {
@@ -1358,7 +1360,9 @@ Object.assign(__exports, { serverUrl, fetchRooms, joinRoom, roomFromLink, roomLi
 
 // ---- src/net/protocol.js ----
 __factories["src/net/protocol.js"] = function (__exports) {
-// Wspólne dla gry i serwera: kody pokoi i zapis komend w wiadomościach sieciowych.
+// Wspólne dla gry i serwera: kody pokoi, kolory graczy i zapis komend w wiadomościach sieciowych.
+
+const { COLOR_CHOICES } = __require("src/config.js");
 
 /** Bez liter i cyfr, które łatwo pomylić (O/0, I/1). */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1399,7 +1403,30 @@ function decodeCommand({ d = '', s = 0, m = 0 }) {
   return { turns: [...d].map((c) => CHAR_TO_DIR[c]).filter(Boolean), shoot: !!s, sword: !!m };
 }
 
-Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, PUBLIC_ROOMS, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand });
+/**
+ * Kolor dla gracza: wybrany, jeśli jest na liście i nikt go nie ma, inaczej pierwszy wolny.
+ * @param {unknown} wanted @param {string[]} taken kolory innych graczy
+ */
+function pickColor(wanted, taken) {
+  const free = COLOR_CHOICES.filter((c) => !taken.includes(c));
+  if (typeof wanted === 'string' && free.includes(wanted.toUpperCase())) return wanted.toUpperCase();
+  return free[0] ?? COLOR_CHOICES[0];
+}
+
+/**
+ * Następny wolny kolor po `current` (kliknięcie w kwadracik koloru).
+ * @param {string} current @param {string[]} taken kolory innych graczy
+ */
+function nextColor(current, taken) {
+  const start = Math.max(0, COLOR_CHOICES.indexOf(current));
+  for (let i = 1; i <= COLOR_CHOICES.length; i++) {
+    const c = COLOR_CHOICES[(start + i) % COLOR_CHOICES.length];
+    if (!taken.includes(c)) return c;
+  }
+  return current;
+}
+
+Object.assign(__exports, { CODE_ALPHABET, CODE_LENGTH, PUBLIC_ROOMS, ROOM_PATH_RE, ROOMS_API, randomCode, normalizeCode, encodeCommand, decodeCommand, pickColor, nextColor });
 };
 
 // ---- src/scenes/setup.js ----
@@ -1423,6 +1450,8 @@ const { drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
 const { load, save } = __require("src/ui/storage.js");
 const { createOfflineController } = __require("src/modes/offline.js");
+const { nextColor, pickColor } = __require("src/net/protocol.js");
+const { paintSwatch, swatch } = __require("src/ui/swatch.js");
 
 const COUNT_HINTS = {
   1: 'Trening: sam na planszy, bez punktów. Zbieraj owoce, omijaj czerwone ściany.',
@@ -1442,6 +1471,13 @@ function cleanName(raw, i) {
   return name || DEFAULT_NAMES[i];
 }
 
+/** Zapamiętane kolory graczy offline, bez powtórzeń (powtórzony dostaje pierwszy wolny). */
+function savedColors(saved) {
+  const colors = [];
+  for (let i = 0; i < OFFLINE_MAX_PLAYERS; i++) colors.push(pickColor(saved?.[i] ?? PLAYER_COLORS[i], colors));
+  return colors;
+}
+
 /** @param {any} app */
 function createSetupScene(app) {
   return {
@@ -1453,16 +1489,28 @@ function createSetupScene(app) {
         h('input', { value: saved[i] ?? fallback, maxLength: NAME_MAX, placeholder: fallback, 'aria-label': `Imię gracza ${i + 1}` }),
       );
 
+      // Kolory: klik w kwadracik zmienia na następny, którego nie ma żaden inny gracz
+      const colors = savedColors(load('colors', PLAYER_COLORS));
+
       const start = (e) => {
         e.preventDefault();
         const names = inputs.slice(0, count).map((input, i) => cleanName(input.value, i));
         save('names', inputs.map((input, i) => cleanName(input.value, i)));
         save('offlinePlayers', count);
+        save('colors', colors.slice(0, count));
         app.controller = createOfflineController(app);
-        app.players = names.map((name, i) => ({ name, color: PLAYER_COLORS[i] }));
+        app.players = names.map((name, i) => ({ name, color: colors[i] }));
         app.match = createMatch(randomSeed(), names.length);
         app.scenes.go('countdown');
       };
+
+      // Zajęte są tylko kolory widocznych graczy (ukryci 3. i 4. gracz niczego nie blokują)
+      const swatches = colors.map((c, i) =>
+        swatch(c, () => {
+          colors[i] = nextColor(colors[i], colors.slice(0, count).filter((_, j) => j !== i));
+          paintSwatch(swatches[i], colors[i]);
+        }),
+      );
 
       const countButtons = [];
       for (let n = OFFLINE_MIN_PLAYERS; n <= OFFLINE_MAX_PLAYERS; n++) {
@@ -1472,15 +1520,21 @@ function createSetupScene(app) {
         h(
           'div',
           { className: 'row' },
-          h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
+          swatches[i],
           input,
           h('small', {}, KEYMAPS[i].help),
         ),
       );
       const hint = h('p', { className: 'hint' });
+      const colorHint = h('p', { className: 'hint' }, 'Kliknij kwadracik, żeby zmienić kolor węża.');
 
       function setCount(n) {
         count = n;
+        // Nowo widoczny gracz z kolorem kogoś innego dostaje pierwszy wolny
+        for (let i = 0; i < n; i++) {
+          colors[i] = pickColor(colors[i], colors.slice(0, i));
+          paintSwatch(swatches[i], colors[i]);
+        }
         countButtons.forEach((b, i) => b.classList.toggle('selected', i + OFFLINE_MIN_PLAYERS === n));
         rows.forEach((row, i) => (row.hidden = i >= n));
         rows[0].querySelector('small').textContent = n === 1 ? SOLO_HELP : KEYMAPS[0].help;
@@ -1502,6 +1556,7 @@ function createSetupScene(app) {
         h('h2', {}, 'GRACZE'),
         h('div', { className: 'row', style: { justifyContent: 'center' } }, h('span', {}, 'Ilu graczy?'), countButtons),
         rows,
+        colorHint,
         hint,
         h(
           'div',
@@ -1527,7 +1582,7 @@ function createSetupScene(app) {
   };
 }
 
-Object.assign(__exports, { clampPlayers, cleanName, createSetupScene });
+Object.assign(__exports, { clampPlayers, cleanName, savedColors, createSetupScene });
 };
 
 // ---- src/core/rng.js ----
@@ -1672,13 +1727,41 @@ function createOfflineController(app) {
 Object.assign(__exports, { createOfflineController });
 };
 
+// ---- src/ui/swatch.js ----
+__factories["src/ui/swatch.js"] = function (__exports) {
+// Kwadracik koloru gracza. Klikalny: każde kliknięcie zmienia kolor na następny wolny.
+
+const { h } = __require("src/ui/dom.js");
+
+/** Maluje kwadracik na dany kolor (z poświatą). */
+function paintSwatch(el, color) {
+  el.style.background = color;
+  el.style.boxShadow = `0 0 8px ${color}`;
+}
+
+/**
+ * @param {string} color
+ * @param {(() => void) | null} onPick  kliknięcie (null = zwykły, nieklikalny kwadracik)
+ */
+function swatch(color, onPick = null) {
+  const el = onPick
+    ? h('button', { type: 'button', className: 'swatch pick', title: 'Kliknij, żeby zmienić kolor', 'aria-label': 'Zmień kolor', onclick: onPick })
+    : h('span', { className: 'swatch' });
+  paintSwatch(el, color);
+  return el;
+}
+
+Object.assign(__exports, { paintSwatch, swatch });
+};
+
 // ---- src/scenes/online.js ----
 __factories["src/scenes/online.js"] = function (__exports) {
 // Gra przez internet: imię, utworzenie pokoju albo dołączenie kodem, poczekalnia.
 
 const { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } = __require("src/config.js");
 const { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } = __require("src/net/client.js");
-const { PUBLIC_ROOMS, normalizeCode, randomCode } = __require("src/net/protocol.js");
+const { PUBLIC_ROOMS, nextColor, normalizeCode, pickColor, randomCode } = __require("src/net/protocol.js");
+const { paintSwatch, swatch } = __require("src/ui/swatch.js");
 const { attachSession, leaveOnline } = __require("src/modes/online.js");
 const { drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
@@ -1711,6 +1794,13 @@ function createOnlineScene(app) {
       style: { width: '6em', textTransform: 'uppercase' },
     });
     const message = h('p', { className: 'hint error' }, error || (server ? '' : 'Serwer gry online nie jest jeszcze ustawiony.'));
+    // Wybrany kolor (gdy w pokoju ktoś już go ma, serwer da pierwszy wolny; w poczekalni można zmienić)
+    let color = pickColor(load('onlineColor', PLAYER_COLORS[0]), []);
+    const colorPick = swatch(color, () => {
+      color = nextColor(color, []);
+      paintSwatch(colorPick, color);
+      save('onlineColor', color);
+    });
 
     const go = async (create) => {
       if (busy || !server) return;
@@ -1728,7 +1818,7 @@ function createOnlineScene(app) {
         let session = null;
         for (let i = 0; !session; i++) {
           try {
-            session = await joinRoom(server, create ? randomCode() : joinCode, playerName, create);
+            session = await joinRoom(server, create ? randomCode() : joinCode, playerName, create, color);
           } catch (err) {
             if (!(create && err.code === 'exists' && i < CREATE_ATTEMPTS)) throw err;
           }
@@ -1759,7 +1849,8 @@ function createOnlineScene(app) {
       },
       h('h2', {}, inviteCode ? (PUBLIC_ROOMS.includes(inviteCode) ? `POKÓJ PUBLICZNY ${inviteCode}` : `ZAPROSZENIE DO POKOJU ${inviteCode}`) : 'GRA PRZEZ INTERNET'),
       inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
-      h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
+      h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), colorPick, name),
+      h('p', { className: 'hint' }, 'Kliknij kwadracik, żeby zmienić kolor węża.'),
       h(
         'div',
         { className: 'buttons' },
@@ -1810,8 +1901,15 @@ function createOnlineScene(app) {
       h(
         'div',
         { className: 'row' },
-        h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
-        h('span', { style: { color: PLAYER_COLORS[i] } }, p.name),
+        // Własny kolor można zmienić w poczekalni (serwer pilnuje, żeby się nie powtarzał)
+        p.id === lobby.you && !playing
+          ? swatch(p.color, () => {
+              const next = nextColor(p.color, lobby.players.filter((o) => o.id !== p.id).map((o) => o.color));
+              save('onlineColor', next);
+              app.session?.send({ t: 'color', c: next });
+            })
+          : swatch(p.color ?? PLAYER_COLORS[i]),
+        h('span', { style: { color: p.color ?? PLAYER_COLORS[i] } }, p.name),
         h('small', {}, [p.id === lobby.host ? (lobby.public ? '★ gospodarz' : '★ założyciel') : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
       ),
     );
@@ -1926,7 +2024,7 @@ function leaveOnline(app) {
 function startMatch(app, session, { seed, players }) {
   app.lateJoin = null;
   const me = players.findIndex((p) => p.id === session.lobby?.you);
-  app.players = players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.players = players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = createMatch(seed, players.length);
   app.controller = createOnlineController(app, session, me);
   app.scenes.go('countdown');
@@ -1952,7 +2050,7 @@ function tryLateStart(app, session) {
 
   app.lateJoin = null;
   const me = late.players.findIndex((p) => p.id === session.lobby?.you);
-  app.players = late.players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.players = late.players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = match;
   app.controller = createOnlineController(app, session, me, late.players.map((p) => p.r));
   app.scenes.go('countdown');
@@ -1981,7 +2079,7 @@ function createOnlineController(app, session, me, joinRounds) {
       else if (msg.t === 'joined') {
         // Nowy gracz w trakcie meczu: gra od rundy msg.r, do tego czasu nie ma węża
         lock.addPlayer(msg.r);
-        app.players.push({ name: msg.name, color: PLAYER_COLORS[msg.p] });
+        app.players.push({ name: msg.name, color: msg.color ?? PLAYER_COLORS[msg.p] });
         app.match.wins.push(0);
       }
     },

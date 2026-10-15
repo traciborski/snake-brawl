@@ -127,7 +127,7 @@
             const players = el('div', { className: 'players' });
             room.players.forEach((name, i) => {
                 if (i) players.append(', ');
-                const color = COLORS[i % COLORS.length];
+                const color = room.colors?.[i] ?? COLORS[i % COLORS.length];
                 players.append(el('span', { style: `color:${color};text-shadow:0 0 6px ${color}` }, name));
             });
             const count = `${room.players.length} / ${room.max}`;

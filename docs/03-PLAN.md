@@ -120,6 +120,12 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Poprawka: ekran gry na jednym komputerze nie otwierał się po dodaniu imion dla 6 graczy
 - **Testy:** zasięg (koło, krawędź), głowa, ogon, czas wirowania, cooldown, pociski, dwa miecze.
 
+## Krok 18: Wybór koloru węża
+- [x] 8 kolorów (`COLOR_CHOICES`), kwadracik przy imieniu zmienia na następny wolny (`nextColor`)
+- [x] Offline: unikalne wśród widocznych graczy, zapamiętane; online: `hello.color`, zmiana w poczekalni (`color`)
+- [x] Serwer przydziela pierwszy wolny, gdy wybrany jest zajęty (`pickColor`), kolory idą w `lobby`, `start`, `late`, `joined`
+- **Testy:** przydział i zmiana kolorów w pokoju, `nextColor`/`pickColor`, zapamiętane kolory offline.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

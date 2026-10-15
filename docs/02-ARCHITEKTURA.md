@@ -274,16 +274,17 @@ Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML
 
 | Kierunek | Wiadomość | Znaczenie |
 |----------|-----------|-----------|
-| klient → serwer | `hello { name, create }` | dołączenie do pokoju z adresu `/room/KOD` (albo założenie go) |
+| klient → serwer | `hello { name, create, color }` | dołączenie do pokoju z adresu `/room/KOD` (albo założenie go), wybrany kolor |
+| klient → serwer | `color { c }` | zmiana koloru w poczekalni (serwer odrzuca zajęty albo spoza `COLOR_CHOICES`) |
 | serwer → klient | `lobby { you, host, players, playing, public }` | stan poczekalni (`playing`: trwa mecz, `public`: pokój publiczny) |
 | klient → serwer | `start` | założyciel zaczyna mecz |
-| serwer → wszyscy | `start { seed, players }` | początek meczu; kolejność graczy = kolory i rogi |
+| serwer → wszyscy | `start { seed, players }` | początek meczu; gracze z imionami i kolorami, kolejność = miejsca startu |
 | klient → serwer | `input { r, f, d, s, m }` | ruch: runda, klatka, skręty (`d`), strzał (`s`), miecz (`m`) |
 | serwer → wszyscy | `input { p, r, f, d, s, m }` | ruch gracza `p` |
 | serwer → wszyscy | `left { p, r, f }` | gracz `p` się rozłączył: od klatki `(r, f)` jego wąż ginie |
 | klient → serwer | `result { r, w }` | wynik rundy `r` (`w`: numer zwycięzcy albo `null`) |
 | serwer → wszyscy | `result { r, w }` | pierwszy zgłoszony wynik rundy, dla dołączających w trakcie |
-| serwer → wszyscy | `joined { p, id, name, r }` | nowy gracz `p` dołączył w trakcie meczu, gra od rundy `r` |
+| serwer → wszyscy | `joined { p, id, name, color, r }` | nowy gracz `p` dołączył w trakcie meczu, gra od rundy `r` |
 | serwer → klient | `late { seed, r, players, results }` | dla dołączającego: ziarno, jego runda, gracze z rundami startu, dotychczasowe wyniki |
 | klient → serwer | `lobby` | koniec meczu, powrót do poczekalni |
 | serwer → klient | `error { msg }` | np. pokój nie istnieje albo jest pełny |

@@ -4,12 +4,12 @@
 // Używają jej lokalny serwer (scripts/serve.js) i Cloudflare (server/worker.js).
 
 import { MAX_PLAYERS, NAME_MAX } from '../src/config.js';
-import { PUBLIC_ROOMS } from '../src/net/protocol.js';
+import { PUBLIC_ROOMS, pickColor } from '../src/net/protocol.js';
 
 const DIRS_RE = /^[udlr]{0,3}$/;
 
 /** @typedef {{ send(text: string): void, close(): void }} Socket */
-/** @typedef {{ id: number, name: string, socket: Socket }} Member */
+/** @typedef {{ id: number, name: string, color: string, socket: Socket }} Member */
 
 export class Room {
   /** @param {string} code @param {{ random?: () => number }} [opts] */
@@ -56,6 +56,7 @@ export class Room {
     return {
       code: this.code,
       players: this.members.map((m) => m.name),
+      colors: this.members.map((m) => m.color),
       playing,
       round: playing ? this.results.length + 1 : null,
       full: this.isFull,
@@ -88,8 +89,14 @@ export class Room {
     };
   }
 
+  /** Kolory zajęte przez innych (w trakcie meczu także przez tych, którzy wyszli: ich węże są na planszy). */
+  takenColors(except = null) {
+    const people = this.phase === 'game' ? [...new Set([...this.members, ...this.players])] : this.members;
+    return people.filter((m) => m !== except).map((m) => m.color);
+  }
+
   /** @returns {Member | null} */
-  join(socket, { name, create }) {
+  join(socket, { name, create, color }) {
     const reject = (code, msg) => {
       send(socket, { t: 'error', code, msg });
       socket.close();
@@ -100,7 +107,7 @@ export class Room {
     if (this.isFull) return reject('full', `Pokój jest pełny (max ${MAX_PLAYERS} graczy)`);
 
     this.created = true;
-    const member = { id: this.nextId++, name: cleanName(name), socket };
+    const member = { id: this.nextId++, name: cleanName(name), color: pickColor(color, this.takenColors()), socket };
     this.members.push(member);
     this.broadcastLobby();
     if (this.phase === 'game') this.joinLate(member);
@@ -120,13 +127,13 @@ export class Room {
     this.players.push(member);
     this.joinRounds.push(r);
     for (const m of this.members) {
-      if (m !== member) send(m.socket, { t: 'joined', p, id: member.id, name: member.name, r });
+      if (m !== member) send(m.socket, { t: 'joined', p, id: member.id, name: member.name, color: member.color, r });
     }
     send(member.socket, {
       t: 'late',
       seed: this.seed,
       r,
-      players: this.players.map((m, i) => ({ id: m.id, name: m.name, r: this.joinRounds[i] })),
+      players: this.players.map((m, i) => ({ id: m.id, name: m.name, color: m.color, r: this.joinRounds[i] })),
       results: this.results,
     });
   }
@@ -144,7 +151,7 @@ export class Room {
         this.results = [];
         const seed = Math.floor(this.random() * 0x100000000) >>> 0;
         this.seed = seed;
-        const players = this.players.map((m) => ({ id: m.id, name: m.name }));
+        const players = this.players.map((m) => ({ id: m.id, name: m.name, color: m.color }));
         this.broadcast({ t: 'start', seed, players });
         this.onChange();
         return;
@@ -168,6 +175,18 @@ export class Room {
         if (r < this.results.length) return;
         this.results.push(w);
         this.broadcast({ t: 'result', r, w });
+        this.onChange();
+        return;
+      }
+      case 'color': {
+        // Zmiana koloru tylko w poczekalni (w trakcie meczu węże już mają swoje kolory)
+        if (this.phase !== 'lobby') return;
+        const taken = this.takenColors(member);
+        if (typeof msg.c !== 'string' || taken.includes(msg.c.toUpperCase())) return;
+        const color = pickColor(msg.c, taken);
+        if (color !== msg.c.toUpperCase()) return;
+        member.color = color;
+        this.broadcastLobby();
         this.onChange();
         return;
       }
@@ -203,7 +222,7 @@ export class Room {
   }
 
   broadcastLobby() {
-    const players = this.members.map((m) => ({ id: m.id, name: m.name }));
+    const players = this.members.map((m) => ({ id: m.id, name: m.name, color: m.color }));
     const host = this.members[0]?.id ?? null;
     const playing = this.phase === 'game';
     const isPublic = this.isPublic;
@@ -221,7 +240,7 @@ export const LIST_TTL_MS = 3 * 60 * 1000;
 
 /** Opis pustego pokoju publicznego (pusty pokój nie zgłasza się na listę, a publiczny ma być widać zawsze). */
 function emptyPublicRoom(code) {
-  return { code, players: [], playing: false, round: null, full: false, public: true, max: MAX_PLAYERS };
+  return { code, players: [], colors: [], playing: false, round: null, full: false, public: true, max: MAX_PLAYERS };
 }
 
 /**
@@ -234,9 +253,10 @@ export function listRooms(rooms) {
   for (const code of PUBLIC_ROOMS) if (!all.some((r) => r.code === code)) all.push(emptyPublicRoom(code));
   const order = (r) => (r.public ? -1 : r.full ? 2 : r.playing ? 1 : 0);
   return all
-    .map(({ code, players, playing, round, full }) => ({
+    .map(({ code, players, colors = [], playing, round, full }) => ({
       code,
       players,
+      colors,
       playing,
       round,
       full,

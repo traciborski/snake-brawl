@@ -39,7 +39,7 @@ test('opis pokoju: gracze, poczekalnia, mecz z numerem rundy, pełny', () => {
 
   const a = client(room, 'Ala', true);
   client(room, 'Bartek');
-  assert.deepEqual(room.summary(), { code: 'KOT7', players: ['Ala', 'Bartek'], playing: false, round: null, full: false, public: false, max: 6 });
+  assert.deepEqual(room.summary(), { code: 'KOT7', players: ['Ala', 'Bartek'], colors: ['#FFD700', '#00E5FF'], playing: false, round: null, full: false, public: false, max: 6 });
 
   a.send({ t: 'start' });
   assert.equal(room.summary().playing, true);
@@ -73,7 +73,7 @@ test('kolejność listy: pokój publiczny (zawsze, nawet pusty), wolne poczekaln
   ];
   const sorted = listRooms(rooms);
   assert.deepEqual(sorted.map((r) => r.code), ['4B', 'AAAA', 'CCCC', 'BBBB', 'ZZZZ']);
-  assert.deepEqual(sorted[0], { code: '4B', players: [], playing: false, round: null, full: false, public: true, max: 6 });
+  assert.deepEqual(sorted[0], { code: '4B', players: [], colors: [], playing: false, round: null, full: false, public: true, max: 6 });
   assert.equal('at' in sorted[1], false);
   // Gdy w 4B ktoś jest, na liście jest jego prawdziwy opis (bez dubla)
   const busy = listRooms([{ code: '4B', players: ['Ala'], playing: true, round: 2, full: false }]);
@@ -97,7 +97,7 @@ test('Cloudflare: pokój zgłasza się do listy, lista zwraca go i usuwa stare w
   const get = async () => (await (await worker.fetch(new Request('https://gra/api/pokoje'), env)).json()).rooms;
   const codes = async () => (await get()).map((r) => r.code);
   assert.deepEqual(await codes(), ['4B', 'KOT7']);
-  assert.deepEqual((await get())[1], { code: 'KOT7', players: ['Ala'], playing: false, round: null, full: false, public: false, max: 6 });
+  assert.deepEqual((await get())[1], { code: 'KOT7', players: ['Ala'], colors: ['#FFD700'], playing: false, round: null, full: false, public: false, max: 6 });
 
   // Pokój bez wieści dłużej niż LIST_TTL_MS (np. po restarcie serwera) znika
   list.storage.map.get('KOT7').at -= LIST_TTL_MS + 1;

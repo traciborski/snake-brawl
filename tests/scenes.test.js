@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { OFFLINE_MAX_PLAYERS } from '../src/config.js';
-import { createSetupScene } from '../src/scenes/setup.js';
+import { createSetupScene, savedColors } from '../src/scenes/setup.js';
 
 /** Minimalny element: tyle, ile używają h() i sceny. */
 function fakeElement(tag) {
@@ -55,4 +55,9 @@ test('ekran gry na jednym komputerze otwiera się i ma pola dla 1–4 graczy', (
     walk(shown);
     assert.equal(inputs.length, OFFLINE_MAX_PLAYERS);
   });
+});
+
+test('kolory graczy offline: zapamiętane bez powtórzeń, zły zapis z przeglądarki nie psuje gry', () => {
+  assert.deepEqual(savedColors(['#00E5FF', '#00E5FF', 'zły', null]), ['#00E5FF', '#FFD700', '#39FF14', '#FF9100']);
+  assert.equal(new Set(savedColors(undefined)).size, OFFLINE_MAX_PLAYERS);
 });

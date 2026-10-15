@@ -46,7 +46,7 @@ export function leaveOnline(app) {
 function startMatch(app, session, { seed, players }) {
   app.lateJoin = null;
   const me = players.findIndex((p) => p.id === session.lobby?.you);
-  app.players = players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.players = players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = createMatch(seed, players.length);
   app.controller = createOnlineController(app, session, me);
   app.scenes.go('countdown');
@@ -72,7 +72,7 @@ function tryLateStart(app, session) {
 
   app.lateJoin = null;
   const me = late.players.findIndex((p) => p.id === session.lobby?.you);
-  app.players = late.players.map((p, i) => ({ name: p.name, color: PLAYER_COLORS[i] }));
+  app.players = late.players.map((p, i) => ({ name: p.name, color: p.color ?? PLAYER_COLORS[i] }));
   app.match = match;
   app.controller = createOnlineController(app, session, me, late.players.map((p) => p.r));
   app.scenes.go('countdown');
@@ -101,7 +101,7 @@ export function createOnlineController(app, session, me, joinRounds) {
       else if (msg.t === 'joined') {
         // Nowy gracz w trakcie meczu: gra od rundy msg.r, do tego czasu nie ma węża
         lock.addPlayer(msg.r);
-        app.players.push({ name: msg.name, color: PLAYER_COLORS[msg.p] });
+        app.players.push({ name: msg.name, color: msg.color ?? PLAYER_COLORS[msg.p] });
         app.match.wins.push(0);
       }
     },

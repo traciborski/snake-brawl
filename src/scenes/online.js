@@ -2,7 +2,8 @@
 
 import { DEFAULT_NAMES, MAX_PLAYERS, NAME_MAX, PLAYER_COLORS, VIEW_W } from '../config.js';
 import { joinRoom, roomLink, roomsPage, serverUrl, showRoomInAddressBar } from '../net/client.js';
-import { PUBLIC_ROOMS, normalizeCode, randomCode } from '../net/protocol.js';
+import { PUBLIC_ROOMS, nextColor, normalizeCode, pickColor, randomCode } from '../net/protocol.js';
+import { paintSwatch, swatch } from '../ui/swatch.js';
 import { attachSession, leaveOnline } from '../modes/online.js';
 import { drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
@@ -35,6 +36,13 @@ export function createOnlineScene(app) {
       style: { width: '6em', textTransform: 'uppercase' },
     });
     const message = h('p', { className: 'hint error' }, error || (server ? '' : 'Serwer gry online nie jest jeszcze ustawiony.'));
+    // Wybrany kolor (gdy w pokoju ktoś już go ma, serwer da pierwszy wolny; w poczekalni można zmienić)
+    let color = pickColor(load('onlineColor', PLAYER_COLORS[0]), []);
+    const colorPick = swatch(color, () => {
+      color = nextColor(color, []);
+      paintSwatch(colorPick, color);
+      save('onlineColor', color);
+    });
 
     const go = async (create) => {
       if (busy || !server) return;
@@ -52,7 +60,7 @@ export function createOnlineScene(app) {
         let session = null;
         for (let i = 0; !session; i++) {
           try {
-            session = await joinRoom(server, create ? randomCode() : joinCode, playerName, create);
+            session = await joinRoom(server, create ? randomCode() : joinCode, playerName, create, color);
           } catch (err) {
             if (!(create && err.code === 'exists' && i < CREATE_ATTEMPTS)) throw err;
           }
@@ -83,7 +91,8 @@ export function createOnlineScene(app) {
       },
       h('h2', {}, inviteCode ? (PUBLIC_ROOMS.includes(inviteCode) ? `POKÓJ PUBLICZNY ${inviteCode}` : `ZAPROSZENIE DO POKOJU ${inviteCode}`) : 'GRA PRZEZ INTERNET'),
       inviteCode && h('p', { className: 'hint' }, 'Wpisz swoje imię i wciśnij Enter, żeby dołączyć.'),
-      h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), name),
+      h('div', { className: 'row' }, h('span', { style: { width: '7em' } }, 'Imię'), colorPick, name),
+      h('p', { className: 'hint' }, 'Kliknij kwadracik, żeby zmienić kolor węża.'),
       h(
         'div',
         { className: 'buttons' },
@@ -134,8 +143,15 @@ export function createOnlineScene(app) {
       h(
         'div',
         { className: 'row' },
-        h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
-        h('span', { style: { color: PLAYER_COLORS[i] } }, p.name),
+        // Własny kolor można zmienić w poczekalni (serwer pilnuje, żeby się nie powtarzał)
+        p.id === lobby.you && !playing
+          ? swatch(p.color, () => {
+              const next = nextColor(p.color, lobby.players.filter((o) => o.id !== p.id).map((o) => o.color));
+              save('onlineColor', next);
+              app.session?.send({ t: 'color', c: next });
+            })
+          : swatch(p.color ?? PLAYER_COLORS[i]),
+        h('span', { style: { color: p.color ?? PLAYER_COLORS[i] } }, p.name),
         h('small', {}, [p.id === lobby.host ? (lobby.public ? '★ gospodarz' : '★ założyciel') : '', p.id === lobby.you ? ' (Ty)' : ''].join('')),
       ),
     );

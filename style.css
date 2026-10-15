@@ -93,6 +93,19 @@ canvas {
     flex: none;
 }
 
+/* Klikalny kwadracik koloru (zmiana koloru węża) */
+.overlay button.swatch.pick {
+    padding: 0;
+    border: 2px solid #05060f;
+    outline: 2px solid #7a80a8;
+    cursor: pointer;
+}
+
+.overlay button.swatch.pick:hover,
+.overlay button.swatch.pick:focus {
+    outline-color: #e8ecff;
+}
+
 .overlay input {
     font: inherit;
     background: #090b1c;

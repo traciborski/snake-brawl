@@ -53,7 +53,7 @@ export async function fetchRooms() {
  * (np. { code: 'exists' | 'missing' | 'full' | 'playing' | 'network', msg }).
  * @returns {Promise<Session>}
  */
-export function joinRoom(baseUrl, code, name, create) {
+export function joinRoom(baseUrl, code, name, create, color = null) {
   return new Promise((resolve, reject) => {
     const networkError = { code: 'network', msg: 'Nie udało się połączyć z serwerem gry' };
     /** @type {WebSocket} */
@@ -82,7 +82,7 @@ export function joinRoom(baseUrl, code, name, create) {
       },
     };
 
-    ws.onopen = () => session.send({ t: 'hello', name, create });
+    ws.onopen = () => session.send({ t: 'hello', name, create, color });
     ws.onmessage = (e) => {
       let msg;
       try {

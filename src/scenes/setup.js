@@ -17,6 +17,8 @@ import { drawText } from '../render/text.js';
 import { h } from '../ui/dom.js';
 import { load, save } from '../ui/storage.js';
 import { createOfflineController } from '../modes/offline.js';
+import { nextColor, pickColor } from '../net/protocol.js';
+import { paintSwatch, swatch } from '../ui/swatch.js';
 
 const COUNT_HINTS = {
   1: 'Trening: sam na planszy, bez punktów. Zbieraj owoce, omijaj czerwone ściany.',
@@ -36,6 +38,13 @@ export function cleanName(raw, i) {
   return name || DEFAULT_NAMES[i];
 }
 
+/** Zapamiętane kolory graczy offline, bez powtórzeń (powtórzony dostaje pierwszy wolny). */
+export function savedColors(saved) {
+  const colors = [];
+  for (let i = 0; i < OFFLINE_MAX_PLAYERS; i++) colors.push(pickColor(saved?.[i] ?? PLAYER_COLORS[i], colors));
+  return colors;
+}
+
 /** @param {any} app */
 export function createSetupScene(app) {
   return {
@@ -47,16 +56,28 @@ export function createSetupScene(app) {
         h('input', { value: saved[i] ?? fallback, maxLength: NAME_MAX, placeholder: fallback, 'aria-label': `Imię gracza ${i + 1}` }),
       );
 
+      // Kolory: klik w kwadracik zmienia na następny, którego nie ma żaden inny gracz
+      const colors = savedColors(load('colors', PLAYER_COLORS));
+
       const start = (e) => {
         e.preventDefault();
         const names = inputs.slice(0, count).map((input, i) => cleanName(input.value, i));
         save('names', inputs.map((input, i) => cleanName(input.value, i)));
         save('offlinePlayers', count);
+        save('colors', colors.slice(0, count));
         app.controller = createOfflineController(app);
-        app.players = names.map((name, i) => ({ name, color: PLAYER_COLORS[i] }));
+        app.players = names.map((name, i) => ({ name, color: colors[i] }));
         app.match = createMatch(randomSeed(), names.length);
         app.scenes.go('countdown');
       };
+
+      // Zajęte są tylko kolory widocznych graczy (ukryci 3. i 4. gracz niczego nie blokują)
+      const swatches = colors.map((c, i) =>
+        swatch(c, () => {
+          colors[i] = nextColor(colors[i], colors.slice(0, count).filter((_, j) => j !== i));
+          paintSwatch(swatches[i], colors[i]);
+        }),
+      );
 
       const countButtons = [];
       for (let n = OFFLINE_MIN_PLAYERS; n <= OFFLINE_MAX_PLAYERS; n++) {
@@ -66,15 +87,21 @@ export function createSetupScene(app) {
         h(
           'div',
           { className: 'row' },
-          h('span', { className: 'swatch', style: { background: PLAYER_COLORS[i], boxShadow: `0 0 8px ${PLAYER_COLORS[i]}` } }),
+          swatches[i],
           input,
           h('small', {}, KEYMAPS[i].help),
         ),
       );
       const hint = h('p', { className: 'hint' });
+      const colorHint = h('p', { className: 'hint' }, 'Kliknij kwadracik, żeby zmienić kolor węża.');
 
       function setCount(n) {
         count = n;
+        // Nowo widoczny gracz z kolorem kogoś innego dostaje pierwszy wolny
+        for (let i = 0; i < n; i++) {
+          colors[i] = pickColor(colors[i], colors.slice(0, i));
+          paintSwatch(swatches[i], colors[i]);
+        }
         countButtons.forEach((b, i) => b.classList.toggle('selected', i + OFFLINE_MIN_PLAYERS === n));
         rows.forEach((row, i) => (row.hidden = i >= n));
         rows[0].querySelector('small').textContent = n === 1 ? SOLO_HELP : KEYMAPS[0].help;
@@ -96,6 +123,7 @@ export function createSetupScene(app) {
         h('h2', {}, 'GRACZE'),
         h('div', { className: 'row', style: { justifyContent: 'center' } }, h('span', {}, 'Ilu graczy?'), countButtons),
         rows,
+        colorHint,
         hint,
         h(
           'div',

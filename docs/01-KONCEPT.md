@@ -23,9 +23,14 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 ## 3. Gracze i sterowanie
 
 - Na starcie każdy gracz wpisuje imię (do 12 znaków). Gra je zapamiętuje.
-- Kolory graczy według kolejności: żółty `#FFD700`, cyjan `#00E5FF`, zielony `#39FF14`,
-  pomarańczowy `#FF9100`, a online jeszcze fioletowy `#B388FF` i biały `#FFFFFF`
-  (żaden nie myli się ze ścianami ani jedzeniem).
+- **Każdy wybiera kolor węża** obok imienia: kliknięcie w kwadracik zmienia kolor na następny,
+  którego nie ma nikt inny. Do wyboru 8 neonowych kolorów: żółty `#FFD700`, cyjan `#00E5FF`,
+  zielony `#39FF14`, pomarańczowy `#FF9100`, fioletowy `#B388FF`, biały `#FFFFFF`,
+  limonkowy `#C6FF00`, morski `#1DE9B6` (żaden nie myli się ze ścianami ani jedzeniem).
+  Domyślnie gracze mają je w tej kolejności. Gra pamięta wybór.
+- Online kolor wybiera się przy imieniu, a w poczekalni można go jeszcze zmienić (kliknięciem
+  w swój kwadracik). Serwer pilnuje, żeby się nie powtarzał: jeśli ktoś już ma wybrany kolor,
+  dostajesz pierwszy wolny. W trakcie meczu kolory się nie zmieniają.
 
 | Gracz (offline) | Ruch | Strzał | Miecz |
 |-----------------|------|--------|-------|
