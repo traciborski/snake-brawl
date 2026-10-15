@@ -114,7 +114,7 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 
 ## Krok 17: Miecz i pełny ekran na telefonie
 - [x] `game/sword.js`: wirowanie 8 ticków, koło o promieniu 3, głowa ginie, ogon odcięty, pociski zniszczone
-- [x] Klawisze miecza (E, prawy Shift, O, numpad ,), przycisk MIECZ na dotyku, `m` w protokole
+- [x] Klawisze miecza (lewy Shift / E, prawy Shift, O, numpad ,), przycisk MIECZ na dotyku, `m` w protokole
 - [x] Animacja ostrza, pasek gotowości w górnym pasku, dźwięk, napis „Cięcie mieczem”
 - [x] Pełny ekran przy puszczeniu palca (pointerup), manifest i tryb aplikacji na iPhonie
 - [x] Poprawka: ekran gry na jednym komputerze nie otwierał się po dodaniu imion dla 6 graczy

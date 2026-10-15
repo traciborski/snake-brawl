@@ -67,9 +67,9 @@ export const KEYMAPS = [
       left: ['KeyA'],
       right: ['KeyD'],
       shoot: ['Space'],
-      sword: ['KeyE'],
+      sword: ['ShiftLeft', 'KeyE'],
     },
-    help: 'W A S D  +  SPACJA  +  E',
+    help: 'W A S D  +  SPACJA  +  L. SHIFT',
   },
   {
     keys: {
@@ -106,7 +106,7 @@ export const KEYMAPS = [
   },
 ];
 /** Podpowiedź klawiszy w treningu (steruje się dowolnym zestawem). */
-export const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA  +  E';
+export const SOLO_HELP = 'W A S D / STRZAŁKI  +  SPACJA  +  SHIFT';
 
 // Adres serwera gry online, używany tylko, gdy gra jest otwarta z dysku (dwuklik w index.html),
 // np. 'wss://snake-brawl.twoje-konto.workers.dev'. Gra otwarta z Cloudflare albo z `npm start`

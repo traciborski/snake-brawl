@@ -34,7 +34,7 @@ rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wy
 
 | Gracz (offline) | Ruch | Strzał | Miecz |
 |-----------------|------|--------|-------|
-| 1 | `W A S D` | `Spacja` | `E` |
+| 1 | `W A S D` | `Spacja` | lewy `Shift` (albo `E`) |
 | 2 | strzałki | `Enter` | prawy `Shift` (albo prawy `Ctrl`) |
 | 3 | `I J K L` | `U` | `O` |
 | 4 | klawiatura numeryczna `8 4 5 6` (albo `2` w dół) | `0` | `,` (numpad) |

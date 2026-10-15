@@ -6,7 +6,7 @@ Mecz gramy do 3 wygranych.
 
 | Tryb | Sterowanie |
 |------|------------|
-| Jeden komputer, gracz 1 | `W A S D` + `Spacja` (strzał) + `E` (miecz) |
+| Jeden komputer, gracz 1 | `W A S D` + `Spacja` (strzał) + lewy `Shift` (miecz) |
 | Jeden komputer, gracz 2 | strzałki + `Enter` + prawy `Shift` |
 | Jeden komputer, gracz 3 | `I J K L` + `U` + `O` |
 | Jeden komputer, gracz 4 | numpad `8 4 5 6` + `0` + `,` |
