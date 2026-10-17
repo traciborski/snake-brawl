@@ -1,16 +1,19 @@
 import { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } from '../config.js';
 import { drawRoundView } from '../render/view.js';
 import { blink, dimScreen, drawPanel, drawScore, drawText } from '../render/text.js';
+import { actionButtons } from '../ui/dom.js';
 
 const MIN_TICKS = 1.5 * TICKS_PER_SECOND;
 
 /** @param {any} app */
 export function createMatchEndScene(app) {
   let ticks = 0;
+  let buttonsShown = false;
 
   return {
     enter() {
       ticks = 0;
+      buttonsShown = false;
       app.audio.play('win');
       app.effects.confetti(app.players[app.match.winner].color);
     },
@@ -20,9 +23,23 @@ export function createMatchEndScene(app) {
       if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
+      // Offline: przyciski rewanżu i menu (na telefonie nie ma Spacji); online wszyscy wracają sami
+      if (!app.controller.matchEndTicks && !buttonsShown && ticks >= MIN_TICKS) {
+        buttonsShown = true;
+        const { row, focus } = actionButtons([
+          { label: 'REWANŻ', onclick: () => app.controller.rematch() },
+          { label: 'MENU', onclick: () => app.controller.leave() },
+        ]);
+        app.overlay.show(row, { position: 'in-panel' });
+        focus();
+      }
       if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(app.players[app.match.winner].color);
       const auto = app.controller.matchEndTicks && ticks >= app.controller.matchEndTicks;
       if (auto || (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm))) app.controller.rematch();
+    },
+
+    exit() {
+      app.overlay.hide();
     },
 
     render() {
@@ -40,7 +57,7 @@ export function createMatchEndScene(app) {
 
       drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 40);
 
-      if (ticks >= MIN_TICKS && blink(time)) {
+      if (app.controller.matchEndTicks && ticks >= MIN_TICKS && blink(time)) {
         drawText(ctx, app.controller.rematchHint, VIEW_W / 2, cy + 110, { size: 12, color: COLORS.text });
       }
     },

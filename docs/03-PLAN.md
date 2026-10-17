@@ -140,6 +140,11 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
   3 komputerów z wejściem w środku rundy (ten sam stan u wszystkich).
   ✅ Sprawdzone w 3 przeglądarkach: trzecia osoba w grze 0,15 s po Enterze, w trakcie rundy.
 
+## Krok 21: Przyciski na końcu treningu i meczu
+- [x] Koniec próby: *Jeszcze raz* / *Menu*; koniec meczu offline: *Rewanż* / *Menu* (`actionButtons`)
+- [x] Odmiana „1 owoc / 2 owoce / 5 owoców”
+- **Testy:** przyciski po chwili i ich działanie (udawany DOM), odmiana. ✅ Sprawdzone w przeglądarce.
+
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną
 - [ ] Strzałki i Spacja nie przewijają strony

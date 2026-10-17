@@ -61,6 +61,12 @@ canvas {
     padding-bottom: calc(var(--u, 1px) * 70);
 }
 
+/* Przyciski na dole panelu z wynikiem (koniec próby, koniec meczu) */
+.overlay.in-panel {
+    align-items: flex-end;
+    padding-bottom: calc(var(--u, 1px) * 135);
+}
+
 .overlay > * {
     pointer-events: auto;
 }

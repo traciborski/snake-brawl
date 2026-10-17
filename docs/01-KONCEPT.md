@@ -63,10 +63,11 @@ do gry przez internet.
    - ostatni żywy wygrywa rundę;
    - jeśli ostatni odpadną w tym samym momencie, jest remis.
 5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
-   i rewanż jednym klawiszem.
+   z przyciskami *Rewanż* i *Menu* (albo Spacja / Esc), żeby dało się grać też na telefonie.
 6. **Trening** (offline, jeden gracz): sam wąż na planszy, bez rund i punktów. Próba trwa,
    dopóki wąż żyje (w pojedynkę zabija tylko czerwona ściana). Wynik to zjedzone owoce i czas,
-   gra pamięta rekord. Spacja zaczyna kolejną próbę na nowym labiryncie.
+   gra pamięta rekord. Przycisk *Jeszcze raz* (albo Spacja) zaczyna kolejną próbę na nowym
+   labiryncie, *Menu* (albo Esc) wraca do menu.
 
 ## 5. Zasady
 

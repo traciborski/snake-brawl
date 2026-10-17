@@ -28,7 +28,7 @@ export class Overlay {
 
   /**
    * @param {HTMLElement} content
-   * @param {{ position?: 'center' | 'low' }} [opts]
+   * @param {{ position?: 'center' | 'low' | 'in-panel' }} [opts]
    */
   show(content, { position = 'center' } = {}) {
     this.el.className = `overlay ${position}`;
@@ -43,4 +43,16 @@ export class Overlay {
     this.el.hidden = true;
     this.el.replaceChildren();
   }
+}
+
+/**
+ * Rząd przycisków na dole ekranu (koniec próby, koniec meczu): do kliknięcia myszą
+ * i stuknięcia palcem, bo na telefonie nie ma Spacji. Pierwszy przycisk ma fokus,
+ * więc Spacja i Enter dalej działają.
+ * @param {{ label: string, onclick: () => void }[]} actions
+ */
+export function actionButtons(actions) {
+  const buttons = actions.map(({ label, onclick }) => h('button', { type: 'button', onclick }, label));
+  const row = h('div', { className: 'buttons' }, buttons);
+  return { row, focus: () => buttons[0]?.focus() };
 }

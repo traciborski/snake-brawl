@@ -1197,7 +1197,7 @@ class Overlay {
 
   /**
    * @param {HTMLElement} content
-   * @param {{ position?: 'center' | 'low' }} [opts]
+   * @param {{ position?: 'center' | 'low' | 'in-panel' }} [opts]
    */
   show(content, { position = 'center' } = {}) {
     this.el.className = `overlay ${position}`;
@@ -1214,7 +1214,19 @@ class Overlay {
   }
 }
 
-Object.assign(__exports, { h, Overlay });
+/**
+ * Rząd przycisków na dole ekranu (koniec próby, koniec meczu): do kliknięcia myszą
+ * i stuknięcia palcem, bo na telefonie nie ma Spacji. Pierwszy przycisk ma fokus,
+ * więc Spacja i Enter dalej działają.
+ * @param {{ label: string, onclick: () => void }[]} actions
+ */
+function actionButtons(actions) {
+  const buttons = actions.map(({ label, onclick }) => h('button', { type: 'button', onclick }, label));
+  const row = h('div', { className: 'buttons' }, buttons);
+  return { row, focus: () => buttons[0]?.focus() };
+}
+
+Object.assign(__exports, { h, Overlay, actionButtons });
 };
 
 // ---- src/net/client.js ----
@@ -3856,6 +3868,7 @@ const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } = __requ
 const { recordRound } = __require("src/game/match.js");
 const { formatTime } = __require("src/render/hud.js");
 const { load, save } = __require("src/ui/storage.js");
+const { actionButtons } = __require("src/ui/dom.js");
 const { drawRoundView } = __require("src/render/view.js");
 const { blink, dimScreen, drawPanel, drawScore, drawText } = __require("src/render/text.js");
 
@@ -3876,6 +3889,14 @@ const SOLO_DEATH = {
   left: 'Koniec treningu',
 };
 
+/** „1 owoc”, „3 owoce”, „5 owoców” (polska odmiana). */
+function fruits(n) {
+  if (n === 1) return '1 owoc';
+  const last = n % 10;
+  const teen = n % 100 >= 12 && n % 100 <= 14;
+  return `${n} ${last >= 2 && last <= 4 && !teen ? 'owoce' : 'owoców'}`;
+}
+
 /**
  * Trening: wynik to zjedzone owoce, najlepszy zapamiętujemy w przeglądarce.
  * @param {import('../game/types.js').RoundState} round
@@ -3889,7 +3910,7 @@ function describeSolo(round) {
     title: record ? 'NOWY REKORD!' : 'KONIEC PRÓBY',
     subtitle: `OWOCE: ${snake.eaten}   CZAS: ${formatTime(round.tick)}`,
     color: record ? COLORS.food : COLORS.text,
-    detail: `${SOLO_DEATH[snake.death] ?? 'Wąż odpadł'} · rekord: ${Math.max(best, snake.eaten)} owoców`,
+    detail: `${SOLO_DEATH[snake.death] ?? 'Wąż odpadł'} · rekord: ${fruits(Math.max(best, snake.eaten))}`,
   };
 }
 
@@ -3916,6 +3937,7 @@ function createRoundEndScene(app) {
   let ticks = 0;
   let info = { title: '', subtitle: '', color: COLORS.text, detail: '' };
   let solo = false;
+  let buttonsShown = false;
 
   const next = () => {
     // Online: gdy w pokoju zostało mniej niż dwóch graczy, mecz kończy się powrotem do poczekalni
@@ -3930,6 +3952,7 @@ function createRoundEndScene(app) {
       recordRound(app.match, result);
       solo = app.round.snakes.length === 1;
       info = solo ? describeSolo(app.round) : describe(app.round, app.players);
+      buttonsShown = false;
       ticks = 0;
       if (app.match.winner === null) app.audio.play('round');
     },
@@ -3939,10 +3962,24 @@ function createRoundEndScene(app) {
       if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
+      // Trening: przyciski (telefon nie ma Spacji), dopiero po chwili, żeby nie stuknąć przypadkiem
+      if (solo && !buttonsShown && ticks >= MIN_TICKS) {
+        buttonsShown = true;
+        const { row, focus } = actionButtons([
+          { label: 'JESZCZE RAZ', onclick: () => next() },
+          { label: 'MENU', onclick: () => app.controller.leave() },
+        ]);
+        app.overlay.show(row, { position: 'in-panel' });
+        focus();
+      }
       // Online wszyscy przechodzą dalej po tym samym czasie, bez przeklikiwania
       const skip = app.controller.canSkip && ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm);
       // Trening czeka na gracza (żeby zdążył przeczytać wynik)
       if ((!solo && ticks >= AUTO_TICKS) || skip) next();
+    },
+
+    exit() {
+      app.overlay.hide();
     },
 
     render() {
@@ -3958,15 +3995,14 @@ function createRoundEndScene(app) {
       drawText(ctx, info.detail, VIEW_W / 2, cy + 5, { size: 10, color: COLORS.dim });
       if (!solo) drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 55);
 
-      if (app.controller.canSkip && ticks >= MIN_TICKS && blink(time)) {
-        const hint = solo ? 'SPACJA — kolejna próba    ESC — menu' : 'SPACJA — dalej';
-        drawText(ctx, hint, VIEW_W / 2, cy + 115, { size: 10, color: COLORS.text });
+      if (app.controller.canSkip && !solo && ticks >= MIN_TICKS && blink(time)) {
+        drawText(ctx, 'SPACJA — dalej', VIEW_W / 2, cy + 115, { size: 10, color: COLORS.text });
       }
     },
   };
 }
 
-Object.assign(__exports, { createRoundEndScene });
+Object.assign(__exports, { fruits, createRoundEndScene });
 };
 
 // ---- src/scenes/matchEnd.js ----
@@ -3974,16 +4010,19 @@ __factories["src/scenes/matchEnd.js"] = function (__exports) {
 const { BOARD_Y, CELL, COLORS, GRID_H, KEYS, TICKS_PER_SECOND, VIEW_W } = __require("src/config.js");
 const { drawRoundView } = __require("src/render/view.js");
 const { blink, dimScreen, drawPanel, drawScore, drawText } = __require("src/render/text.js");
+const { actionButtons } = __require("src/ui/dom.js");
 
 const MIN_TICKS = 1.5 * TICKS_PER_SECOND;
 
 /** @param {any} app */
 function createMatchEndScene(app) {
   let ticks = 0;
+  let buttonsShown = false;
 
   return {
     enter() {
       ticks = 0;
+      buttonsShown = false;
       app.audio.play('win');
       app.effects.confetti(app.players[app.match.winner].color);
     },
@@ -3993,9 +4032,23 @@ function createMatchEndScene(app) {
       if (k.consumePressed(KEYS.back)) return app.controller.leave();
       if (k.consumePressed(KEYS.mute)) app.audio.toggleMute();
       ticks++;
+      // Offline: przyciski rewanżu i menu (na telefonie nie ma Spacji); online wszyscy wracają sami
+      if (!app.controller.matchEndTicks && !buttonsShown && ticks >= MIN_TICKS) {
+        buttonsShown = true;
+        const { row, focus } = actionButtons([
+          { label: 'REWANŻ', onclick: () => app.controller.rematch() },
+          { label: 'MENU', onclick: () => app.controller.leave() },
+        ]);
+        app.overlay.show(row, { position: 'in-panel' });
+        focus();
+      }
       if (ticks % (2 * TICKS_PER_SECOND) === 0) app.effects.confetti(app.players[app.match.winner].color);
       const auto = app.controller.matchEndTicks && ticks >= app.controller.matchEndTicks;
       if (auto || (ticks >= MIN_TICKS && k.consumePressed(KEYS.confirm))) app.controller.rematch();
+    },
+
+    exit() {
+      app.overlay.hide();
     },
 
     render() {
@@ -4013,7 +4066,7 @@ function createMatchEndScene(app) {
 
       drawScore(ctx, app.match.wins, app.players, VIEW_W / 2, cy + 40);
 
-      if (ticks >= MIN_TICKS && blink(time)) {
+      if (app.controller.matchEndTicks && ticks >= MIN_TICKS && blink(time)) {
         drawText(ctx, app.controller.rematchHint, VIEW_W / 2, cy + 110, { size: 12, color: COLORS.text });
       }
     },
