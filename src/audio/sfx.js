@@ -134,6 +134,8 @@ export class Sfx {
       swordSwing: 'sword',
       bulletWarp: 'warp',
       died: 'die',
+      crateExploded: 'die',
+      ammoCollected: 'eat',
     };
     // Ten sam dźwięk najwyżej raz na tick
     const names = new Set(events.map((e) => SOUND[e.type]).filter(Boolean));

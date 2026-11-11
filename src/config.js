@@ -31,6 +31,8 @@ export const SWORD_TICKS = 8; // ok. 0,45 s wirowania
 export const SWORD_COOLDOWN = 72; // ok. 4 s od wciśnięcia do następnego cięcia
 export const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 export const FOOD_COUNT = 3;
+export const CRATE_RADIUS = 2;
+export const CRATE_AMMO = 10;
 export const WINS_TO_MATCH = 3;
 export const MAZE_DENSITY = 0.08;
 // Udział rodzajów ścian w labiryncie: najwięcej czarnych, najmniej niebieskich

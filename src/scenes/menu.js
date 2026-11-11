@@ -76,6 +76,7 @@ export function createMenuScene(app) {
       drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 225, { size: 10, color: COLORS.text });
       drawText(ctx, 'Strzał w głowę eliminuje. Trafiony ogon odpada.', VIEW_W / 2, 250, { size: 10, color: COLORS.dim });
       drawText(ctx, '1 segment ogona = 10 strzałów. Własne pociski są niegroźne.', VIEW_W / 2, 272, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Skrzynka: strzał lub wjazd = wybuch 5×5. Łup: +10 AMMO.', VIEW_W / 2, 294, { size: 10, color: COLORS.dim });
 
       if (blink(time, 1600)) {
         drawText(ctx, 'wybierz tryb gry', VIEW_W / 2, 330, { size: 10, color: COLORS.dim });

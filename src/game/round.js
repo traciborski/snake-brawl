@@ -4,6 +4,7 @@
 import { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } from '../config.js';
 import { createRng } from '../core/rng.js';
 import { fire, moveBullets } from './bullets.js';
+import { collectAmmo, explodeCrate, refillCrate } from './crates.js';
 import { eatFood, refillFood } from './food.js';
 import { cellIndex, passThrough, samePos, step, wrap } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
@@ -38,11 +39,14 @@ export function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
+    crate: null,
+    ammoPickups: [],
     // Przy 5–6 wężach trochę więcej owoców
     foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);
+  refillCrate(state);
   return state;
 }
 
@@ -55,6 +59,7 @@ export function addSnake(state, id) {
   const spawns = spawnPoints(state.grid, START_LENGTH);
   const taken = new Set();
   for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
+  if (state.crate) taken.add(cellIndex(state.grid, state.crate));
   const free = (spawn) => {
     let p = spawn.body[0];
     const cells = [...spawn.body];
@@ -68,7 +73,7 @@ export function addSnake(state, id) {
 
 /**
  * Kopia stanu rundy do przewidywania (gra online): wszystko, co zmienia stepRound, jest nowe.
- * Labirynt i wymiary planszy w trakcie rundy się nie zmieniają, więc są wspólne.
+ * Wymiary są wspólne; wybuch zastępuje tablicę ścian, zamiast zmieniać współdzieloną.
  * @param {RoundState} s @returns {RoundState}
  */
 export function cloneRound(s) {
@@ -78,6 +83,8 @@ export function cloneRound(s) {
     snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
     bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
     food: s.food.map((p) => ({ ...p })),
+    crate: s.crate ? { ...s.crate } : null,
+    ammoPickups: s.ammoPickups.map((p) => ({ ...p })),
     result: s.result ? { ...s.result } : null,
   };
 }
@@ -115,13 +122,18 @@ export function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
+  if (state.crate && state.snakes.some((s) => samePos(s.body[0], state.crate))) {
+    explodeCrate(state, null, events);
+  }
 
   // 5b. Miecze tną wokół głów (już po ruchu)
   applySwords(state, events);
 
   // 6. Jedzenie
   eatFood(state, events);
+  collectAmmo(state, events);
   refillFood(state);
+  refillCrate(state);
 
   // 7. Koniec rundy
   checkRoundEnd(state, events);

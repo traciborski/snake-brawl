@@ -66,7 +66,7 @@ export function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' | 'explosion'} cause */
 export function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;
@@ -76,7 +76,7 @@ export function kill(snake, cause, by, events) {
 /**
  * Trafienie pociskiem w segment o indeksie `index`.
  * Głowa → śmierć, ciało → odcięcie ogona od trafionego segmentu.
- * @param {Snake} snake @param {number} index @param {number} by @param {GameEvent[]} events
+ * @param {Snake} snake @param {number} index @param {number | null} by @param {GameEvent[]} events
  */
 export function applyHit(snake, index, by, events) {
   if (index === 0) {

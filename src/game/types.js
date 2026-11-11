@@ -17,7 +17,7 @@
  * @property {number} swordCooldown  ticki do kolejnego cięcia mieczem
  * @property {number} ammo       strzały z już „zjedzonego” segmentu
  * @property {boolean} alive
- * @property {null | 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} death   przyczyna śmierci
+ * @property {null | 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' | 'explosion'} death   przyczyna śmierci
  *   (crash = zderzenie głowami, body = wjazd w rywala, sword = cięcie mieczem, left = rozłączenie online)
  */
 
@@ -34,6 +34,8 @@
  * @property {Snake[]} snakes
  * @property {Bullet[]} bullets
  * @property {Pos[]} food
+ * @property {Pos | null} crate
+ * @property {Pos[]} ammoPickups
  * @property {number} foodCount
  * @property {RoundResult | null} result
  */
@@ -49,11 +51,13 @@
  *   { type: 'bulletBounce', pos: Pos } |
  *   { type: 'bulletWarp', pos: Pos } |
  *   { type: 'swordSwing', snake: number, pos: Pos } |
- *   { type: 'bodyHit', snake: number, by: number, cells: Pos[] } |
+ *   { type: 'bodyHit', snake: number, by: number | null, cells: Pos[] } |
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |
  *   { type: 'ate', snake: number, pos: Pos } |
- *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' } |
+ *   { type: 'crateExploded', pos: Pos, cells: Pos[] } |
+ *   { type: 'ammoCollected', snake: number, pos: Pos } |
+ *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' | 'explosion' } |
  *   { type: 'roundOver', result: RoundResult }
  * )} GameEvent
  */

@@ -91,6 +91,41 @@ export function drawFood(ctx, round, time) {
   ctx.restore();
 }
 
+/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
+export function drawCrates(ctx, round) {
+  ctx.save();
+  if (round.crate) {
+    const x = px(round.crate);
+    const y = py(round.crate);
+    ctx.shadowColor = '#ff9100';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ff9100';
+    ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#60320b';
+    ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
+    ctx.strokeStyle = '#ffcc66';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y + 4);
+    ctx.lineTo(x + CELL - 4, y + CELL - 4);
+    ctx.moveTo(x + CELL - 4, y + 4);
+    ctx.lineTo(x + 4, y + CELL - 4);
+    ctx.stroke();
+  }
+  for (const p of round.ammoPickups) {
+    const x = px(p);
+    const y = py(p);
+    ctx.shadowColor = '#39ff14';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#164a18';
+    ctx.fillRect(x + 2, y + 3, CELL - 4, CELL - 6);
+    ctx.fillStyle = '#baff80';
+    for (let i = 0; i < 3; i++) ctx.fillRect(x + 5 + i * 4, y + 6, 2, 8);
+  }
+  ctx.restore();
+}
+
 /**
  * Wirujący miecz wokół głowy: koło zasięgu i dwa ostrza obracające się w trakcie cięcia.
  * @param {CanvasRenderingContext2D} ctx @param {Snake} snake @param {string} color @param {number} alpha część ticka (płynny obrót)

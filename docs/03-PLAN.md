@@ -6,6 +6,12 @@
 
 Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądarce.
 
+## Rozszerzenie: wybuchowe skrzynki
+- [x] Jedna skrzynka, detonacja pociskiem lub wjazdem głowy, odtworzenie na wolnym polu
+- [x] Wybuch 5×5 niszczy ściany i obiekty, zabija głowy i odcina ogony także strzelającego
+- [x] Paczka +10 amunicji, grafika, efekty, dźwięk i izolacja stanu przewidywanego online
+- **Testy:** detonacja, zasięg i krawędzie, odtwarzanie skrzynki, zbieranie, rollback.
+
 ## Krok 0: Szkielet projektu
 - [x] `package.json` (`npm start`, `npm test`), `scripts/serve.js`
 - [x] Nowy `index.html` z jednym `<canvas>`, nowy `style.css`

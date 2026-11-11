@@ -7,7 +7,7 @@
 
 Arcade'owa walka węży, w 1–4 osoby na jednej klawiaturze albo w 2–6 osób przez internet:
 rośniesz, zjadając jedzenie, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni
-żywy wąż (strzał w głowę i czerwona ściana eliminują).
+żywy wąż (strzał w głowę, czerwona ściana i wybuch skrzynki przy głowie eliminują).
 
 ## 2. Ustalenia
 
@@ -59,13 +59,14 @@ do gry przez internet.
    piąty i szósty (online) na środku lewego i prawego boku; długość 3.
 3. **Runda** nie ma limitu czasu: trwa, aż zostanie najwyżej jeden żywy wąż.
 4. **Wynik rundy**:
-   - wąż ginie od strzału w głowę albo czerwonej ściany i dalej tylko ogląda;
+   - wąż ginie od strzału lub miecza w głowę, czerwonej ściany, zderzenia albo wybuchu
+     skrzynki przy głowie i dalej tylko ogląda;
    - ostatni żywy wygrywa rundę;
    - jeśli ostatni odpadną w tym samym momencie, jest remis.
 5. **Mecz** gramy do 3 wygranych rund (remis nie daje punktu). Potem ekran zwycięzcy
    z przyciskami *Rewanż* i *Menu* (albo Spacja / Esc), żeby dało się grać też na telefonie.
 6. **Trening** (offline, jeden gracz): sam wąż na planszy, bez rund i punktów. Próba trwa,
-   dopóki wąż żyje (w pojedynkę zabija tylko czerwona ściana). Wynik to zjedzone owoce i czas,
+   dopóki wąż żyje (zabija czerwona ściana albo wybuch skrzynki). Wynik to zjedzone owoce i czas,
    gra pamięta rekord. Przycisk *Jeszcze raz* (albo Spacja) zaczyna kolejną próbę na nowym
    labiryncie, *Menu* (albo Esc) wraca do menu.
 
@@ -100,8 +101,22 @@ do gry przez internet.
   a niebieska i krawędź planszy przenoszą na drugą stronę. Odbity pocisk może wrócić i trafić
   rywala (strzelającego przelatuje bez szkody).
 - Pocisk ma **zasięg jednej szerokości planszy** (48 pól) i znika po **3 odbiciach**, żeby nie latał w kółko.
-- Ściany są niezniszczalne.
+- Pociski nie niszczą ścian; może je zniszczyć wybuch skrzynki.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
+
+**Wybuchowe skrzynki i amunicja**
+- Na planszy jest **jedna skrzynka**. Po jej zniszczeniu na końcu ticka pojawia się następna,
+  na losowym wolnym polu, nie tuż przed jadącym wężem. Jeśli nie ma miejsca, czeka na wolne pole.
+- Skrzynkę detonuje **trafienie pociskiem albo wjazd głową węża**. Miecz jej nie niszczy.
+- Wybuch niszczy wszystko w **kwadracie 5×5 pól** (po 2 pola od skrzynki w każdą stronę,
+  także narożniki). Przy krawędzi jest przycięty do planszy, nie przechodzi na drugą stronę.
+- Niszczy wszystkie rodzaje ścian, owoce, amunicję i pociski w zasięgu. Owoce są potem uzupełniane.
+  Ściany nie osłaniają przed wybuchem; zniszczenie portalu nie niszczy jego odległej bliźniaczki.
+- Głowa w zasięgu oznacza śmierć, ciało — odcięcie ogona od pierwszego trafionego segmentu.
+  **Strzelający nie jest chroniony** przed własnym wybuchem; możliwy jest remis.
+- Po wybuchu na miejscu skrzynki zostaje **jedna paczka amunicji**. Zebranie głową daje
+  **+10 strzałów**, bez skracania węża i bez zmiany jego długości. Paczki zostają do zebrania
+  albo zniszczenia kolejnym wybuchem; pociski i miecz ich nie niszczą.
 
 **Miecz (atak z bliska)**
 - Drugi przycisk ataku. Po wciśnięciu wokół głowy wiruje ostrze przez ok. 0,45 s i tnie wszystko

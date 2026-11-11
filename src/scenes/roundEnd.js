@@ -16,11 +16,13 @@ const DEATH = {
   crash: 'Zderzenie głowami',
   sword: 'Cięcie mieczem',
   left: 'Rywal wyszedł z gry',
+  explosion: 'Wybuch skrzynki',
 };
 
 const SOLO_DEATH = {
   wall: 'Czerwona ściana',
   left: 'Koniec treningu',
+  explosion: 'Wybuch skrzynki',
 };
 
 /** „1 owoc”, „3 owoce”, „5 owoców” (polska odmiana). */

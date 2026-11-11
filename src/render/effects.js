@@ -50,6 +50,14 @@ export class Effects {
     const color = (id) => players[id].color;
     for (const e of events) {
       switch (e.type) {
+        case 'crateExploded':
+          for (const p of e.cells) this.burstAt(p, '#ff9100', 4, 90, 0.4, 8);
+          this.burstAt(e.pos, '#ffffff', 30, 240, 0.55, 5);
+          this.addShake(14);
+          break;
+        case 'ammoCollected':
+          this.burstAt(e.pos, '#baff80', 14, 100, 0.4, 3);
+          break;
         case 'shot':
           this.burstAt(e.pos, color(e.snake), 6, 80, 0.2, 3);
           break;

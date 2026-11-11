@@ -1,5 +1,5 @@
-// Plansza: tło, kropki kratki, ramka i ściany. Ściany się nie zmieniają w trakcie
-// rundy, więc rysujemy je raz do warstwy off-screen (poświata jest kosztowna).
+// Plansza: tło, kropki kratki, ramka i ściany. Warstwę off-screen odświeżamy
+// po zmianie tablicy ścian (wybuch skrzynki), bo poświata jest kosztowna.
 
 import { BOARD_Y, CELL, COLORS, GRID_H, GRID_W } from '../config.js';
 

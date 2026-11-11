@@ -166,6 +166,8 @@ const SWORD_TICKS = 8; // ok. 0,45 s wirowania
 const SWORD_COOLDOWN = 72; // ok. 4 s od wciśnięcia do następnego cięcia
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 const FOOD_COUNT = 3;
+const CRATE_RADIUS = 2;
+const CRATE_AMMO = 10;
 const WINS_TO_MATCH = 3;
 const MAZE_DENSITY = 0.08;
 // Udział rodzajów ścian w labiryncie: najwięcej czarnych, najmniej niebieskich
@@ -276,7 +278,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, CRATE_RADIUS, CRATE_AMMO, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -782,6 +784,8 @@ class Sfx {
       swordSwing: 'sword',
       bulletWarp: 'warp',
       died: 'die',
+      crateExploded: 'die',
+      ammoCollected: 'eat',
     };
     // Ten sam dźwięk najwyżej raz na tick
     const names = new Set(events.map((e) => SOUND[e.type]).filter(Boolean));
@@ -846,6 +850,14 @@ class Effects {
     const color = (id) => players[id].color;
     for (const e of events) {
       switch (e.type) {
+        case 'crateExploded':
+          for (const p of e.cells) this.burstAt(p, '#ff9100', 4, 90, 0.4, 8);
+          this.burstAt(e.pos, '#ffffff', 30, 240, 0.55, 5);
+          this.addShake(14);
+          break;
+        case 'ammoCollected':
+          this.burstAt(e.pos, '#baff80', 14, 100, 0.4, 3);
+          break;
         case 'shot':
           this.burstAt(e.pos, color(e.snake), 6, 80, 0.2, 3);
           break;
@@ -1052,6 +1064,7 @@ function createMenuScene(app) {
       drawText(ctx, 'CZERWONA zabija   CZARNA odbija   NIEBIESKA przenosi', VIEW_W / 2, 225, { size: 10, color: COLORS.text });
       drawText(ctx, 'Strzał w głowę eliminuje. Trafiony ogon odpada.', VIEW_W / 2, 250, { size: 10, color: COLORS.dim });
       drawText(ctx, '1 segment ogona = 10 strzałów. Własne pociski są niegroźne.', VIEW_W / 2, 272, { size: 10, color: COLORS.dim });
+      drawText(ctx, 'Skrzynka: strzał lub wjazd = wybuch 5×5. Łup: +10 AMMO.', VIEW_W / 2, 294, { size: 10, color: COLORS.dim });
 
       if (blink(time, 1600)) {
         drawText(ctx, 'wybierz tryb gry', VIEW_W / 2, 330, { size: 10, color: COLORS.dim });
@@ -2203,6 +2216,7 @@ __factories["src/game/round.js"] = function (__exports) {
 const { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } = __require("src/config.js");
 const { createRng } = __require("src/core/rng.js");
 const { fire, moveBullets } = __require("src/game/bullets.js");
+const { collectAmmo, explodeCrate, refillCrate } = __require("src/game/crates.js");
 const { eatFood, refillFood } = __require("src/game/food.js");
 const { cellIndex, passThrough, samePos, step, wrap } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
@@ -2237,11 +2251,14 @@ function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
+    crate: null,
+    ammoPickups: [],
     // Przy 5–6 wężach trochę więcej owoców
     foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);
+  refillCrate(state);
   return state;
 }
 
@@ -2254,6 +2271,7 @@ function addSnake(state, id) {
   const spawns = spawnPoints(state.grid, START_LENGTH);
   const taken = new Set();
   for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
+  if (state.crate) taken.add(cellIndex(state.grid, state.crate));
   const free = (spawn) => {
     let p = spawn.body[0];
     const cells = [...spawn.body];
@@ -2267,7 +2285,7 @@ function addSnake(state, id) {
 
 /**
  * Kopia stanu rundy do przewidywania (gra online): wszystko, co zmienia stepRound, jest nowe.
- * Labirynt i wymiary planszy w trakcie rundy się nie zmieniają, więc są wspólne.
+ * Wymiary są wspólne; wybuch zastępuje tablicę ścian, zamiast zmieniać współdzieloną.
  * @param {RoundState} s @returns {RoundState}
  */
 function cloneRound(s) {
@@ -2277,6 +2295,8 @@ function cloneRound(s) {
     snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
     bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
     food: s.food.map((p) => ({ ...p })),
+    crate: s.crate ? { ...s.crate } : null,
+    ammoPickups: s.ammoPickups.map((p) => ({ ...p })),
     result: s.result ? { ...s.result } : null,
   };
 }
@@ -2314,13 +2334,18 @@ function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
+  if (state.crate && state.snakes.some((s) => samePos(s.body[0], state.crate))) {
+    explodeCrate(state, null, events);
+  }
 
   // 5b. Miecze tną wokół głów (już po ruchu)
   applySwords(state, events);
 
   // 6. Jedzenie
   eatFood(state, events);
+  collectAmmo(state, events);
   refillFood(state);
+  refillCrate(state);
 
   // 7. Koniec rundy
   checkRoundEnd(state, events);
@@ -2437,6 +2462,7 @@ __factories["src/game/bullets.js"] = function (__exports) {
 const { BULLET_CELLS, BULLET_MAX_BOUNCES, BULLET_PER_TICKS, BULLET_RANGE, SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } = __require("src/config.js");
 const { OPPOSITE, cellIndex, passThrough, samePos } = __require("src/game/grid.js");
 const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
+const { explodeCrate } = __require("src/game/crates.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Snake} Snake */
@@ -2475,6 +2501,7 @@ function fire(state, snake, events) {
     return true;
   }
   applyMove(bullet, first, events);
+  if (bulletHitsCrate(state, bullet, events)) return true;
   const other = state.bullets.findIndex((b) => samePos(b.pos, bullet.pos));
   if (other >= 0) {
     state.bullets.splice(other, 1);
@@ -2498,6 +2525,12 @@ function bulletHitsSnake(state, bullet, events) {
     return true;
   }
   return false;
+}
+
+function bulletHitsCrate(state, bullet, events) {
+  if (!state.crate || !samePos(state.crate, bullet.pos)) return false;
+  explodeCrate(state, bullet.owner, events);
+  return true;
 }
 
 /** Przesuwa pociski o tyle pól, ile wypada w tym ticku, sprawdzając kolizje po każdym polu. */
@@ -2566,6 +2599,7 @@ function stepBullets(state, events) {
       if (gone.has(a.b) || gone.has(c.b)) continue;
       const meet = samePos(a.to, c.to);
       const cross = samePos(a.to, c.from) && samePos(c.to, a.from);
+      if (meet && state.crate && samePos(a.to, state.crate)) continue;
       if (meet || cross) {
         events.push({ type: 'bulletClash', pos: a.to });
         gone.add(a.b);
@@ -2576,7 +2610,10 @@ function stepBullets(state, events) {
 
   for (const m of moves) if (!gone.has(m.b)) applyMove(m.b, m.move, events);
   for (const m of moves) {
-    if (!gone.has(m.b) && bulletHitsSnake(state, m.b, events)) gone.add(m.b);
+    if (!gone.has(m.b) && state.bullets.includes(m.b) && bulletHitsCrate(state, m.b, events)) gone.add(m.b);
+  }
+  for (const m of moves) {
+    if (!gone.has(m.b) && state.bullets.includes(m.b) && bulletHitsSnake(state, m.b, events)) gone.add(m.b);
   }
   state.bullets = state.bullets.filter((b) => !gone.has(b));
 }
@@ -2748,7 +2785,7 @@ function bounce(snake, grid) {
   snake.dir = dirBetween(grid, snake.body[1], snake.body[0]) ?? OPPOSITE[snake.dir];
 }
 
-/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left'} cause */
+/** Śmierć węża. @param {Snake} snake @param {'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' | 'explosion'} cause */
 function kill(snake, cause, by, events) {
   snake.alive = false;
   snake.death = cause;
@@ -2758,7 +2795,7 @@ function kill(snake, cause, by, events) {
 /**
  * Trafienie pociskiem w segment o indeksie `index`.
  * Głowa → śmierć, ciało → odcięcie ogona od trafionego segmentu.
- * @param {Snake} snake @param {number} index @param {number} by @param {GameEvent[]} events
+ * @param {Snake} snake @param {number} index @param {number | null} by @param {GameEvent[]} events
  */
 function applyHit(snake, index, by, events) {
   if (index === 0) {
@@ -2775,6 +2812,90 @@ function segmentAt(snake, pos) {
 }
 
 Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers, canShoot, bounce, kill, applyHit, segmentAt });
+};
+
+// ---- src/game/crates.js ----
+__factories["src/game/crates.js"] = function (__exports) {
+// Jedna wybuchowa skrzynka na planszy i amunicja pozostająca po wybuchu.
+
+const { CRATE_AMMO, CRATE_RADIUS, WALL } = __require("src/config.js");
+const { randInt } = __require("src/core/rng.js");
+const { cellIndex, samePos, step, wrap } = __require("src/game/grid.js");
+const { applyHit, kill } = __require("src/game/snake.js");
+
+/** @param {import('./types.js').RoundState} state */
+function refillCrate(state) {
+  if (state.crate) return;
+  const taken = new Uint8Array(state.walls);
+  const mark = (p) => { taken[cellIndex(state.grid, p)] = 1; };
+  for (const snake of state.snakes) {
+    snake.body.forEach(mark);
+    // Nowa skrzynka nie pojawia się tuż przed jadącym wężem.
+    if (snake.alive) {
+      let p = snake.body[0];
+      for (let i = 0; i <= CRATE_RADIUS; i++) {
+        p = wrap(state.grid, step(p, snake.dir));
+        mark(p);
+      }
+    }
+  }
+  state.food.forEach(mark);
+  state.ammoPickups.forEach(mark);
+  state.bullets.forEach((b) => mark(b.pos));
+  const free = [];
+  for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
+  if (!free.length) return;
+  const i = free[randInt(state.rng, free.length)];
+  state.crate = { x: i % state.grid.w, y: Math.floor(i / state.grid.w) };
+}
+
+/**
+ * Wybuch obejmuje kwadrat 5×5, przy krawędzi przycięty do planszy.
+ * Ściany zastępujemy nową tablicą: kopie rollbacku i cache renderera zachowują swój labirynt.
+ * @param {import('./types.js').RoundState} state
+ * @param {number | null} by
+ * @param {import('./types.js').GameEvent[]} events
+ */
+function explodeCrate(state, by, events) {
+  if (!state.crate) return;
+  const pos = state.crate;
+  state.crate = null;
+  const inside = (p) => Math.abs(p.x - pos.x) <= CRATE_RADIUS && Math.abs(p.y - pos.y) <= CRATE_RADIUS;
+  const cells = [];
+  state.walls = new Uint8Array(state.walls);
+  for (let y = Math.max(0, pos.y - CRATE_RADIUS); y <= Math.min(state.grid.h - 1, pos.y + CRATE_RADIUS); y++) {
+    for (let x = Math.max(0, pos.x - CRATE_RADIUS); x <= Math.min(state.grid.w - 1, pos.x + CRATE_RADIUS); x++) {
+      const p = { x, y };
+      cells.push(p);
+      state.walls[cellIndex(state.grid, p)] = WALL.NONE;
+    }
+  }
+  state.bullets = state.bullets.filter((b) => !inside(b.pos));
+  state.food = state.food.filter((p) => !inside(p));
+  state.ammoPickups = state.ammoPickups.filter((p) => !inside(p));
+  events.push({ type: 'crateExploded', pos, cells });
+  for (const snake of state.snakes) {
+    if (!snake.alive) continue;
+    const index = snake.body.findIndex(inside);
+    if (index === 0) kill(snake, 'explosion', by, events);
+    else if (index > 0) applyHit(snake, index, by, events);
+  }
+  state.ammoPickups.push({ ...pos });
+}
+
+/** @param {import('./types.js').RoundState} state @param {import('./types.js').GameEvent[]} events */
+function collectAmmo(state, events) {
+  for (const snake of state.snakes) {
+    if (!snake.alive) continue;
+    const i = state.ammoPickups.findIndex((p) => samePos(p, snake.body[0]));
+    if (i < 0) continue;
+    const [pos] = state.ammoPickups.splice(i, 1);
+    snake.ammo += CRATE_AMMO;
+    events.push({ type: 'ammoCollected', snake: snake.id, pos });
+  }
+}
+
+Object.assign(__exports, { refillCrate, explodeCrate, collectAmmo });
 };
 
 // ---- src/game/food.js ----
@@ -2799,6 +2920,8 @@ function refillFood(state) {
   state.snakes.forEach((s) => s.body.forEach(mark));
   state.bullets.forEach((b) => mark(b.pos));
   state.food.forEach(mark);
+  if (state.crate) mark(state.crate);
+  state.ammoPickups.forEach(mark);
 
   const free = [];
   for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
@@ -3429,7 +3552,7 @@ __factories["src/render/view.js"] = function (__exports) {
 // Widok rundy: plansza + obiekty + efekty + HUD. Wspólny dla odliczania, gry i wyników.
 
 const { drawBoard } = __require("src/render/board.js");
-const { drawBullets, drawFood, drawSnake, drawSword } = __require("src/render/entities.js");
+const { drawBullets, drawCrates, drawFood, drawSnake, drawSword } = __require("src/render/entities.js");
 const { drawHud } = __require("src/render/hud.js");
 
 /**
@@ -3447,6 +3570,7 @@ function drawRoundView(app, time) {
   effects.applyShake(ctx);
   drawBoard(ctx, round, renderer.scale);
   drawFood(ctx, round, time);
+  drawCrates(ctx, round);
   for (const snake of round.snakes) drawSnake(ctx, snake, players[snake.id].color);
   for (const snake of round.snakes) drawSword(ctx, snake, players[snake.id].color, app.alpha ?? 0);
   drawBullets(ctx, round, players);
@@ -3461,8 +3585,8 @@ Object.assign(__exports, { drawRoundView });
 
 // ---- src/render/board.js ----
 __factories["src/render/board.js"] = function (__exports) {
-// Plansza: tło, kropki kratki, ramka i ściany. Ściany się nie zmieniają w trakcie
-// rundy, więc rysujemy je raz do warstwy off-screen (poświata jest kosztowna).
+// Plansza: tło, kropki kratki, ramka i ściany. Warstwę off-screen odświeżamy
+// po zmianie tablicy ścian (wybuch skrzynki), bo poświata jest kosztowna.
 
 const { BOARD_Y, CELL, COLORS, GRID_H, GRID_W } = __require("src/config.js");
 
@@ -3630,6 +3754,41 @@ function drawFood(ctx, round, time) {
   ctx.restore();
 }
 
+/** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
+function drawCrates(ctx, round) {
+  ctx.save();
+  if (round.crate) {
+    const x = px(round.crate);
+    const y = py(round.crate);
+    ctx.shadowColor = '#ff9100';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ff9100';
+    ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#60320b';
+    ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
+    ctx.strokeStyle = '#ffcc66';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y + 4);
+    ctx.lineTo(x + CELL - 4, y + CELL - 4);
+    ctx.moveTo(x + CELL - 4, y + 4);
+    ctx.lineTo(x + 4, y + CELL - 4);
+    ctx.stroke();
+  }
+  for (const p of round.ammoPickups) {
+    const x = px(p);
+    const y = py(p);
+    ctx.shadowColor = '#39ff14';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#164a18';
+    ctx.fillRect(x + 2, y + 3, CELL - 4, CELL - 6);
+    ctx.fillStyle = '#baff80';
+    for (let i = 0; i < 3; i++) ctx.fillRect(x + 5 + i * 4, y + 6, 2, 8);
+  }
+  ctx.restore();
+}
+
 /**
  * Wirujący miecz wokół głowy: koło zasięgu i dwa ostrza obracające się w trakcie cięcia.
  * @param {CanvasRenderingContext2D} ctx @param {Snake} snake @param {string} color @param {number} alpha część ticka (płynny obrót)
@@ -3679,7 +3838,7 @@ function drawSword(ctx, snake, color, alpha = 0) {
   ctx.restore();
 }
 
-Object.assign(__exports, { drawSnake, drawBullets, drawFood, drawSword });
+Object.assign(__exports, { drawSnake, drawBullets, drawFood, drawCrates, drawSword });
 };
 
 // ---- src/render/hud.js ----
@@ -3882,11 +4041,13 @@ const DEATH = {
   crash: 'Zderzenie głowami',
   sword: 'Cięcie mieczem',
   left: 'Rywal wyszedł z gry',
+  explosion: 'Wybuch skrzynki',
 };
 
 const SOLO_DEATH = {
   wall: 'Czerwona ściana',
   left: 'Koniec treningu',
+  explosion: 'Wybuch skrzynki',
 };
 
 /** „1 owoc”, „3 owoce”, „5 owoców” (polska odmiana). */
