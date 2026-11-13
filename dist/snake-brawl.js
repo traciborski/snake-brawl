@@ -167,6 +167,8 @@ const SWORD_COOLDOWN = 72; // ok. 4 s od wciśnięcia do następnego cięcia
 const COUNTDOWN_TICKS = 3 * TICKS_PER_SECOND;
 const FOOD_COUNT = 3;
 const CRATE_RADIUS = 2;
+const CRATE_COUNT = 4;
+const CRATE_AMMO_COUNT = 2;
 const CRATE_AMMO = 10;
 const WINS_TO_MATCH = 3;
 const MAZE_DENSITY = 0.08;
@@ -278,7 +280,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, CRATE_RADIUS, CRATE_AMMO, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, CRATE_RADIUS, CRATE_COUNT, CRATE_AMMO_COUNT, CRATE_AMMO, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -2213,10 +2215,10 @@ __factories["src/game/round.js"] = function (__exports) {
 // Runda: stan początkowy i jeden krok symulacji.
 // Czysta logika: bez DOM, bez czasu systemowego, losowość tylko z RNG w stanie.
 
-const { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } = __require("src/config.js");
+const { CRATE_AMMO_COUNT, CRATE_COUNT, FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } = __require("src/config.js");
 const { createRng } = __require("src/core/rng.js");
 const { fire, moveBullets } = __require("src/game/bullets.js");
-const { collectAmmo, explodeCrate, refillCrate } = __require("src/game/crates.js");
+const { crateAt, collectAmmo, explodeCrate, refillCrates } = __require("src/game/crates.js");
 const { eatFood, refillFood } = __require("src/game/food.js");
 const { cellIndex, passThrough, samePos, step, wrap } = __require("src/game/grid.js");
 const { generateMaze, spawnPoints } = __require("src/game/maze.js");
@@ -2251,14 +2253,17 @@ function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
-    crate: null,
+    crates: [
+      ...Array.from({ length: CRATE_AMMO_COUNT }, () => ({ kind: 'ammo', pos: null })),
+      ...Array.from({ length: CRATE_COUNT - CRATE_AMMO_COUNT }, () => ({ kind: 'fake', pos: null })),
+    ],
     ammoPickups: [],
     // Przy 5–6 wężach trochę więcej owoców
     foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);
-  refillCrate(state);
+  refillCrates(state);
   return state;
 }
 
@@ -2271,7 +2276,7 @@ function addSnake(state, id) {
   const spawns = spawnPoints(state.grid, START_LENGTH);
   const taken = new Set();
   for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
-  if (state.crate) taken.add(cellIndex(state.grid, state.crate));
+  for (const crate of state.crates) if (crate.pos) taken.add(cellIndex(state.grid, crate.pos));
   const free = (spawn) => {
     let p = spawn.body[0];
     const cells = [...spawn.body];
@@ -2295,7 +2300,7 @@ function cloneRound(s) {
     snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
     bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
     food: s.food.map((p) => ({ ...p })),
-    crate: s.crate ? { ...s.crate } : null,
+    crates: s.crates.map((crate) => ({ ...crate, pos: crate.pos ? { ...crate.pos } : null })),
     ammoPickups: s.ammoPickups.map((p) => ({ ...p })),
     result: s.result ? { ...s.result } : null,
   };
@@ -2334,8 +2339,8 @@ function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
-  if (state.crate && state.snakes.some((s) => samePos(s.body[0], state.crate))) {
-    explodeCrate(state, null, events);
+  for (const crate of state.crates) {
+    if (crate.pos && state.snakes.some((s) => samePos(s.body[0], crate.pos))) explodeCrate(state, null, events, crate);
   }
 
   // 5b. Miecze tną wokół głów (już po ruchu)
@@ -2345,7 +2350,7 @@ function stepRound(state, commands = []) {
   eatFood(state, events);
   collectAmmo(state, events);
   refillFood(state);
-  refillCrate(state);
+  refillCrates(state);
 
   // 7. Koniec rundy
   checkRoundEnd(state, events);
@@ -2462,7 +2467,7 @@ __factories["src/game/bullets.js"] = function (__exports) {
 const { BULLET_CELLS, BULLET_MAX_BOUNCES, BULLET_PER_TICKS, BULLET_RANGE, SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } = __require("src/config.js");
 const { OPPOSITE, cellIndex, passThrough, samePos } = __require("src/game/grid.js");
 const { applyHit, canShoot, segmentAt } = __require("src/game/snake.js");
-const { explodeCrate } = __require("src/game/crates.js");
+const { crateAt, explodeCrate } = __require("src/game/crates.js");
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Snake} Snake */
@@ -2528,8 +2533,9 @@ function bulletHitsSnake(state, bullet, events) {
 }
 
 function bulletHitsCrate(state, bullet, events) {
-  if (!state.crate || !samePos(state.crate, bullet.pos)) return false;
-  explodeCrate(state, bullet.owner, events);
+  const crate = crateAt(state, bullet.pos);
+  if (!crate) return false;
+  explodeCrate(state, bullet.owner, events, crate);
   return true;
 }
 
@@ -2599,7 +2605,7 @@ function stepBullets(state, events) {
       if (gone.has(a.b) || gone.has(c.b)) continue;
       const meet = samePos(a.to, c.to);
       const cross = samePos(a.to, c.from) && samePos(c.to, a.from);
-      if (meet && state.crate && samePos(a.to, state.crate)) continue;
+      if (meet && crateAt(state, a.to)) continue;
       if (meet || cross) {
         events.push({ type: 'bulletClash', pos: a.to });
         gone.add(a.b);
@@ -2816,16 +2822,20 @@ Object.assign(__exports, { MAX_QUEUED_TURNS, createSnake, queueTurn, tickTimers,
 
 // ---- src/game/crates.js ----
 __factories["src/game/crates.js"] = function (__exports) {
-// Jedna wybuchowa skrzynka na planszy i amunicja pozostająca po wybuchu.
+// Cztery skrzynki na planszy (dwie z amunicją, dwie fałszywe).
 
 const { CRATE_AMMO, CRATE_RADIUS, WALL } = __require("src/config.js");
 const { randInt } = __require("src/core/rng.js");
 const { cellIndex, samePos, step, wrap } = __require("src/game/grid.js");
 const { applyHit, kill } = __require("src/game/snake.js");
 
+/** @param {import('./types.js').RoundState} state @param {import('./types.js').Pos} pos */
+function crateAt(state, pos) {
+  return state.crates.find((crate) => crate.pos && samePos(crate.pos, pos)) ?? null;
+}
+
 /** @param {import('./types.js').RoundState} state */
-function refillCrate(state) {
-  if (state.crate) return;
+function refillCrates(state) {
   const taken = new Uint8Array(state.walls);
   const mark = (p) => { taken[cellIndex(state.grid, p)] = 1; };
   for (const snake of state.snakes) {
@@ -2842,11 +2852,19 @@ function refillCrate(state) {
   state.food.forEach(mark);
   state.ammoPickups.forEach(mark);
   state.bullets.forEach((b) => mark(b.pos));
-  const free = [];
-  for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
-  if (!free.length) return;
-  const i = free[randInt(state.rng, free.length)];
-  state.crate = { x: i % state.grid.w, y: Math.floor(i / state.grid.w) };
+  state.crates.forEach((crate) => {
+    if (crate.pos) mark(crate.pos);
+  });
+
+  for (const crate of state.crates) {
+    if (crate.pos) continue;
+    const free = [];
+    for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
+    if (!free.length) return;
+    const i = free[randInt(state.rng, free.length)];
+    crate.pos = { x: i % state.grid.w, y: Math.floor(i / state.grid.w) };
+    taken[i] = 1;
+  }
 }
 
 /**
@@ -2855,11 +2873,12 @@ function refillCrate(state) {
  * @param {import('./types.js').RoundState} state
  * @param {number | null} by
  * @param {import('./types.js').GameEvent[]} events
+ * @param {import('./types.js').Crate} crate
  */
-function explodeCrate(state, by, events) {
-  if (!state.crate) return;
-  const pos = state.crate;
-  state.crate = null;
+function explodeCrate(state, by, events, crate) {
+  if (!crate.pos) return;
+  const pos = crate.pos;
+  crate.pos = null;
   const inside = (p) => Math.abs(p.x - pos.x) <= CRATE_RADIUS && Math.abs(p.y - pos.y) <= CRATE_RADIUS;
   const cells = [];
   state.walls = new Uint8Array(state.walls);
@@ -2873,14 +2892,14 @@ function explodeCrate(state, by, events) {
   state.bullets = state.bullets.filter((b) => !inside(b.pos));
   state.food = state.food.filter((p) => !inside(p));
   state.ammoPickups = state.ammoPickups.filter((p) => !inside(p));
-  events.push({ type: 'crateExploded', pos, cells });
+  events.push({ type: 'crateExploded', pos, cells, kind: crate.kind });
   for (const snake of state.snakes) {
     if (!snake.alive) continue;
     const index = snake.body.findIndex(inside);
     if (index === 0) kill(snake, 'explosion', by, events);
     else if (index > 0) applyHit(snake, index, by, events);
   }
-  state.ammoPickups.push({ ...pos });
+  if (crate.kind === 'ammo') state.ammoPickups.push({ ...pos });
 }
 
 /** @param {import('./types.js').RoundState} state @param {import('./types.js').GameEvent[]} events */
@@ -2895,7 +2914,7 @@ function collectAmmo(state, events) {
   }
 }
 
-Object.assign(__exports, { refillCrate, explodeCrate, collectAmmo });
+Object.assign(__exports, { crateAt, refillCrates, explodeCrate, collectAmmo });
 };
 
 // ---- src/game/food.js ----
@@ -2920,7 +2939,9 @@ function refillFood(state) {
   state.snakes.forEach((s) => s.body.forEach(mark));
   state.bullets.forEach((b) => mark(b.pos));
   state.food.forEach(mark);
-  if (state.crate) mark(state.crate);
+  state.crates.forEach((crate) => {
+    if (crate.pos) mark(crate.pos);
+  });
   state.ammoPickups.forEach(mark);
 
   const free = [];
@@ -3757,9 +3778,10 @@ function drawFood(ctx, round, time) {
 /** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
 function drawCrates(ctx, round) {
   ctx.save();
-  if (round.crate) {
-    const x = px(round.crate);
-    const y = py(round.crate);
+  for (const crate of round.crates) {
+    if (!crate.pos) continue;
+    const x = px(crate.pos);
+    const y = py(crate.pos);
     ctx.shadowColor = '#ff9100';
     ctx.shadowBlur = 12;
     ctx.fillStyle = '#ff9100';

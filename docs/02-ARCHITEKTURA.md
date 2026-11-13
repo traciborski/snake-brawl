@@ -70,7 +70,7 @@ src/
     bullets.js          strzał (1 segment = 10 strzałów), lot, kolizje pocisków
     sword.js            miecz: wirowanie wokół głowy, cięcie w kole o promieniu 3 pól
     food.js             losowanie owoców na wolnych polach
-    crates.js           jedna skrzynka, wybuch 5×5 niszczący ściany i paczki +10 amunicji
+    crates.js           4 skrzynki (2 zwykłe, 2 fałszywe), wybuch 5×5 i paczki amunicji
     match.js            wynik rundy, licznik meczu, zwycięzca
   input/
     keyboard.js         nasłuch klawiszy, kolejka kierunków na zestaw klawiszy
@@ -123,10 +123,12 @@ RoundState = {
   snakes: [Snake, Snake],       // [Leon, Hugo]
   bullets: Bullet[],
   food: Pos[],                  // zawsze 3
-  crate: Pos | null,            // jedna skrzynka, null tylko przy braku miejsca lub przed uzupełnieniem
+  crates: Crate[],              // 4 skrzynki (2 zwykłe, 2 fałszywe); pos=null, gdy czeka na wolne pole
   ammoPickups: Pos[],           // paczki pozostałe po wybuchach
   result: null | { winner: 0 | 1 | 'draw' },   // bez limitu czasu
 }
+
+Crate = { kind: 'ammo' | 'fake', pos: Pos | null }
 
 Snake = {
   id: 0 | 1,
@@ -163,11 +165,13 @@ Kolejność jest ważna dla uczciwości: oba węże są przetwarzane **równocze
    własne ciało → wąż się odbija, czyli odwraca ciało i nie rusza się w tym ticku. Odbity wąż nie zwalnia ogona, więc sprawdzamy ponownie, aż nic się nie zmieni.
    Na koniec głowa w cudzy pocisk → śmierć.
 6. **Jedzenie i skrzynki**: zjedzenie daje `growPending++`, zebranie paczki daje +10 amunicji,
-   uzupełnij owoce i jedną skrzynkę. Pocisk detonuje skrzynkę przy każdym polu lotu
-   (także pierwszym); głowa detonuje ją po ruchu węży, przed mieczami. Wybuch niszczy
-   obiekty w kwadracie 5×5 i zostawia paczkę. Nowa skrzynka powstaje dopiero na końcu ticka.
+   uzupełnij owoce i skrzynki na wolnych polach. Są 4 skrzynki: 2 zwykłe i 2 fałszywe;
+   oba rodzaje wybuchają po trafieniu pociskiem lub głową, ale paczkę zostawia tylko zwykła.
+   Pocisk detonuje skrzynkę przy każdym polu lotu (także pierwszym); głowa detonuje ją po ruchu
+   węży, przed mieczami. Wybuch niszczy obiekty w kwadracie 5×5. Zniszczona skrzynka odradza się
+   na końcu ticka jako ten sam rodzaj; jeśli brak wolnego pola, pozostaje do uzupełnienia.
    Wybuch zastępuje `walls` nową tablicą: nie zmienia współdzielonych ścian w `cloneRound`,
-   a renderer rozpoznaje zmianę referencji i odświeża cache planszy. Skrzynka i paczki
+   a renderer rozpoznaje zmianę referencji i odświeża cache planszy. Skrzynki i paczki
    są kopiowane w `cloneRound`, więc przewidywanie online nie zmienia stanu potwierdzonego.
 7. **Koniec rundy**: ktoś zginął → ustaw `result` (obaj naraz → remis).
 

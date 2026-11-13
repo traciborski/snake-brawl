@@ -6,7 +6,7 @@
 import { BULLET_CELLS, BULLET_MAX_BOUNCES, BULLET_PER_TICKS, BULLET_RANGE, SHOTS_PER_SEGMENT, SHOT_COOLDOWN, WALL } from '../config.js';
 import { OPPOSITE, cellIndex, passThrough, samePos } from './grid.js';
 import { applyHit, canShoot, segmentAt } from './snake.js';
-import { explodeCrate } from './crates.js';
+import { crateAt, explodeCrate } from './crates.js';
 
 /** @typedef {import('./types.js').RoundState} RoundState */
 /** @typedef {import('./types.js').Snake} Snake */
@@ -72,8 +72,9 @@ export function bulletHitsSnake(state, bullet, events) {
 }
 
 function bulletHitsCrate(state, bullet, events) {
-  if (!state.crate || !samePos(state.crate, bullet.pos)) return false;
-  explodeCrate(state, bullet.owner, events);
+  const crate = crateAt(state, bullet.pos);
+  if (!crate) return false;
+  explodeCrate(state, bullet.owner, events, crate);
   return true;
 }
 
@@ -143,7 +144,7 @@ function stepBullets(state, events) {
       if (gone.has(a.b) || gone.has(c.b)) continue;
       const meet = samePos(a.to, c.to);
       const cross = samePos(a.to, c.from) && samePos(c.to, a.from);
-      if (meet && state.crate && samePos(a.to, state.crate)) continue;
+      if (meet && crateAt(state, a.to)) continue;
       if (meet || cross) {
         events.push({ type: 'bulletClash', pos: a.to });
         gone.add(a.b);

@@ -1,10 +1,10 @@
 // Runda: stan początkowy i jeden krok symulacji.
 // Czysta logika: bez DOM, bez czasu systemowego, losowość tylko z RNG w stanie.
 
-import { FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } from '../config.js';
+import { CRATE_AMMO_COUNT, CRATE_COUNT, FOOD_COUNT, GRID_H, GRID_W, MAZE_DENSITY, SNAKE_MOVE_EVERY, START_LENGTH, WALL } from '../config.js';
 import { createRng } from '../core/rng.js';
 import { fire, moveBullets } from './bullets.js';
-import { collectAmmo, explodeCrate, refillCrate } from './crates.js';
+import { crateAt, collectAmmo, explodeCrate, refillCrates } from './crates.js';
 import { eatFood, refillFood } from './food.js';
 import { cellIndex, passThrough, samePos, step, wrap } from './grid.js';
 import { generateMaze, spawnPoints } from './maze.js';
@@ -39,14 +39,17 @@ export function createRound(seed, options = {}) {
     snakes: spawns.slice(0, players).map((s, i) => createSnake(i, s.body, s.dir)),
     bullets: [],
     food: [],
-    crate: null,
+    crates: [
+      ...Array.from({ length: CRATE_AMMO_COUNT }, () => ({ kind: 'ammo', pos: null })),
+      ...Array.from({ length: CRATE_COUNT - CRATE_AMMO_COUNT }, () => ({ kind: 'fake', pos: null })),
+    ],
     ammoPickups: [],
     // Przy 5–6 wężach trochę więcej owoców
     foodCount: options.foodCount ?? FOOD_COUNT + Math.max(0, players - 4),
     result: null,
   };
   refillFood(state);
-  refillCrate(state);
+  refillCrates(state);
   return state;
 }
 
@@ -59,7 +62,7 @@ export function addSnake(state, id) {
   const spawns = spawnPoints(state.grid, START_LENGTH);
   const taken = new Set();
   for (const s of state.snakes) if (s.alive) for (const p of s.body) taken.add(cellIndex(state.grid, p));
-  if (state.crate) taken.add(cellIndex(state.grid, state.crate));
+  for (const crate of state.crates) if (crate.pos) taken.add(cellIndex(state.grid, crate.pos));
   const free = (spawn) => {
     let p = spawn.body[0];
     const cells = [...spawn.body];
@@ -83,7 +86,7 @@ export function cloneRound(s) {
     snakes: s.snakes.map((sn) => ({ ...sn, body: sn.body.map((p) => ({ ...p })), nextDirs: [...sn.nextDirs] })),
     bullets: s.bullets.map((b) => ({ ...b, pos: { ...b.pos } })),
     food: s.food.map((p) => ({ ...p })),
-    crate: s.crate ? { ...s.crate } : null,
+    crates: s.crates.map((crate) => ({ ...crate, pos: crate.pos ? { ...crate.pos } : null })),
     ammoPickups: s.ammoPickups.map((p) => ({ ...p })),
     result: s.result ? { ...s.result } : null,
   };
@@ -122,8 +125,8 @@ export function stepRound(state, commands = []) {
 
   // 5. Węże
   if (state.tick % SNAKE_MOVE_EVERY === 0) moveSnakes(state, events);
-  if (state.crate && state.snakes.some((s) => samePos(s.body[0], state.crate))) {
-    explodeCrate(state, null, events);
+  for (const crate of state.crates) {
+    if (crate.pos && state.snakes.some((s) => samePos(s.body[0], crate.pos))) explodeCrate(state, null, events, crate);
   }
 
   // 5b. Miecze tną wokół głów (już po ruchu)
@@ -133,7 +136,7 @@ export function stepRound(state, commands = []) {
   eatFood(state, events);
   collectAmmo(state, events);
   refillFood(state);
-  refillCrate(state);
+  refillCrates(state);
 
   // 7. Koniec rundy
   checkRoundEnd(state, events);

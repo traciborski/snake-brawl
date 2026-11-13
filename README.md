@@ -50,3 +50,4 @@ Po zmianach w `src/` trzeba uruchomić `npm run build` i zacommitować `dist/`
 2. [Architektura](docs/02-ARCHITEKTURA.md): jak zbudowany jest kod
 3. [Plan](docs/03-PLAN.md): kroki i lista kontrolna
 4. [Wystawienie](docs/04-WYSTAWIENIE.md): Cloudflare Workers
+5. [Mini-spec wyników meczów w sesji](docs/05-MECZE-W-SESJI.md): tabela zwycięstw i historia meczów w pokoju online

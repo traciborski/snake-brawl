@@ -94,9 +94,10 @@ export function drawFood(ctx, round, time) {
 /** @param {CanvasRenderingContext2D} ctx @param {RoundState} round */
 export function drawCrates(ctx, round) {
   ctx.save();
-  if (round.crate) {
-    const x = px(round.crate);
-    const y = py(round.crate);
+  for (const crate of round.crates) {
+    if (!crate.pos) continue;
+    const x = px(crate.pos);
+    const y = py(crate.pos);
     ctx.shadowColor = '#ff9100';
     ctx.shadowBlur = 12;
     ctx.fillStyle = '#ff9100';

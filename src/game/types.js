@@ -3,6 +3,7 @@
 /** @typedef {'up' | 'down' | 'left' | 'right'} Dir */
 /** @typedef {{ x: number, y: number }} Pos */
 /** @typedef {{ w: number, h: number }} Grid */
+/** @typedef {{ kind: 'ammo' | 'fake', pos: Pos | null }} Crate */
 
 /**
  * @typedef {object} Snake
@@ -34,7 +35,7 @@
  * @property {Snake[]} snakes
  * @property {Bullet[]} bullets
  * @property {Pos[]} food
- * @property {Pos | null} crate
+ * @property {Crate[]} crates
  * @property {Pos[]} ammoPickups
  * @property {number} foodCount
  * @property {RoundResult | null} result
@@ -55,7 +56,7 @@
  *   { type: 'bounced', snake: number, pos: Pos } |
  *   { type: 'teleported', snake: number, pos: Pos } |
  *   { type: 'ate', snake: number, pos: Pos } |
- *   { type: 'crateExploded', pos: Pos, cells: Pos[] } |
+ *   { type: 'crateExploded', pos: Pos, cells: Pos[], kind: 'ammo' | 'fake' } |
  *   { type: 'ammoCollected', snake: number, pos: Pos } |
  *   { type: 'died', snake: number, by: number | null, pos: Pos, cause: 'shot' | 'wall' | 'crash' | 'body' | 'sword' | 'left' | 'explosion' } |
  *   { type: 'roundOver', result: RoundResult }

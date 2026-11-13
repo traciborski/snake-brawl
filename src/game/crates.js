@@ -1,13 +1,17 @@
-// Jedna wybuchowa skrzynka na planszy i amunicja pozostająca po wybuchu.
+// Cztery skrzynki na planszy (dwie z amunicją, dwie fałszywe).
 
 import { CRATE_AMMO, CRATE_RADIUS, WALL } from '../config.js';
 import { randInt } from '../core/rng.js';
 import { cellIndex, samePos, step, wrap } from './grid.js';
 import { applyHit, kill } from './snake.js';
 
+/** @param {import('./types.js').RoundState} state @param {import('./types.js').Pos} pos */
+export function crateAt(state, pos) {
+  return state.crates.find((crate) => crate.pos && samePos(crate.pos, pos)) ?? null;
+}
+
 /** @param {import('./types.js').RoundState} state */
-export function refillCrate(state) {
-  if (state.crate) return;
+export function refillCrates(state) {
   const taken = new Uint8Array(state.walls);
   const mark = (p) => { taken[cellIndex(state.grid, p)] = 1; };
   for (const snake of state.snakes) {
@@ -24,11 +28,19 @@ export function refillCrate(state) {
   state.food.forEach(mark);
   state.ammoPickups.forEach(mark);
   state.bullets.forEach((b) => mark(b.pos));
-  const free = [];
-  for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
-  if (!free.length) return;
-  const i = free[randInt(state.rng, free.length)];
-  state.crate = { x: i % state.grid.w, y: Math.floor(i / state.grid.w) };
+  state.crates.forEach((crate) => {
+    if (crate.pos) mark(crate.pos);
+  });
+
+  for (const crate of state.crates) {
+    if (crate.pos) continue;
+    const free = [];
+    for (let i = 0; i < taken.length; i++) if (!taken[i]) free.push(i);
+    if (!free.length) return;
+    const i = free[randInt(state.rng, free.length)];
+    crate.pos = { x: i % state.grid.w, y: Math.floor(i / state.grid.w) };
+    taken[i] = 1;
+  }
 }
 
 /**
@@ -37,11 +49,12 @@ export function refillCrate(state) {
  * @param {import('./types.js').RoundState} state
  * @param {number | null} by
  * @param {import('./types.js').GameEvent[]} events
+ * @param {import('./types.js').Crate} crate
  */
-export function explodeCrate(state, by, events) {
-  if (!state.crate) return;
-  const pos = state.crate;
-  state.crate = null;
+export function explodeCrate(state, by, events, crate) {
+  if (!crate.pos) return;
+  const pos = crate.pos;
+  crate.pos = null;
   const inside = (p) => Math.abs(p.x - pos.x) <= CRATE_RADIUS && Math.abs(p.y - pos.y) <= CRATE_RADIUS;
   const cells = [];
   state.walls = new Uint8Array(state.walls);
@@ -55,14 +68,14 @@ export function explodeCrate(state, by, events) {
   state.bullets = state.bullets.filter((b) => !inside(b.pos));
   state.food = state.food.filter((p) => !inside(p));
   state.ammoPickups = state.ammoPickups.filter((p) => !inside(p));
-  events.push({ type: 'crateExploded', pos, cells });
+  events.push({ type: 'crateExploded', pos, cells, kind: crate.kind });
   for (const snake of state.snakes) {
     if (!snake.alive) continue;
     const index = snake.body.findIndex(inside);
     if (index === 0) kill(snake, 'explosion', by, events);
     else if (index > 0) applyHit(snake, index, by, events);
   }
-  state.ammoPickups.push({ ...pos });
+  if (crate.kind === 'ammo') state.ammoPickups.push({ ...pos });
 }
 
 /** @param {import('./types.js').RoundState} state @param {import('./types.js').GameEvent[]} events */

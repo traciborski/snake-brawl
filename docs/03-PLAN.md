@@ -12,6 +12,11 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - [x] Paczka +10 amunicji, grafika, efekty, dźwięk i izolacja stanu przewidywanego online
 - **Testy:** detonacja, zasięg i krawędzie, odtwarzanie skrzynki, zbieranie, rollback.
 
+## Rozszerzenie: fałszywe skrzynki
+- [ ] Na planszy 4 skrzynki: 2 zwykłe i 2 fałszywe, nierozróżnialne przed detonacją
+- [ ] Oba rodzaje wybuchają i odradzają się; amunicję zostawiają tylko zwykłe
+- **Testy:** liczba i rodzaje skrzynek, detonacja fałszywej bez amunicji, odradzanie, rollback.
+
 ## Krok 0: Szkielet projektu
 - [x] `package.json` (`npm start`, `npm test`), `scripts/serve.js`
 - [x] Nowy `index.html` z jednym `<canvas>`, nowy `style.css`

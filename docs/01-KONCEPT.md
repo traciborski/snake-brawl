@@ -105,9 +105,11 @@ do gry przez internet.
 - Dwa pociski, które się spotkają, znoszą się nawzajem. Pociski przelatują nad owocami.
 
 **Wybuchowe skrzynki i amunicja**
-- Na planszy jest **jedna skrzynka**. Po jej zniszczeniu na końcu ticka pojawia się następna,
-  na losowym wolnym polu, nie tuż przed jadącym wężem. Jeśli nie ma miejsca, czeka na wolne pole.
+- Na planszy są **4 skrzynki**: 2 zwykłe i 2 fałszywe. Wyglądają tak samo. Po zniszczeniu
+  każda odradza się na losowym wolnym polu, nie tuż przed jadącym wężem; jeśli nie ma miejsca,
+  czeka na wolne pole. Liczba i rodzaj skrzynek pozostają stałe.
 - Skrzynkę detonuje **trafienie pociskiem albo wjazd głową węża**. Miecz jej nie niszczy.
+- Każda skrzynka wybucha tak samo. Zwykła zostawia paczkę amunicji, fałszywa — nie.
 - Wybuch niszczy wszystko w **kwadracie 5×5 pól** (po 2 pola od skrzynki w każdą stronę,
   także narożniki). Przy krawędzi jest przycięty do planszy, nie przechodzi na drugą stronę.
 - Niszczy wszystkie rodzaje ścian, owoce, amunicję i pociski w zasięgu. Owoce są potem uzupełniane.
@@ -176,4 +178,5 @@ do gry przez internet.
 - Power-upy: przyspieszenie, tarcza, potrójny strzał, duch.
 - Bot (AI) jako tryb treningowy.
 - Muzyka, kilka gotowych map, ustawienia meczu.
-- Tabele wyników.
+- Rankingi i trwałe tabele wyników między pokojami. Wyniki meczów w jednej sesji opisuje
+  [mini-spec](05-MECZE-W-SESJI.md).

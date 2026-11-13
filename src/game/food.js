@@ -18,7 +18,9 @@ export function refillFood(state) {
   state.snakes.forEach((s) => s.body.forEach(mark));
   state.bullets.forEach((b) => mark(b.pos));
   state.food.forEach(mark);
-  if (state.crate) mark(state.crate);
+  state.crates.forEach((crate) => {
+    if (crate.pos) mark(crate.pos);
+  });
   state.ammoPickups.forEach(mark);
 
   const free = [];
