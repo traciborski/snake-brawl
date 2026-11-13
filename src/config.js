@@ -50,6 +50,7 @@ export const WALL = {
 
 // Gracze
 export const MAX_PLAYERS = 6; // gra przez internet
+export const BOT_MAX_COUNT = MAX_PLAYERS - 1;
 export const OFFLINE_MIN_PLAYERS = 1; // jeden gracz = trening
 export const OFFLINE_MAX_PLAYERS = 4;
 export const OFFLINE_DEFAULT_PLAYERS = 2;

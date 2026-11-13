@@ -26,14 +26,15 @@ export function createMenuScene(app) {
       showRoomInAddressBar(null);
       const buttons = [
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
-        h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
+        h('button', { type: 'button', onclick: () => app.scenes.go('setup', { bots: true }) }, '2  GRA Z BOTAMI'),
+        h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '3  GRA PRZEZ INTERNET'),
       ];
       // Pokój publiczny widać od razu w menu (gdy jest serwer gry): wchodzi się jednym kliknięciem
       const code = PUBLIC_ROOMS[0];
       const status = h('small', { className: 'room-status' });
       if (serverUrl()) {
         buttons.push(
-          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `3  POKÓJ PUBLICZNY ${code}  `, status),
+          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `4  POKÓJ PUBLICZNY ${code}  `, status),
         );
         const refresh = async () => {
           const rooms = await fetchRooms();
@@ -43,7 +44,7 @@ export function createMenuScene(app) {
         timer = setInterval(refresh, PUBLIC_REFRESH_MS);
         // Lista wszystkich pokoi to strona serwera gry (gra otwarta z dysku jej nie ma)
         if (location.protocol !== 'file:') {
-          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '4  WSZYSTKIE POKOJE'));
+          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '5  WSZYSTKIE POKOJE'));
         }
       }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
@@ -86,16 +87,16 @@ export function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1–4 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, cyfry wybierają przycisk, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
     else if (['ArrowUp', 'KeyW'].includes(e.code)) buttons[(i - 1 + buttons.length) % buttons.length].focus();
-    else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
-    else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
-    else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
-    else if ((e.code === 'Digit4' || e.code === 'Numpad4') && buttons[3]) buttons[3].click();
-    else if (e.code === 'KeyM') app.audio.toggleMute();
+    else if (/^(Digit|Numpad)[1-9]$/.test(e.code)) {
+      const index = Number(e.code.slice(-1)) - 1;
+      if (!buttons[index]) return;
+      buttons[index].click();
+    } else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();
   }

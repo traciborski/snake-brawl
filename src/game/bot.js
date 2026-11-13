@@ -61,7 +61,7 @@ function scoreDirection(state, snake, dir, pos, difficulty) {
 }
 
 function countExits(state, snake, pos) {
-  return DIRECTIONS.filter((dir) => dir !== OPPOSITE[dir] && !isDangerous(state, snake, passThrough(state.grid, state.walls, pos, dir).pos)).length;
+  return DIRECTIONS.filter((dir) => dir !== OPPOSITE[snake.dir] && !isDangerous(state, snake, passThrough(state.grid, state.walls, pos, dir).pos)).length;
 }
 
 function distance(grid, a, b) {
