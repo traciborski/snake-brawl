@@ -1,6 +1,7 @@
 # Snake Brawl
 
-Arcade'owa walka węży: w 1–4 osoby na jednej klawiaturze (sam = trening) albo w 2–6 osób przez internet.
+Arcade'owa walka węży: w 1–4 osoby na jednej klawiaturze, jeden gracz przeciwko 1–5 botom,
+albo w 2–6 osób przez internet.
 Rośniesz, zjadając owoce, strzelasz kawałkami własnego ogona, a rundę wygrywa ostatni żywy wąż.
 Mecz gramy do 3 wygranych.
 
@@ -11,6 +12,7 @@ Mecz gramy do 3 wygranych.
 | Jeden komputer, gracz 3 | `I J K L` + `U` + `O` |
 | Jeden komputer, gracz 4 | numpad `8 4 5 6` + `0` + `,` |
 | Trening (sam) | dowolny z tych zestawów |
+| Gra z botami | gracz 1 steruje `W A S D`, boty sterowane przez AI |
 | Przez internet | każdy steruje swoim wężem dowolnym z tych zestawów |
 | Telefon / tablet | przesunięcie palcem = skręt, przyciski **STRZAŁ** i **MIECZ** (telefon poziomo, pełny ekran po stuknięciu) |
 

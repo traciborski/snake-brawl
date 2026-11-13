@@ -1,8 +1,8 @@
 // Ekrany z formularzami w Node, na udawanym DOM: łapie błędy typu „ekran się nie otwiera”.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OFFLINE_MAX_PLAYERS } from '../src/config.js';
-import { createSetupScene, savedColors } from '../src/scenes/setup.js';
+import { BOT_MAX_COUNT, OFFLINE_MAX_PLAYERS } from '../src/config.js';
+import { clampBots, createSetupScene, savedColors } from '../src/scenes/setup.js';
 
 /** Minimalny element: tyle, ile używają h() i sceny. */
 function fakeElement(tag) {
@@ -54,6 +54,25 @@ test('ekran gry na jednym komputerze otwiera się i ma pola dla 1–4 graczy', (
     };
     walk(shown);
     assert.equal(inputs.length, OFFLINE_MAX_PLAYERS);
+  });
+});
+
+test('konfiguracja botów pozwala wybrać 1–5 przeciwników i poziom trudności', () => {
+  withFakeDom(() => {
+    let shown = null;
+    const app = { overlay: { show: (el) => (shown = el), hide() {} }, scenes: { go() {} } };
+    createSetupScene(app).enter({ bots: true });
+    const labels = [];
+    const walk = (el) => {
+      if (!el || typeof el !== 'object') return;
+      if (el.tagName === 'BUTTON') labels.push(el.children[0]);
+      el.children?.forEach(walk);
+    };
+    walk(shown);
+    assert.ok(labels.includes('1') && labels.includes(String(BOT_MAX_COUNT)));
+    assert.ok(labels.includes('ŁATWY') && labels.includes('ŚREDNI') && labels.includes('TRUDNY'));
+    assert.equal(clampBots(0), 1);
+    assert.equal(clampBots(9), BOT_MAX_COUNT);
   });
 });
 

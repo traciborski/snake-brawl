@@ -72,11 +72,13 @@ src/
     food.js             losowanie owoców na wolnych polach
     crates.js           4 skrzynki (2 zwykłe, 2 fałszywe), wybuch 5×5 i paczki amunicji
     match.js            wynik rundy, licznik meczu, zwycięzca
+    bot.js              deterministyczne komendy botów z oceny bezpiecznych ruchów i celów
   input/
     keyboard.js         nasłuch klawiszy, kolejka kierunków na zestaw klawiszy
     touch.js            dotyk: przesunięcie palcem = skręt, przycisk STRZAŁ; te same komendy co klawiatura
   modes/
     offline.js          kontroler trybu: jeden komputer
+    bots.js             kontroler jednego gracza i botów
     online.js           kontroler trybu: internet (lockstep)
   net/
     client.js           połączenie z serwerem pokoi
@@ -197,6 +199,7 @@ Sceny gry są wspólne dla obu trybów. Różnice zamyka **kontroler trybu** (`a
 | Kontroler        | `commands()` (komendy na tick)                | `leave()` (Esc) | `rematch()` | pauza / przeklikiwanie |
 |------------------|-----------------------------------------------|-----------------|-------------|------------------------|
 | `modes/offline`  | z klawiatury, zestaw klawiszy i = gracz i     | menu            | nowy mecz   | tak                    |
+| `modes/bots`     | gracz 1 z klawiatury, reszta z `game/bot.js` | menu            | nowy mecz   | tak                    |
 | `modes/online`   | od wszystkich graczy z sieci albo `null` (czekamy) | wyjście z pokoju | poczekalnia | nie                    |
 
 Formularze (imiona, kod pokoju, poczekalnia, przyciski menu) to **nakładka HTML** nad canvasem

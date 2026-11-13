@@ -1,6 +1,6 @@
 // Prosty bot offline: wybiera bezpieczny ruch, zbiera owoce i atakuje, gdy ma okazję.
 
-import { BULLET_RANGE, CRATE_RADIUS, SWORD_RADIUS, WALL } from '../config.js';
+import { BULLET_RANGE, SWORD_RADIUS, WALL } from '../config.js';
 import { createRng, randInt } from '../core/rng.js';
 import { cellIndex, OPPOSITE, passThrough, samePos } from './grid.js';
 
@@ -52,7 +52,7 @@ function isDangerous(state, snake, pos) {
 }
 
 function scoreDirection(state, snake, dir, pos, difficulty) {
-  let score = countExits(state, snake, pos) * (difficulty === 'hard' ? 3 : 1);
+  let score = countExits(state, snake, pos, dir) * (difficulty === 'hard' ? 3 : 1);
   const distances = state.food.map((food) => distance(state.grid, pos, food));
   if (distances.length) score -= Math.min(...distances) * (difficulty === 'hard' ? 0.8 : 1.2);
   if (state.walls[cellIndex(state.grid, pos)] === WALL.BOUNCE) score -= 4;
@@ -60,8 +60,8 @@ function scoreDirection(state, snake, dir, pos, difficulty) {
   return score;
 }
 
-function countExits(state, snake, pos) {
-  return DIRECTIONS.filter((dir) => dir !== OPPOSITE[snake.dir] && !isDangerous(state, snake, passThrough(state.grid, state.walls, pos, dir).pos)).length;
+function countExits(state, snake, pos, heading) {
+  return DIRECTIONS.filter((dir) => dir !== OPPOSITE[heading] && !isDangerous(state, snake, passThrough(state.grid, state.walls, pos, dir).pos)).length;
 }
 
 function distance(grid, a, b) {
@@ -108,8 +108,12 @@ function shouldSwing(state, snake, difficulty) {
   const range = difficulty === 'easy' ? 1 : SWORD_RADIUS;
   return state.snakes.some((other) => {
     if (!other.alive || other.id === snake.id) return false;
-    const dx = Math.min(Math.abs(other.body[0].x - snake.body[0].x), state.grid.w - Math.abs(other.body[0].x - snake.body[0].x));
-    const dy = Math.min(Math.abs(other.body[0].y - snake.body[0].y), state.grid.h - Math.abs(other.body[0].y - snake.body[0].y));
-    return dx * dx + dy * dy <= range * range;
+    return other.body.some((part) => {
+      const rawX = Math.abs(part.x - snake.body[0].x);
+      const rawY = Math.abs(part.y - snake.body[0].y);
+      const dx = Math.min(rawX, state.grid.w - rawX);
+      const dy = Math.min(rawY, state.grid.h - rawY);
+      return dx * dx + dy * dy <= range * range;
+    });
   });
 }

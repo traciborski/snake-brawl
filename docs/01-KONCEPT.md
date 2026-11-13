@@ -69,6 +69,9 @@ do gry przez internet.
    dopóki wąż żyje (zabija czerwona ściana albo wybuch skrzynki). Wynik to zjedzone owoce i czas,
    gra pamięta rekord. Przycisk *Jeszcze raz* (albo Spacja) zaczyna kolejną próbę na nowym
    labiryncie, *Menu* (albo Esc) wraca do menu.
+7. **Gra z botami** (offline): jeden gracz wybiera od 1 do 5 botów i poziom trudności
+   (łatwy, średni, trudny). Boty używają tych samych zasad co gracze; mecz nadal trwa do
+   3 wygranych rund.
 
 ## 5. Zasady
 
@@ -176,7 +179,6 @@ do gry przez internet.
 ## 8. Poza pierwszą wersją (później)
 
 - Power-upy: przyspieszenie, tarcza, potrójny strzał, duch.
-- Bot (AI) jako tryb treningowy.
 - Muzyka, kilka gotowych map, ustawienia meczu.
 - Rankingi i trwałe tabele wyników między pokojami. Wyniki meczów w jednej sesji opisuje
   [mini-spec](05-MECZE-W-SESJI.md).
