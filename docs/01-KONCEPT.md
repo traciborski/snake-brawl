@@ -70,8 +70,9 @@ do gry przez internet.
    gra pamięta rekord. Przycisk *Jeszcze raz* (albo Spacja) zaczyna kolejną próbę na nowym
    labiryncie, *Menu* (albo Esc) wraca do menu.
 7. **Gra z botami** (offline): jeden gracz wybiera od 1 do 5 botów i poziom trudności
-   (łatwy, średni, trudny). Boty używają tych samych zasad co gracze; mecz nadal trwa do
-   3 wygranych rund.
+   (łatwy, średni, trudny). Łatwy wybiera losowe bezpieczne ruchy; średni szuka jedzenia
+   i strzela do celu w zasięgu 8 pól; trudny lepiej ocenia bezpieczne drogi i strzela
+   na większą odległość. Boty używają tych samych zasad co gracze; mecz trwa do 3 wygranych rund.
 
 ## 5. Zasady
 

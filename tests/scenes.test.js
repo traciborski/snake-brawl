@@ -60,19 +60,29 @@ test('ekran gry na jednym komputerze otwiera się i ma pola dla 1–4 graczy', (
 test('konfiguracja botów pozwala wybrać 1–5 przeciwników i poziom trudności', () => {
   withFakeDom(() => {
     let shown = null;
-    const app = { overlay: { show: (el) => (shown = el), hide() {} }, scenes: { go() {} } };
+    const went = [];
+    const app = { overlay: { show: (el) => (shown = el), hide() {} }, scenes: { go: (name) => went.push(name) } };
     createSetupScene(app).enter({ bots: true });
-    const labels = [];
+    const buttons = [];
     const walk = (el) => {
       if (!el || typeof el !== 'object') return;
-      if (el.tagName === 'BUTTON') labels.push(el.children[0]);
+      if (el.tagName === 'BUTTON') buttons.push(el);
       el.children?.forEach(walk);
     };
     walk(shown);
+    const labels = buttons.map((button) => button.children[0]);
     assert.ok(labels.includes('1') && labels.includes(String(BOT_MAX_COUNT)));
     assert.ok(labels.includes('ŁATWY') && labels.includes('ŚREDNI') && labels.includes('TRUDNY'));
     assert.equal(clampBots(0), 1);
     assert.equal(clampBots(9), BOT_MAX_COUNT);
+    buttons.find((button) => button.children[0] === '2').listeners.click[0]();
+    buttons.find((button) => button.children[0] === 'TRUDNY').listeners.click[0]();
+    shown.listeners.submit[0]({ preventDefault() {} });
+    assert.equal(app.players.length, 3);
+    assert.deepEqual(app.players.map((player) => player.name), ['Gracz 1', 'Bot 1', 'Bot 2']);
+    assert.equal(new Set(app.players.map((player) => player.color)).size, 3);
+    assert.equal(app.match.wins.length, 3);
+    assert.deepEqual(went, ['countdown']);
   });
 });
 

@@ -191,6 +191,7 @@ export function createSetupScene(app) {
         ),
         h('p', { className: 'hint' }, 'Enter — start · Esc — menu'),
       );
+      setDifficulty(difficulty);
       setCount(count);
       app.overlay.show(form);
       inputs[0].select();
