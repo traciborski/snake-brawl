@@ -157,9 +157,9 @@ Każdy krok kończy się czymś, co da się sprawdzić testem albo w przeglądar
 - **Testy:** przyciski po chwili i ich działanie (udawany DOM), odmiana. ✅ Sprawdzone w przeglądarce.
 
 ## Krok 22: Gra z botami
-- [ ] Tryb lokalny: jeden człowiek kontra 1–5 botów; poziom łatwy, średni lub trudny
-- [ ] Boty wybierają bezpieczne ruchy, zbierają owoce i atakują; rewanż zachowuje skład i trudność
-- **Testy:** deterministyczne decyzje, unikanie natychmiastowej śmierci, ataki i konfiguracja trybu.
+- [x] Tryb lokalny: jeden człowiek kontra 1–5 botów; poziom łatwy, średni lub trudny
+- [x] Boty wybierają bezpieczne ruchy, zbierają owoce i atakują; rewanż zachowuje skład i trudność
+- **Testy:** deterministyczne decyzje, unikanie natychmiastowej śmierci, ataki i konfiguracja trybu. ✅ `npm run build`, `npm test` (155 testów).
 
 ## Lista kontrolna ręczna (przed uznaniem wersji 1.0)
 - [ ] Obaj gracze sterują jednocześnie, a szybkie skręty nie giną

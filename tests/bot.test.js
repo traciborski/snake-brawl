@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WALL } from '../src/config.js';
 import { chooseBotCommand } from '../src/game/bot.js';
+import { createRound, stepRound } from '../src/game/round.js';
 import { createBotController } from '../src/modes/bots.js';
 import { emptyRound, place, wall } from './helpers.js';
 
@@ -53,4 +54,16 @@ test('kontroler botów łączy sterowanie człowieka i komendy AI', () => {
   assert.deepEqual(commands[0].turns, ['up']);
   assert.ok(commands[1]);
   assert.ok(commands[2]);
+});
+
+test('pięć botów rozgrywa deterministyczną symulację', () => {
+  const play = () => {
+    const state = createRound(123, { players: 6 });
+    for (let tick = 0; tick < 600 && !state.result; tick++) {
+      const commands = state.snakes.map((_, id) => id === 0 ? {} : chooseBotCommand(state, id, ['easy', 'medium', 'hard'][id % 3]));
+      stepRound(state, commands);
+    }
+    return state;
+  };
+  assert.deepEqual(play(), play());
 });

@@ -185,6 +185,7 @@ const WALL = {
 
 // Gracze
 const MAX_PLAYERS = 6; // gra przez internet
+const BOT_MAX_COUNT = MAX_PLAYERS - 1;
 const OFFLINE_MIN_PLAYERS = 1; // jeden gracz = trening
 const OFFLINE_MAX_PLAYERS = 4;
 const OFFLINE_DEFAULT_PLAYERS = 2;
@@ -280,7 +281,7 @@ const COLORS = {
 
 const FONT = '"Press Start 2P", monospace';
 
-Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, CRATE_RADIUS, CRATE_COUNT, CRATE_AMMO_COUNT, CRATE_AMMO, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
+Object.assign(__exports, { TICK_MS, TICKS_PER_SECOND, GRID_W, GRID_H, CELL, HUD_H, BOARD_Y, VIEW_W, VIEW_H, SNAKE_MOVE_EVERY, START_LENGTH, SHOT_COOLDOWN, SHOTS_PER_SEGMENT, BULLET_CELLS, BULLET_PER_TICKS, BULLET_RANGE, BULLET_MAX_BOUNCES, SWORD_RADIUS, SWORD_TICKS, SWORD_COOLDOWN, COUNTDOWN_TICKS, FOOD_COUNT, CRATE_RADIUS, CRATE_COUNT, CRATE_AMMO_COUNT, CRATE_AMMO, WINS_TO_MATCH, MAZE_DENSITY, WALL_MIX, WALL, MAX_PLAYERS, BOT_MAX_COUNT, OFFLINE_MIN_PLAYERS, OFFLINE_MAX_PLAYERS, OFFLINE_DEFAULT_PLAYERS, NAME_MAX, PLAYER_COLORS, COLOR_CHOICES, DEFAULT_NAMES, KEYMAPS, SOLO_HELP, ONLINE_SERVER, KEYS, COLORS, FONT });
 };
 
 // ---- src/core/loop.js ----
@@ -1016,14 +1017,15 @@ function createMenuScene(app) {
       showRoomInAddressBar(null);
       const buttons = [
         h('button', { type: 'button', onclick: () => app.scenes.go('setup'), autofocus: true }, '1  GRA NA JEDNYM KOMPUTERZE'),
-        h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '2  GRA PRZEZ INTERNET'),
+        h('button', { type: 'button', onclick: () => app.scenes.go('setup', { bots: true }) }, '2  GRA Z BOTAMI'),
+        h('button', { type: 'button', onclick: () => app.scenes.go('online') }, '3  GRA PRZEZ INTERNET'),
       ];
       // Pokój publiczny widać od razu w menu (gdy jest serwer gry): wchodzi się jednym kliknięciem
       const code = PUBLIC_ROOMS[0];
       const status = h('small', { className: 'room-status' });
       if (serverUrl()) {
         buttons.push(
-          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `3  POKÓJ PUBLICZNY ${code}  `, status),
+          h('button', { type: 'button', onclick: () => app.scenes.go('online', { invite: code }) }, `4  POKÓJ PUBLICZNY ${code}  `, status),
         );
         const refresh = async () => {
           const rooms = await fetchRooms();
@@ -1033,7 +1035,7 @@ function createMenuScene(app) {
         timer = setInterval(refresh, PUBLIC_REFRESH_MS);
         // Lista wszystkich pokoi to strona serwera gry (gra otwarta z dysku jej nie ma)
         if (location.protocol !== 'file:') {
-          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '4  WSZYSTKIE POKOJE'));
+          buttons.push(h('button', { type: 'button', onclick: () => location.assign(roomsPage()) }, '5  WSZYSTKIE POKOJE'));
         }
       }
       const menu = h('div', { className: 'menu-buttons', onkeydown: (e) => onKey(e, buttons) }, buttons);
@@ -1076,16 +1078,16 @@ function createMenuScene(app) {
     },
   };
 
-  /** Strzałki/WS przesuwają wybór, 1–4 wybierają od razu, M wycisza. */
+  /** Strzałki/WS przesuwają wybór, cyfry wybierają przycisk, M wycisza. */
   function onKey(e, buttons) {
     const i = buttons.indexOf(document.activeElement);
     if (['ArrowDown', 'KeyS'].includes(e.code)) buttons[(i + 1) % buttons.length].focus();
     else if (['ArrowUp', 'KeyW'].includes(e.code)) buttons[(i - 1 + buttons.length) % buttons.length].focus();
-    else if (e.code === 'Digit1' || e.code === 'Numpad1') buttons[0].click();
-    else if (e.code === 'Digit2' || e.code === 'Numpad2') buttons[1].click();
-    else if ((e.code === 'Digit3' || e.code === 'Numpad3') && buttons[2]) buttons[2].click();
-    else if ((e.code === 'Digit4' || e.code === 'Numpad4') && buttons[3]) buttons[3].click();
-    else if (e.code === 'KeyM') app.audio.toggleMute();
+    else if (/^(Digit|Numpad)[1-9]$/.test(e.code)) {
+      const index = Number(e.code.slice(-1)) - 1;
+      if (!buttons[index]) return;
+      buttons[index].click();
+    } else if (e.code === 'KeyM') app.audio.toggleMute();
     else return;
     e.preventDefault();
   }
@@ -1477,6 +1479,7 @@ __factories["src/scenes/setup.js"] = function (__exports) {
 
 const {
   DEFAULT_NAMES,
+  BOT_MAX_COUNT,
   KEYMAPS,
   NAME_MAX,
   OFFLINE_DEFAULT_PLAYERS,
@@ -1492,6 +1495,7 @@ const { drawText } = __require("src/render/text.js");
 const { h } = __require("src/ui/dom.js");
 const { load, save } = __require("src/ui/storage.js");
 const { createOfflineController } = __require("src/modes/offline.js");
+const { createBotController } = __require("src/modes/bots.js");
 const { nextColor, pickColor } = __require("src/net/protocol.js");
 const { paintSwatch, swatch } = __require("src/ui/swatch.js");
 
@@ -1499,6 +1503,19 @@ const COUNT_HINTS = {
   1: 'Trening: sam na planszy, bez punktów. Zbieraj owoce, omijaj czerwone ściany.',
   4: 'Gracz 4 potrzebuje klawiatury numerycznej.',
 };
+const BOT_DIFFICULTY_NAMES = { easy: 'łatwy', medium: 'średni', hard: 'trudny' };
+const BOT_DIFFICULTIES = Object.keys(BOT_DIFFICULTY_NAMES);
+
+function botCountLabel(n) {
+  if (n === 1) return '1 bot';
+  return `${n} ${n <= 4 ? 'boty' : 'botów'}`;
+}
+
+function clampBots(n) {
+  const count = Math.round(Number(n));
+  if (!Number.isFinite(count)) return 2;
+  return Math.min(BOT_MAX_COUNT, Math.max(1, count));
+}
 
 /** Liczba graczy w dozwolonym zakresie (np. zapamiętana w przeglądarce). */
 function clampPlayers(n) {
@@ -1522,10 +1539,17 @@ function savedColors(saved) {
 
 /** @param {any} app */
 function createSetupScene(app) {
+  let botMode = false;
+
   return {
-    enter() {
+    enter(params = {}) {
+      botMode = !!params.bots;
       const saved = load('names', DEFAULT_NAMES);
-      let count = clampPlayers(load('offlinePlayers', OFFLINE_DEFAULT_PLAYERS));
+      let count = botMode
+        ? clampBots(load('botCount', 3))
+        : clampPlayers(load('offlinePlayers', OFFLINE_DEFAULT_PLAYERS));
+      const savedDifficulty = load('botDifficulty', 'medium');
+      let difficulty = BOT_DIFFICULTIES.includes(savedDifficulty) ? savedDifficulty : 'medium';
       // Pola na imiona wszystkich czterech graczy: przy zmianie liczby graczy wpisane imiona zostają
       const inputs = DEFAULT_NAMES.slice(0, OFFLINE_MAX_PLAYERS).map((fallback, i) =>
         h('input', { value: saved[i] ?? fallback, maxLength: NAME_MAX, placeholder: fallback, 'aria-label': `Imię gracza ${i + 1}` }),
@@ -1536,26 +1560,42 @@ function createSetupScene(app) {
 
       const start = (e) => {
         e.preventDefault();
-        const names = inputs.slice(0, count).map((input, i) => cleanName(input.value, i));
+        const names = inputs.slice(0, botMode ? 1 : count).map((input, i) => cleanName(input.value, i));
         save('names', inputs.map((input, i) => cleanName(input.value, i)));
-        save('offlinePlayers', count);
-        save('colors', colors.slice(0, count));
-        app.controller = createOfflineController(app);
-        app.players = names.map((name, i) => ({ name, color: colors[i] }));
-        app.match = createMatch(randomSeed(), names.length);
+        save(botMode ? 'botCount' : 'offlinePlayers', count);
+        save('colors', colors.slice(0, botMode ? 1 : count));
+        if (botMode) {
+          save('botDifficulty', difficulty);
+          const taken = [colors[0]];
+          app.players = [
+            { name: names[0], color: colors[0] },
+            ...Array.from({ length: count }, (_, i) => {
+              const color = pickColor(PLAYER_COLORS[i + 1], taken);
+              taken.push(color);
+              return { name: `Bot ${i + 1}`, color };
+            }),
+          ];
+          app.controller = createBotController(app, difficulty);
+        } else {
+          app.players = names.map((name, i) => ({ name, color: colors[i] }));
+          app.controller = createOfflineController(app);
+        }
+        app.match = createMatch(randomSeed(), app.players.length);
         app.scenes.go('countdown');
       };
 
       // Zajęte są tylko kolory widocznych graczy (ukryci 3. i 4. gracz niczego nie blokują)
       const swatches = colors.map((c, i) =>
         swatch(c, () => {
-          colors[i] = nextColor(colors[i], colors.slice(0, count).filter((_, j) => j !== i));
+          const visibleCount = botMode ? 1 : count;
+          colors[i] = nextColor(colors[i], colors.slice(0, visibleCount).filter((_, j) => j !== i));
           paintSwatch(swatches[i], colors[i]);
         }),
       );
 
       const countButtons = [];
-      for (let n = OFFLINE_MIN_PLAYERS; n <= OFFLINE_MAX_PLAYERS; n++) {
+      const maxCount = botMode ? BOT_MAX_COUNT : OFFLINE_MAX_PLAYERS;
+      for (let n = 1; n <= maxCount; n++) {
         countButtons.push(h('button', { type: 'button', className: 'count', onclick: () => setCount(n) }, String(n)));
       }
       const rows = inputs.map((input, i) =>
@@ -1569,18 +1609,32 @@ function createSetupScene(app) {
       );
       const hint = h('p', { className: 'hint' });
       const colorHint = h('p', { className: 'hint' }, 'Kliknij kwadracik, żeby zmienić kolor węża.');
+      const difficultyButtons = BOT_DIFFICULTIES.map((level) =>
+        h('button', {
+          type: 'button',
+          className: 'count',
+          onclick: () => setDifficulty(level),
+        }, level === 'easy' ? 'ŁATWY' : level === 'medium' ? 'ŚREDNI' : 'TRUDNY'),
+      );
+
+      function setDifficulty(level) {
+        difficulty = level;
+        difficultyButtons.forEach((button, i) => button.classList.toggle('selected', BOT_DIFFICULTIES[i] === level));
+        hint.textContent = `${botCountLabel(count)} · trudność: ${BOT_DIFFICULTY_NAMES[level]}`;
+      }
 
       function setCount(n) {
-        count = n;
+        count = botMode ? clampBots(n) : clampPlayers(n);
         // Nowo widoczny gracz z kolorem kogoś innego dostaje pierwszy wolny
-        for (let i = 0; i < n; i++) {
+        const visibleCount = botMode ? 1 : count;
+        for (let i = 0; i < visibleCount; i++) {
           colors[i] = pickColor(colors[i], colors.slice(0, i));
           paintSwatch(swatches[i], colors[i]);
         }
-        countButtons.forEach((b, i) => b.classList.toggle('selected', i + OFFLINE_MIN_PLAYERS === n));
-        rows.forEach((row, i) => (row.hidden = i >= n));
-        rows[0].querySelector('small').textContent = n === 1 ? SOLO_HELP : KEYMAPS[0].help;
-        hint.textContent = COUNT_HINTS[n] ?? '';
+        countButtons.forEach((b, i) => b.classList.toggle('selected', i + 1 === count));
+        rows.forEach((row, i) => (row.hidden = i >= visibleCount));
+        rows[0].querySelector('small').textContent = botMode || count === 1 ? SOLO_HELP : KEYMAPS[0].help;
+        hint.textContent = botMode ? `${botCountLabel(count)} · trudność: ${BOT_DIFFICULTY_NAMES[difficulty]}` : COUNT_HINTS[count] ?? '';
       }
 
       const form = h(
@@ -1591,13 +1645,19 @@ function createSetupScene(app) {
           onkeydown: (e) => {
             if (e.code === 'Escape') app.scenes.go('menu');
             // Szybki wybór liczby graczy cyframi, gdy nie piszemy w polu
-            const digit = /^Digit([1-4])$/.exec(e.code);
-            if (digit && !(e.target instanceof HTMLInputElement)) setCount(Number(digit[1]));
+            const digit = /^Digit([1-5])$/.exec(e.code);
+            if (digit && !(e.target instanceof HTMLInputElement) && Number(digit[1]) <= maxCount) setCount(Number(digit[1]));
           },
         },
-        h('h2', {}, 'GRACZE'),
-        h('div', { className: 'row', style: { justifyContent: 'center' } }, h('span', {}, 'Ilu graczy?'), countButtons),
+        h('h2', {}, botMode ? 'GRA Z BOTAMI' : 'GRACZE'),
+        h('div', { className: 'row', style: { justifyContent: 'center' } }, h('span', {}, botMode ? 'Ilu botów?' : 'Ilu graczy?'), countButtons),
         rows,
+        botMode && h(
+          'div',
+          { className: 'row', style: { justifyContent: 'center' } },
+          h('span', {}, 'Trudność'),
+          difficultyButtons,
+        ),
         colorHint,
         hint,
         h(
@@ -1608,6 +1668,7 @@ function createSetupScene(app) {
         ),
         h('p', { className: 'hint' }, 'Enter — start · Esc — menu'),
       );
+      setDifficulty(difficulty);
       setCount(count);
       app.overlay.show(form);
       inputs[0].select();
@@ -1619,12 +1680,12 @@ function createSetupScene(app) {
 
     render() {
       app.renderer.begin();
-      drawText(app.renderer.ctx, 'GRA NA JEDNYM KOMPUTERZE', VIEW_W / 2, 80, { size: 20, color: PLAYER_COLORS[0], glow: 12 });
+      drawText(app.renderer.ctx, botMode ? 'GRA Z BOTAMI' : 'GRA NA JEDNYM KOMPUTERZE', VIEW_W / 2, 80, { size: 20, color: PLAYER_COLORS[0], glow: 12 });
     },
   };
 }
 
-Object.assign(__exports, { clampPlayers, cleanName, savedColors, createSetupScene });
+Object.assign(__exports, { clampBots, clampPlayers, cleanName, savedColors, createSetupScene });
 };
 
 // ---- src/core/rng.js ----
@@ -1767,6 +1828,258 @@ function createOfflineController(app) {
 }
 
 Object.assign(__exports, { createOfflineController });
+};
+
+// ---- src/modes/bots.js ----
+__factories["src/modes/bots.js"] = function (__exports) {
+// Tryb lokalny: jeden człowiek przeciwko botom.
+
+const { randomSeed } = __require("src/core/rng.js");
+const { createMatch } = __require("src/game/match.js");
+const { chooseBotCommand } = __require("src/game/bot.js");
+const { mergeCommands } = __require("src/input/touch.js");
+
+/** @param {any} app @param {'easy' | 'medium' | 'hard'} difficulty */
+function createBotController(app, difficulty) {
+  return {
+    canPause: true,
+    canSkip: true,
+    rematchHint: 'SPACJA — rewanż    ESC — menu',
+    commands() {
+      const human = app.keyboard.consumeCommands()[0] ?? {};
+      return [
+        mergeCommands(human, app.touch.consume()),
+        ...app.players.slice(1).map((_, i) => chooseBotCommand(app.round, i + 1, difficulty)),
+      ];
+    },
+    leave: () => app.scenes.go('menu'),
+    rematch() {
+      app.match = createMatch(randomSeed(), app.players.length);
+      app.scenes.go('countdown');
+    },
+  };
+}
+
+Object.assign(__exports, { createBotController });
+};
+
+// ---- src/game/bot.js ----
+__factories["src/game/bot.js"] = function (__exports) {
+// Prosty bot offline: wybiera bezpieczny ruch, zbiera owoce i atakuje, gdy ma okazję.
+
+const { BULLET_RANGE, SWORD_RADIUS, WALL } = __require("src/config.js");
+const { createRng, randInt } = __require("src/core/rng.js");
+const { cellIndex, OPPOSITE, passThrough, samePos } = __require("src/game/grid.js");
+
+const DIRECTIONS = ['up', 'down', 'left', 'right'];
+
+/**
+ * Komenda bota dla jednego ticka. Wybór jest deterministyczny, więc testy i rewanże
+ * z tym samym stanem dają ten sam ruch.
+ * @param {import('./types.js').RoundState} state
+ * @param {number} id
+ * @param {'easy' | 'medium' | 'hard'} difficulty
+ * @returns {import('./types.js').Command}
+ */
+function chooseBotCommand(state, id, difficulty = 'medium') {
+  const snake = state.snakes[id];
+  if (!snake?.alive) return {};
+
+  const heading = snake.nextDirs.at(-1) ?? snake.dir;
+  const directions = [heading, ...DIRECTIONS.filter((dir) => dir !== heading && dir !== OPPOSITE[heading])];
+  const options = directions.map((dir) => {
+    const { pos } = passThrough(state.grid, state.walls, snake.body[0], dir);
+    const blocked = isDangerous(state, snake, pos);
+    return { dir, pos, blocked, score: scoreDirection(state, snake, dir, pos, difficulty) };
+  });
+  const safe = options.filter((option) => !option.blocked);
+  const choices = safe.length ? safe : options;
+  const best = difficulty === 'easy'
+    ? choices[randInt(botRng(state, id), choices.length)]
+    : chooseBest(choices, state, id);
+
+  const turns = snake.nextDirs.length === 0 && best.dir !== snake.dir ? [best.dir] : [];
+  return {
+    turns,
+    shoot: shouldShoot(state, snake, difficulty),
+    sword: shouldSwing(state, snake, difficulty),
+  };
+}
+
+function isDangerous(state, snake, pos) {
+  if (state.walls[cellIndex(state.grid, pos)] === WALL.DEADLY) return true;
+  if (state.crates.some((crate) => crate.pos && samePos(crate.pos, pos))) return true;
+  if (state.bullets.some((bullet) => bullet.owner !== snake.id && samePos(bullet.pos, pos))) return true;
+  for (const other of state.snakes) {
+    if (!other.alive) continue;
+    const bodyLength = other.body.length - (other.growPending ? 0 : 1);
+    if (other.body.slice(0, bodyLength).some((part) => samePos(part, pos))) return true;
+  }
+  return false;
+}
+
+function scoreDirection(state, snake, dir, pos, difficulty) {
+  let score = countExits(state, snake, pos, dir) * (difficulty === 'hard' ? 3 : 1);
+  const distances = state.food.map((food) => distance(state.grid, pos, food));
+  if (distances.length) score -= Math.min(...distances) * (difficulty === 'hard' ? 0.8 : 1.2);
+  if (state.walls[cellIndex(state.grid, pos)] === WALL.BOUNCE) score -= 4;
+  if (dir !== snake.dir) score -= 0.5;
+  return score;
+}
+
+function countExits(state, snake, pos, heading) {
+  return DIRECTIONS.filter((dir) => dir !== OPPOSITE[heading] && !isDangerous(state, snake, passThrough(state.grid, state.walls, pos, dir).pos)).length;
+}
+
+function distance(grid, a, b) {
+  const dx = Math.abs(a.x - b.x);
+  const dy = Math.abs(a.y - b.y);
+  return Math.min(dx, grid.w - dx) + Math.min(dy, grid.h - dy);
+}
+
+function chooseBest(choices, state, id) {
+  const bestScore = Math.max(...choices.map((option) => option.score));
+  const best = choices.filter((option) => option.score === bestScore);
+  return best[randInt(botRng(state, id), best.length)];
+}
+
+function botRng(state, id) {
+  const seed = (state.rng.state ^ Math.imul(state.tick + 1, 0x9e3779b9) ^ Math.imul(id + 1, 0x85ebca6b)) >>> 0;
+  return createRng(seed);
+}
+
+function shouldShoot(state, snake, difficulty) {
+  if (difficulty === 'easy' || snake.cooldown > 0 || (snake.ammo === 0 && snake.body.length <= 1)) return false;
+  const range = difficulty === 'hard' ? BULLET_RANGE : 8;
+  let pos = snake.body[0];
+  let dir = snake.dir;
+  for (let i = 0; i < range; i++) {
+    const move = passThrough(state.grid, state.walls, pos, dir);
+    const wall = state.walls[cellIndex(state.grid, move.pos)];
+    if (wall === WALL.DEADLY) return false;
+    if (wall === WALL.BOUNCE) {
+      dir = OPPOSITE[dir];
+      continue;
+    }
+    pos = move.pos;
+    const hit = state.snakes.some((other) =>
+      other.alive && other.id !== snake.id && other.body.some((part) => samePos(part, pos)),
+    );
+    if (hit) return true;
+  }
+  return false;
+}
+
+function shouldSwing(state, snake, difficulty) {
+  if (snake.swordCooldown > 0 || snake.swordTicks > 0) return false;
+  const range = difficulty === 'easy' ? 1 : SWORD_RADIUS;
+  return state.snakes.some((other) => {
+    if (!other.alive || other.id === snake.id) return false;
+    return other.body.some((part) => {
+      const rawX = Math.abs(part.x - snake.body[0].x);
+      const rawY = Math.abs(part.y - snake.body[0].y);
+      const dx = Math.min(rawX, state.grid.w - rawX);
+      const dy = Math.min(rawY, state.grid.h - rawY);
+      return dx * dx + dy * dy <= range * range;
+    });
+  });
+}
+
+Object.assign(__exports, { chooseBotCommand });
+};
+
+// ---- src/game/grid.js ----
+__factories["src/game/grid.js"] = function (__exports) {
+// Kratka: kierunki, pozycje i pomocnicze funkcje.
+
+const { WALL } = __require("src/config.js");
+
+/** @typedef {import('./types.js').Dir} Dir */
+/** @typedef {import('./types.js').Pos} Pos */
+/** @typedef {import('./types.js').Grid} Grid */
+
+/** @type {Record<Dir, Pos>} */
+const DIR_VEC = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
+
+/** @type {Record<Dir, Dir>} */
+const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+/** @param {Pos} pos @param {Dir} dir @returns {Pos} */
+function step(pos, dir) {
+  const v = DIR_VEC[dir];
+  return { x: pos.x + v.x, y: pos.y + v.y };
+}
+
+/** @param {Pos} a @param {Pos} b */
+function samePos(a, b) {
+  return a.x === b.x && a.y === b.y;
+}
+
+/** @param {Grid} grid @param {Pos} p */
+function inBounds(grid, p) {
+  return p.x >= 0 && p.y >= 0 && p.x < grid.w && p.y < grid.h;
+}
+
+/** @param {Grid} grid @param {Pos} p */
+function cellIndex(grid, p) {
+  return p.y * grid.w + p.x;
+}
+
+/** Obrót o 180° wokół środka planszy. @param {Grid} grid @param {Pos} p */
+function rotate180(grid, p) {
+  return { x: grid.w - 1 - p.x, y: grid.h - 1 - p.y };
+}
+
+/** Czy pole jest poza planszą albo jest ścianą (dowolnego rodzaju). */
+function isBlocked(grid, walls, p) {
+  return !inBounds(grid, p) || walls[cellIndex(grid, p)] !== 0;
+}
+
+/** Zawija pozycję na drugą stronę planszy (krawędź działa jak portal). */
+function wrap(grid, p) {
+  return { x: (p.x + grid.w) % grid.w, y: (p.y + grid.h) % grid.h };
+}
+
+/**
+ * Pole, na które wjeżdża wąż z `from` w kierunku `dir`.
+ * - Krawędź planszy: wyjazd z przeciwnej krawędzi.
+ * - Niebieska ściana w środku: wyjazd zza jej bliźniaczki po drugiej stronie planszy
+ *   (obraz po obrocie o 180°; labirynt jest symetryczny, więc zawsze istnieje),
+ *   dalej w tym samym kierunku.
+ * @param {Grid} grid @param {Uint8Array} walls @param {Pos} from @param {Dir} dir
+ * @returns {{ pos: Pos, teleported: boolean }}
+ */
+function passThrough(grid, walls, from, dir) {
+  const isPortal = (p) => walls[cellIndex(grid, p)] === WALL.PORTAL;
+  const next = step(from, dir);
+  let teleported = !inBounds(grid, next);
+  let pos = wrap(grid, next);
+  if (isPortal(pos)) {
+    pos = rotate180(grid, pos);
+    for (let i = 0; i < grid.w + grid.h && isPortal(pos); i++) pos = wrap(grid, step(pos, dir));
+    teleported = true;
+  }
+  return { pos, teleported };
+}
+
+/**
+ * Kierunek od pola `from` do sąsiedniego pola `to`, także przez krawędź planszy.
+ * Gdy pola nie sąsiadują (przeskok przez niebieską ścianę), zwraca null.
+ * @returns {Dir | null}
+ */
+function dirBetween(grid, from, to) {
+  for (const d of /** @type {Dir[]} */ (Object.keys(DIR_VEC))) {
+    if (samePos(wrap(grid, step(from, d)), to)) return d;
+  }
+  return null;
+}
+
+Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex, rotate180, isBlocked, wrap, passThrough, dirBetween });
 };
 
 // ---- src/ui/swatch.js ----
@@ -2625,100 +2938,6 @@ function stepBullets(state, events) {
 }
 
 Object.assign(__exports, { bulletStepsAt, fire, bulletHitsSnake, moveBullets, nextCell });
-};
-
-// ---- src/game/grid.js ----
-__factories["src/game/grid.js"] = function (__exports) {
-// Kratka: kierunki, pozycje i pomocnicze funkcje.
-
-const { WALL } = __require("src/config.js");
-
-/** @typedef {import('./types.js').Dir} Dir */
-/** @typedef {import('./types.js').Pos} Pos */
-/** @typedef {import('./types.js').Grid} Grid */
-
-/** @type {Record<Dir, Pos>} */
-const DIR_VEC = {
-  up: { x: 0, y: -1 },
-  down: { x: 0, y: 1 },
-  left: { x: -1, y: 0 },
-  right: { x: 1, y: 0 },
-};
-
-/** @type {Record<Dir, Dir>} */
-const OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
-
-/** @param {Pos} pos @param {Dir} dir @returns {Pos} */
-function step(pos, dir) {
-  const v = DIR_VEC[dir];
-  return { x: pos.x + v.x, y: pos.y + v.y };
-}
-
-/** @param {Pos} a @param {Pos} b */
-function samePos(a, b) {
-  return a.x === b.x && a.y === b.y;
-}
-
-/** @param {Grid} grid @param {Pos} p */
-function inBounds(grid, p) {
-  return p.x >= 0 && p.y >= 0 && p.x < grid.w && p.y < grid.h;
-}
-
-/** @param {Grid} grid @param {Pos} p */
-function cellIndex(grid, p) {
-  return p.y * grid.w + p.x;
-}
-
-/** Obrót o 180° wokół środka planszy. @param {Grid} grid @param {Pos} p */
-function rotate180(grid, p) {
-  return { x: grid.w - 1 - p.x, y: grid.h - 1 - p.y };
-}
-
-/** Czy pole jest poza planszą albo jest ścianą (dowolnego rodzaju). */
-function isBlocked(grid, walls, p) {
-  return !inBounds(grid, p) || walls[cellIndex(grid, p)] !== 0;
-}
-
-/** Zawija pozycję na drugą stronę planszy (krawędź działa jak portal). */
-function wrap(grid, p) {
-  return { x: (p.x + grid.w) % grid.w, y: (p.y + grid.h) % grid.h };
-}
-
-/**
- * Pole, na które wjeżdża wąż z `from` w kierunku `dir`.
- * - Krawędź planszy: wyjazd z przeciwnej krawędzi.
- * - Niebieska ściana w środku: wyjazd zza jej bliźniaczki po drugiej stronie planszy
- *   (obraz po obrocie o 180°; labirynt jest symetryczny, więc zawsze istnieje),
- *   dalej w tym samym kierunku.
- * @param {Grid} grid @param {Uint8Array} walls @param {Pos} from @param {Dir} dir
- * @returns {{ pos: Pos, teleported: boolean }}
- */
-function passThrough(grid, walls, from, dir) {
-  const isPortal = (p) => walls[cellIndex(grid, p)] === WALL.PORTAL;
-  const next = step(from, dir);
-  let teleported = !inBounds(grid, next);
-  let pos = wrap(grid, next);
-  if (isPortal(pos)) {
-    pos = rotate180(grid, pos);
-    for (let i = 0; i < grid.w + grid.h && isPortal(pos); i++) pos = wrap(grid, step(pos, dir));
-    teleported = true;
-  }
-  return { pos, teleported };
-}
-
-/**
- * Kierunek od pola `from` do sąsiedniego pola `to`, także przez krawędź planszy.
- * Gdy pola nie sąsiadują (przeskok przez niebieską ścianę), zwraca null.
- * @returns {Dir | null}
- */
-function dirBetween(grid, from, to) {
-  for (const d of /** @type {Dir[]} */ (Object.keys(DIR_VEC))) {
-    if (samePos(wrap(grid, step(from, d)), to)) return d;
-  }
-  return null;
-}
-
-Object.assign(__exports, { DIR_VEC, OPPOSITE, step, samePos, inBounds, cellIndex, rotate180, isBlocked, wrap, passThrough, dirBetween });
 };
 
 // ---- src/game/snake.js ----
