@@ -3,3 +3,4 @@ site/
 
 # Lokalne dane narzędzia Cloudflare (wrangler dev)
 .wrangler/
+node_modules
